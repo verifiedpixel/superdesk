@@ -11,9 +11,9 @@
         .controller('ListLayout', ListLayoutController)
 
         .directive('sdListLayout', ListLayoutDirective)
+        .directive('sdStageItems', StageItemListDirective)
         .directive('sdContentGroup', ContentGroupDirective)
         .directive('sdContentGroupHeader', ContentGroupHeaderDirective)
-        .directive('sdStageItems', StageItemListDirective)
 
         .config(contentConfig)
         ;
@@ -95,16 +95,232 @@
         };
     }
 
-    function ContentGroupDirective() {
-        return {
-            templateUrl: 'scripts/superdesk-content/views/content-group.html'
-        };
-    }
-
     function ContentGroupHeaderDirective() {
         return {
             templateUrl: 'scripts/superdesk-content/views/content-group-header.html'
         };
+    }
+
+    ContentGroupDirective.$inject = ['search', 'api', 'superdesk', 'desks', '$timeout'];
+    function ContentGroupDirective(search, api, superdesk, desks, $timeout) {
+        var ITEM_HEIGHT = 57,
+           ITEMS_COUNT = 8,
+           BUFFER = 8,
+           UP = -1,
+           DOWN = 1,
+           MOVES = {
+               38: UP,
+               40: DOWN
+           };
+
+        return {
+            templateUrl: 'scripts/superdesk-content/views/content-group.html',
+            link: function(scope, elem) {
+
+                scope.uuid = function(item) {
+                    return item._id;
+                };
+
+                scope.view = 'compact';
+                scope.page = 1;
+                scope.fetching = false;
+                scope.cacheNextItems = [];
+                scope.cachePreviousItems = [];
+
+                scope.edit = edit;
+                scope.preview = preview;
+                scope.renderNew = renderNew;
+                scope.select = select;
+
+                scope.$watch('group', queryItems);
+                scope.$on('task:stage', handleStage);
+                scope.$on('ingest:update', update);
+
+                var list = elem[0].getElementsByClassName('inline-content-items')[0],
+                    scrollElem = elem.find('.stage-content').first();
+                scrollElem.on('keydown', handleKey);
+                scrollElem.on('scroll', handleScroll);
+                scope.$on('$destroy', function() {
+                    scrollElem.off();
+                });
+
+                var criteria,
+                    updateTimeout,
+                    moveTimeout;
+
+                function handleStage(event, data) {
+                    if (data.new_stage === scope.stage || data.old_stage === scope.stage) {
+                        update();
+                    }
+                }
+
+                function select(view) {
+                    scope.selected = view;
+                }
+
+                function queryItems() {
+                    var query = search.query({});
+                    query.filter({term: {'task.stage': scope.group._id}});
+                    query.size(0); // we just need to get total number of items
+
+                    if (scope.queryString) {
+                        query.filter({query: {query_string: {
+                            query: scope.queryString,
+                            lenient: false
+                        }}});
+                    }
+
+                    criteria = {source: query.getCriteria()};
+
+                    scope.loading = true;
+                    scope.total = null;
+                    return apiquery().then(function(items) {
+                        scope.total = items._meta.total;
+                        scope.$applyAsync(render);
+                    })['finally'](function() {
+                        scope.loading = false;
+                    });
+                }
+
+                function render() {
+                    var top = scrollElem[0].scrollTop,
+                        start = Math.floor(top / ITEM_HEIGHT),
+                        from = Math.max(0, start - BUFFER),
+                        to = Math.min(scope.total, start + ITEMS_COUNT + BUFFER);
+
+                    console.log('render', top, start, from, to);
+
+                    if (parseInt(list.style.height, 10) !== scope.total * ITEM_HEIGHT) {
+                        list.style.height = (scope.total * ITEM_HEIGHT) + 'px';
+                    }
+
+                    criteria.source.from = from;
+                    criteria.source.size = to - from;
+                    return apiquery().then(function(items) {
+                        scope.$applyAsync(function() {
+                            if (scope.total !== items._meta.total) {
+                                console.log(scope.total, items._meta.total);
+                                scope.total = items._meta.total;
+                                list.style.height = (scope.total * ITEM_HEIGHT) + 'px';
+                            }
+
+                            list.style.paddingTop = (from * ITEM_HEIGHT) + 'px';
+                            scope.items = merge(items._items);
+                        });
+                    });
+                }
+
+                function apiquery(query) {
+                    return api.query('archive', query ? {source: query} : criteria);
+                }
+
+                function renderNew() {
+                    scope.total += scope.newItemsCount;
+                    scope.newItemsCount = 0;
+                    render();
+                }
+
+                function merge(newItems) {
+                    var next = [],
+                        olditems = scope.items || [];
+                    angular.forEach(newItems, function(item) {
+                        var old = _.find(olditems, {_id: item._id});
+                        next.push(old ? angular.extend(old, item) : item);
+                    });
+
+                    return next;
+                }
+
+                function updateCurrentView() {
+                    var ids = _.pluck(scope.items, '_id'),
+                        query = {query: {filtered: {filter: {and: [
+                            {terms: {_id: ids}},
+                            {term: {'task.stage': scope.stage}}
+                        ]}}}};
+                    query.size = ids.length;
+                    apiquery(query).then(function(items) {
+                        var nextItems = _.indexBy(items._items, '_id');
+                        angular.forEach(scope.items, function(item, i) {
+                            var diff = nextItems[item._id] || {_deleted: 1};
+                            angular.extend(item, diff);
+                        });
+                    });
+                }
+
+                function update() {
+                    if (scrollElem[0].scrollTop || scope.selected) {
+                        updateCurrentView();
+                    } else {
+                        render();
+                    }
+                }
+
+                function handleScroll(event) {
+                    $timeout.cancel(updateTimeout);
+                    updateTimeout = $timeout(render, 100, false);
+                }
+
+                function handleKey(event) {
+                    var code = event.keyCode || event.which;
+                    if (MOVES[code]) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        $timeout.cancel(updateTimeout);
+                        move(MOVES[code], event);
+                        handleScroll(); // make sure we scroll after moving
+                    }
+                }
+
+                function clickItem(item, event) {
+                    scope.select(item);
+                    if (event) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        event.stopImmediatePropagation();
+                    }
+                }
+
+                function move(diff, event) {
+                    var index = _.findIndex(scope.items, scope.selected),
+                        nextItem,
+                        nextIndex;
+
+                    if (index === -1) {
+                        nextItem = scope.items[0];
+                    } else {
+                        nextIndex = Math.max(0, Math.min(scope.items.length - 1, index + diff));
+                        nextItem = scope.items[nextIndex];
+
+                        $timeout.cancel(moveTimeout);
+                        moveTimeout = $timeout(function() {
+                            var top = scrollElem[0].scrollTop,
+                                topItemIndex = Math.ceil(top / ITEM_HEIGHT),
+                                bottomItemIndex = Math.floor((top + scrollElem[0].clientHeight) / ITEM_HEIGHT),
+                                nextItemIndex = nextIndex + criteria.source.from;
+                            if (nextItemIndex < topItemIndex) {
+                                scrollElem[0].scrollTop = Math.max(0, nextItemIndex * ITEM_HEIGHT);
+                            } else if (nextItemIndex >= bottomItemIndex) {
+                                scrollElem[0].scrollTop = (nextItemIndex - ITEMS_COUNT + 1) * ITEM_HEIGHT;
+                            }
+                        }, 50, false);
+                    }
+
+                    scope.$apply(function() {
+                        clickItem(scope.items[nextIndex], event);
+                    });
+                }
+            }
+        };
+
+        function preview(item) {
+            desks.setWorkspace(item.task.desk, item.task.stage);
+            superdesk.intent('read_only', 'content_article', item);
+        }
+
+        function edit(item) {
+            desks.setWorkspace(item.task.desk, item.task.stage);
+            superdesk.intent('author', 'article', item);
+        }
     }
 
     StageItemListDirective.$inject = ['search', 'api', 'superdesk', 'desks', '$timeout', '$q', '$location', '$anchorScroll'];
