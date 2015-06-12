@@ -4,8 +4,8 @@
     <span class="state-border"></span>
 
     <div class="list-field type-icon" ng-mouseenter="hover = true" ng-mouseleave="hover = false">
-        <i class="filetype-icon-{{item.type}}" ng-hide="hover || multi.selected"></i>
-        <span sd-check ng-model="multi.selected" ng-change="toggleSelected()" ng-show="hover || multi.selected"></span>
+        <i class="filetype-icon-{{item.type}}" ng-hide="hover || item.selected"></i>
+        <span sd-check ng-model="item.selected" ng-change="toggleSelected(item)" ng-show="hover || item.selected"></span>
     </div>
 
     <div class="list-field urgency">
@@ -32,7 +32,7 @@
             <div class="takekey" ng-if="item.anpa_take_key">{{ item.anpa_take_key }}</div>
             <div class="category" ng-if="item['anpa-category'].name">{{ item['anpa-category'].name }}</div>
             <div class="provider" sd-meta-ingest data-item="item"></div>
-            <div ng-if="item.marked_for_not_publication == true" class="not_for_publication" translate>Not for publication</div>
+            <div ng-if="item.marked_for_not_publication" class="state-label not-for-publication" translate>Not For Publication</div>
             <div class="expires" ng-if="item.is_spiked"><span translate>expires</span> {{ item.expiry | reldate }}</div>
             <div ng-if="item.archived"><div sd-fetched-desks data-item="item"></div></div>
         </div>
@@ -44,7 +44,7 @@
         <ul ng-if="extras.activity" class="item-functions"
             sd-activity-list
             data-item="item"
-            data-type="{{ spike ? 'spike' : (type || item._type)}}"
+            data-type="{{ spike ? 'spike' : ((type || item._type) === 'published'? 'archive': (type || item._type))}}"
             data-action="{{extras.activity.action}}">
         </ul>
     </div>

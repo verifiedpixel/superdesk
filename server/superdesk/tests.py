@@ -48,6 +48,7 @@ def get_test_settings():
     test_settings['ELASTICSEARCH_INDEX'] = 'sptest'
     test_settings['MONGO_DBNAME'] = 'sptests'
     test_settings['LEGAL_ARCHIVE_DBNAME'] = 'sptests_legal'
+    test_settings['PUBLICAPI_DBNAME'] = 'sptests_publicapi'
     test_settings['DEBUG'] = True
     test_settings['TESTING'] = True
     test_settings['SUPERDESK_TESTING'] = True
@@ -70,8 +71,8 @@ def drop_elastic(app):
 def drop_mongo(app):
     with app.app_context():
         try:
-            app.data.mongo.pymongo().cx.drop_database(app.config['MONGO_DBNAME'])
-            app.data.mongo.pymongo().cx.drop_database(app.config['LEGAL_ARCHIVE_DBNAME'])
+            app.data.mongo.pymongo(prefix='MONGO').cx.drop_database(app.config['MONGO_DBNAME'])
+            app.data.mongo.pymongo(prefix='LEGAL_ARCHIVE').cx.drop_database(app.config['LEGAL_ARCHIVE_DBNAME'])
         except AttributeError:
             pass
 

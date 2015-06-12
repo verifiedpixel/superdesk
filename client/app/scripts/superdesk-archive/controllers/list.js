@@ -5,10 +5,11 @@ define([
     'use strict';
 
     ArchiveListController.$inject = [
-        '$scope', '$injector', '$location', 'superdesk',
-        'session', 'api', 'desks', 'ContentCtrl', 'StagesCtrl', 'notify'
+        '$scope', '$injector', '$location', '$q', 'superdesk',
+        'session', 'api', 'desks', 'ContentCtrl', 'StagesCtrl', 'notify', 'multi'
     ];
-    function ArchiveListController($scope, $injector, $location, superdesk, session, api, desks, ContentCtrl, StagesCtrl, notify) {
+    function ArchiveListController($scope, $injector, $location, $q, superdesk, session, api, desks, ContentCtrl,
+        StagesCtrl, notify, multi) {
 
         var resource,
             self = this;
@@ -59,6 +60,7 @@ define([
             }
 
             $scope.stages.select(stage);
+            multi.reset();
         };
 
         $scope.openUpload = function openUpload() {
@@ -80,12 +82,10 @@ define([
 
         this.fetchItem = function fetchItem(id) {
             if (resource == null) {
-                return;
+                return $q.reject(id);
             }
-            return resource.getById(id)
-            .then(function(item) {
-                $scope.selected.fetch = item;
-            });
+
+            return resource.getById(id);
         };
 
         var refreshItems = _.debounce(_refresh, 100);

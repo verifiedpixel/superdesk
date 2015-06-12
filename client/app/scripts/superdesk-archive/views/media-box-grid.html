@@ -6,15 +6,15 @@
         <div class="buttons"></div>
     </div>
 
-    <div class="media" ng-show="item.type == 'text' || item.type == 'composite' || item.type == 'preformatted' || item.type == 'picture'" ng-mouseenter="hover=true" ng-mouseleave="hover=false">
+    <div class="media multi" ng-show="item.type == 'text' || item.type == 'composite' || item.type == 'preformatted' || item.type == 'picture'" ng-mouseenter="hover=true" ng-mouseleave="hover=false">
         <div sd-item-rendition data-item="item" data-rendition="thumbnail"></div>
         <span class="text">
             <small title="{{ item.headline }}">{{item.headline | limitTo: 90}}</small>
             <span sd-item-container data-item="item" class="container"></span>
         </span>
 
-        <div class="selectbox" ng-show="hover || multi.selected">
-            <span sd-check ng-model="multi.selected" ng-change="toggleSelected()"></span>
+        <div class="selectbox" ng-show="hover || item.selected">
+            <span sd-check ng-model="item.selected" ng-change="toggleSelected(item)"></span>
         </div>
     </div>
 
@@ -40,7 +40,7 @@
             <dd ng-if="item.is_spiked"><time title="{{ item.expiry | date:'medium' }}">{{ item.expiry | reldate }}</time></dd>
         </dl>
 
-        <span ng-if="item.marked_for_not_publication == true" class="not_for_publication" translate>Not for publication</span>
+        <div ng-if="item.marked_for_not_publication" class="state-label not-for-publication" translate>Not for publication</div>       
 
         <div ng-if="item.archived" class="fetched-desk"><div sd-fetched-desks data-item="item"></div></div>
     </div>

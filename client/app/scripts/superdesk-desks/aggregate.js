@@ -11,8 +11,8 @@
  (function() {
     'use strict';
 
-    AggregateCtrl.$inject = ['api', 'session', 'desks', 'preferencesService'];
-    function AggregateCtrl(api, session, desks, preferencesService) {
+    AggregateCtrl.$inject = ['api', 'session', 'desks', 'preferencesService', 'storage'];
+    function AggregateCtrl(api, session, desks, preferencesService, storage) {
         var PREFERENCES_KEY = 'agg:view';
         var self = this;
         this.loading = true;
@@ -95,12 +95,23 @@
             }
             return this.allStages;
         };
+
+        this.state = storage.getItem('agg:state') || {};
+
+        this.switchState = function(key) {
+            this.state[key] = !this.getState(key);
+            storage.setItem('agg:state', this.state);
+        };
+
+        this.getState = function(key) {
+            return (this.state[key] === undefined) ? true : this.state[key];
+        };
     }
 
     AggregateSettingsDirective.$inject = ['desks', 'preferencesService', 'WizardHandler'];
     function AggregateSettingsDirective(desks, preferencesService, WizardHandler) {
         return {
-            templateUrl: 'scripts/superdesk-desks/views/aggregate-settings.html',
+            templateUrl: 'scripts/superdesk-desks/views/aggregate-settings-configuration.html',
             scope: {
                 modalActive: '=',
                 desks: '=',
@@ -110,7 +121,9 @@
                 stageLookup: '=',
                 searchLookup: '=',
                 groups: '=',
-                editGroups: '='
+                editGroups: '=',
+                close: '&',
+                widget: '@'
             },
             link: function(scope, elem) {
 
@@ -123,6 +136,7 @@
                 scope.closeModal = function() {
                     scope.step.current = 'desks';
                     scope.modalActive = false;
+                    scope.close();
                 };
 
                 scope.previous = function() {
@@ -257,7 +271,7 @@
         };
     }
 
-    angular.module('superdesk.aggregate.sidebar', ['superdesk.authoring.widgets'])
+    angular.module('superdesk.aggregate.sidebar', ['superdesk.authoring.widgets', 'superdesk.desks'])
     .config(['authoringWidgetsProvider', function(authoringWidgetsProvider) {
         authoringWidgetsProvider
         .widget('aggregate', {

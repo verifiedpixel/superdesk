@@ -231,7 +231,7 @@
                 }
             };
         }])
-        .directive('sdFetchedDesks', ['familyService', function(familyService) {
+        .directive('sdFetchedDesks', ['desks', 'familyService', '$location', function(desks, familyService, $location) {
             return {
                 scope: {
                     item: '='
@@ -246,6 +246,11 @@
                                 });
                         }
                     });
+
+                    scope.selectFetched = function (desk) {
+                        desks.setCurrentDeskId(desk.desk._id);
+                        $location.path('/workspace/content').search('_id=' + desk.itemId);
+                    };
                 }
             };
         }])
@@ -343,13 +348,8 @@
                         return false;
                     };
 
-                    // here we make a copy which we can modify without affecting data
-                    scope.multi = angular.extend({
-                        selected: multi.isSelected(scope.item)
-                    }, scope.item);
-
-                    scope.toggleSelected = function() {
-                        multi.toggle(scope.multi);
+                    scope.toggleSelected = function(item) {
+                        multi.toggle(item);
                     };
                 }
             };
@@ -503,7 +503,7 @@
                     _.each(items._items, function(i) {
                         if (i.task && i.task.desk && desks.deskLookup[i.task.desk]) {
                             if (deskIdList.indexOf(i.task.desk) < 0) {
-                                deskList.push({'desk': desks.deskLookup[i.task.desk], 'count': 1});
+                                deskList.push({'desk': desks.deskLookup[i.task.desk], 'count': 1, 'itemId': i._id});
                                 deskIdList.push(i.task.desk);
                             } else {
                                 deskList[deskIdList.indexOf(i.task.desk)].count += 1;

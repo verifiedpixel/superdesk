@@ -46,6 +46,7 @@ describe('search service', function() {
 
         beforeEach(module('superdesk.archive'));
         beforeEach(module('superdesk.authoring.multiedit'));
+        beforeEach(module('superdesk.packaging'));
 
         beforeEach(inject(function($rootScope, $compile) {
             scope = $rootScope.$new();
@@ -56,7 +57,7 @@ describe('search service', function() {
         it('can show how many items are selected', inject(function() {
             expect(scope.multi.count).toBe(0);
 
-            scope.multi.toggle({_id: 1});
+            scope.multi.toggle({_id: 1, selected: true});
             expect(scope.multi.count).toBe(1);
 
             scope.multi.reset();
@@ -67,10 +68,10 @@ describe('search service', function() {
             spyOn(multiEdit, 'create');
             spyOn(multiEdit, 'open');
 
-            scope.multi.toggle({_id: 'foo'});
-            scope.multi.toggle({_id: 'bar'});
+            scope.multi.toggle({_id: 'foo', selected: true});
+            scope.multi.toggle({_id: 'bar', selected: true});
 
-            scope.multiedit();
+            scope.action.multiedit();
             expect(multiEdit.create).toHaveBeenCalledWith(['foo', 'bar']);
             expect(multiEdit.open).toHaveBeenCalled();
         }));

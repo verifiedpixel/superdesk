@@ -21,6 +21,8 @@ try:
 except ImportError:
     from urlparse import urlparse
 
+from publicapi.settings import MONGO_DBNAME as PUBLICAPI_DBNAME  # noqa @UnusedImport
+
 
 def env(variable, fallback_value=None):
     env_value = os.environ.get(variable, '')
@@ -61,7 +63,6 @@ X_MAX_AGE = 24 * 3600
 X_HEADERS = ['Content-Type', 'Authorization', 'If-Match']
 
 
-MONGO_ENABLE_MULTI_DBS = False
 MONGO_DBNAME = env('MONGO_DBNAME', 'superdesk')
 if env('MONGOLAB_URI'):
     MONGO_URI = env('MONGOLAB_URI')
@@ -123,10 +124,6 @@ CELERYBEAT_SCHEDULE = {
         'task': 'apps.publish.content_purge',
         'schedule': crontab(minute=30)
     },
-    'system:compare_repositories': {
-        'task': 'superdesk.data_consistency.compare_repos',
-        'schedule': timedelta(minutes=30)
-    }
 }
 
 SENTRY_DSN = env('SENTRY_DSN')
@@ -179,6 +176,7 @@ INSTALLED_APPS = [
     'apps.text_archive',
     'apps.validators',
     'apps.validate',
+    'apps.publicapi_publish'
 ]
 
 RESOURCE_METHODS = ['GET', 'POST']

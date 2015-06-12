@@ -8,6 +8,7 @@ function Content() {
     this.getItem = getItem;
     this.editItem = editItem;
     this.getCount = getCount;
+    this.send = send;
 
     this.setListView = function() {
         var list = element(by.css('.list-layout'));
@@ -21,6 +22,10 @@ function Content() {
                 grid.click();
             }
         });
+    };
+
+    this.getItems = function() {
+        return element.all(by.repeater('items._items'));
     };
 
     this.actionOnItem = function(action, item) {
@@ -62,5 +67,51 @@ function Content() {
 
     function items() {
         return element.all(by.repeater('items._items'));
+    }
+
+    this.getCount = function () {
+        return element.all(by.repeater('items._items')).count();
+    };
+
+    /**
+     * @alias this.getCount
+     */
+    this.count = this.getCount;
+
+    this.selectItem = function(item) {
+        var crtItem;
+        return this.getItem(item)
+            .waitReady().then(function(elem) {
+                crtItem = elem;
+                return browser.actions()
+                       .mouseMove(crtItem.element(by.className('filetype-icon-text')))
+                       .perform();
+            }).then(function() {
+                return crtItem
+                    .element(by.css('[ng-change="toggleSelected(item)"]'))
+                    .click();
+            });
+    };
+
+    this.spikeItems = function() {
+        element(by.css('[ng-click="action.spikeItems()"]')).click();
+    };
+
+    this.unspikeItems = function() {
+        element(by.css('[ng-click="action.unspikeItems()"]')).click();
+    };
+
+    this.selectSpikedList = function() {
+        element(by.css('[ng-click="toggleSpike()"')).click();
+    };
+
+    this.createPackageFromItems = function() {
+        var elem = element(by.css('[class="multi-action-bar ng-scope"]'));
+        elem.element(by.className('icon-package-plus')).click();
+        browser.sleep(500);
+    };
+
+    function send() {
+        return element(by.id('send-item-btn')).click();
     }
 }

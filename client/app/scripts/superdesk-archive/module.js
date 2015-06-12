@@ -19,8 +19,8 @@ define([
          *
          * @param {Object} item
          */
-        this.isSelected = function isSelected(item) {
-            return !!_.find(items, {_id: item._id});
+        this.isSelected = function(item) {
+            return item.selected;
         };
 
         /**
@@ -28,8 +28,7 @@ define([
          *
          * @param {Object} item
          */
-        this.toggle = function toggle(item) {
-            item.selected = !this.isSelected(item);
+        this.toggle = function(item) {
             if (item.selected) {
                 items = _.union(items, [item]);
             } else {
@@ -39,16 +38,23 @@ define([
         };
 
         /**
+         * Get list of selected items identifiers
+         */
+        this.getIds = function() {
+            return _.map(items, '_id');
+        };
+
+        /**
          * Get list of selected items
          */
-        this.getQueue = function getQueue() {
-            return _.map(items, '_id');
+        this.getItems = function() {
+            return items;
         };
 
         /**
          * Reset to empty
          */
-        this.reset = function reset() {
+        this.reset = function() {
             _.each(items, function(item) {
                 item.selected = false;
             });
@@ -72,7 +78,7 @@ define([
          *
          * @param {Object} item
          */
-        this.spike = function spike(item) {
+        this.spike = function(item) {
             return api.update(SPIKE_RESOURCE, item, {state: 'spiked'})
                 .then(function() {
                     if ($location.search()._id === item._id) {
@@ -87,11 +93,20 @@ define([
         };
 
         /**
+         * Spike given items.
+         *
+         * @param {Object} items
+         */
+        this.spikeMultiple = function spikeMultiple(items) {
+            items.forEach(this.spike);
+        };
+
+        /**
          * Unspike given item.
          *
          * @param {Object} item
          */
-        this.unspike = function unspike(item) {
+        this.unspike = function(item) {
             return api.update(UNSPIKE_RESOURCE, item, {})
                 .then(function() {
                     if ($location.search()._id === item._id) {
@@ -103,6 +118,15 @@ define([
                 ['finally'](function() {
                     item.actioning.unspike = false;
                 });
+        };
+
+        /**
+         * Unspike given items.
+         *
+         * @param {Object} items
+         */
+        this.unspikeMultiple = function unspikeMultiple(items) {
+            items.forEach(this.unspike);
         };
     }
 

@@ -61,11 +61,16 @@
     }
 
     function stripHtml(item) {
-        var elem = document.createElement('div');
-        elem.innerHTML = item.headline? item.headline: '';
-        if (elem.textContent !== '') {
-            item.headline = elem.textContent;
-        }
+        var fields = ['headline', 'abstract'];
+        _.each(fields, function(key) {
+            if (angular.isDefined(item[key])) {
+                var elem = document.createElement('div');
+                elem.innerHTML = item[key];
+                if (elem.textContent !== '') {
+                    item[key] = elem.textContent;
+                }
+            }
+        });
     }
 
     /**
@@ -247,6 +252,7 @@
                 delete diff.publish_schedule;
             }
 
+            stripHtml(diff);
             var endpoint = 'archive_' + action;
             return api.update(endpoint, orig, diff)
             .then(function(result) {
@@ -380,8 +386,11 @@
                 return action;
             }
 
+            var is_read_only_state = _.contains(['spiked', 'scheduled', 'killed'], current_item.state);
+            var lockedByMe = !lock.isLocked(current_item);
+
             // new take should be on the text item that are closed or last take but not killed.
-            action.new_take = current_item.state !== 'killed' && (current_item.type === 'text' || current_item.type === 'preformatted') &&
+            action.new_take = !is_read_only_state && (current_item.type === 'text' || current_item.type === 'preformatted') &&
                 (angular.isUndefined(current_item.takes) || current_item.takes.last_take === current_item._id) &&
                 (angular.isUndefined(current_item.more_coming) || !current_item.more_coming);
 
@@ -395,8 +404,8 @@
                 if (current_item.state === 'scheduled') {
                     action.deschedule = true;
                 } else if (current_item.state === 'published' || current_item.state === 'corrected') {
-                    action.kill = user_privileges.kill;
-                    action.correct = user_privileges.correct;
+                    action.kill = user_privileges.kill && lockedByMe;
+                    action.correct = user_privileges.correct && lockedByMe;
                 }
 
                 action.re_write = (_.contains(['published', 'corrected'], current_item.state) &&
@@ -418,7 +427,7 @@
                         current_item.task && current_item.task.desk &&
                         user_privileges.publish;
 
-                action.edit = current_item.type !== 'composite' && current_item.state !== 'spiked';
+                action.edit = current_item.type !== 'composite' && current_item.state !== 'spiked' && lockedByMe;
                 action.unspike = current_item.state === 'spiked' && user_privileges.unspike;
                 action.spike = current_item.state !== 'spiked' && user_privileges.spike &&
                     (angular.isUndefined(current_item.takes) || current_item.takes.last_take === current_item._id);
@@ -426,21 +435,20 @@
 
             //mark item for highlights
             action.mark_item = (current_item.task && current_item.task.desk &&
-                current_item.state !== 'killed' && current_item.package_type !== 'takes' &&
+                !is_read_only_state && current_item.package_type !== 'takes' &&
                  user_privileges.mark_for_highlights);
 
-            action.package_item = item.state !== 'killed' && item.package_type !== 'takes';
-            action.multi_edit = _.contains(['text', 'preformatted'], item.type) &&
-                !_.contains(['killed', 'scheduled'], item.state);
+            action.package_item = !is_read_only_state && item.package_type !== 'takes';
+            action.multi_edit = _.contains(['text', 'preformatted'], item.type) && !is_read_only_state;
 
             //check for desk membership for edit rights.
             if (current_item.task && current_item.task.desk) {
                 // in production
-                action.duplicate = user_privileges.duplicate;
                 var desk = _.find(self.userDesks, {'_id': current_item.task.desk});
                 if (!desk) {
                     action = angular.extend({}, DEFAULT_ACTIONS);
                 }
+                action.duplicate = user_privileges.duplicate && !is_read_only_state;
             } else {
                 // personal
                 action.copy = true;
@@ -655,7 +663,7 @@
 
                 $scope.$watch('origItem', function(new_value, old_value) {
                     $scope.itemActions = authoring.itemActions(new_value);
-                });
+                }, true);
 
                 $scope.publish_enabled = function() {
                     return $scope.origItem && !$scope.origItem.marked_for_not_publication &&
@@ -729,6 +737,15 @@
                         }
                     }
                 }, true);
+
+                $scope.$watch('item.marked_for_not_publication', function(newValue, oldValue) {
+                    if (newValue !== oldValue) {
+                        var item = _.create($scope.origItem);
+                        $scope.dirty = true;
+                        item.marked_for_not_publication = newValue;
+                        $scope.itemActions = authoring.itemActions(item);
+                    }
+                });
 
                 $scope.proofread = false;
                 $scope.referrerUrl = referrer.getReferrerUrl();
@@ -874,11 +891,6 @@
                     }
                 };
 
-                $scope.markForPublication = function(isArticlePublishable) {
-                    $scope.item.marked_for_not_publication = isArticlePublishable;
-                    return $scope.save();
-                };
-
                 $scope.deschedule = function() {
                     $scope.item.publish_schedule = false;
                     return $scope.save();
@@ -969,7 +981,7 @@
                             $scope.origItem = item;
                             $scope.dirty = false;
                             $scope.closePreview();
-                            $scope._editable = $scope.item._editable = false;
+                            $scope.item._editable = $scope._editable;
                         });
                 }
 
@@ -991,9 +1003,9 @@
                         session.sessionId !== data.lock_session) {
                         authoring.unlock($scope.item, data.user);
                         $scope._editable = $scope.item._editable = false;
-                        $scope.item._locked = false;
-                        $scope.item.lock_session = null;
-                        $scope.item.lock_user = null;
+                        $scope.origItem._locked = $scope.item._locked = false;
+                        $scope.origItem.lock_session = $scope.item.lock_session = null;
+                        $scope.origItem.lock_user = $scope.item.lock_user = null;
                         if ($scope.action !== 'view') {
                             $location.url($scope.referrerUrl);
                         }
@@ -1001,7 +1013,7 @@
                 });
 
                 $scope.$on('item:updated', function(_e, data) {
-                    if ($scope.action === 'view') {
+                    if (data.item === $scope.origItem._id && $scope.action === 'view') {
                         refreshItem();
                     }
                 });
@@ -1189,8 +1201,8 @@
             }
         };
     }
-    SendItem.$inject = ['$q', 'superdesk', 'api', 'desks', 'notify', '$location', 'macros', '$rootScope', 'authoring'];
-    function SendItem($q, superdesk, api, desks, notify, $location, macros, $rootScope, authoring) {
+    SendItem.$inject = ['$q', 'superdesk', 'api', 'desks', 'notify', '$location', 'macros', '$rootScope', 'authoring', 'send'];
+    function SendItem($q, superdesk, api, desks, notify, $location, macros, $rootScope, authoring, send) {
         return {
             scope: {
                 item: '=',
@@ -1210,14 +1222,31 @@
                 scope.selectedMacro = null;
                 scope.beforeSend = scope._beforeSend || $q.when;
 
-                scope.$watch('item', function() {
-                    if (scope.item) {
-                        desks.initialize()
-                        .then(fetchDesks)
-                        .then(fetchStages)
-                        .then(fetchMacros);
+                scope.$watch('item', activateItem);
+                scope.$watch(send.getConfig, activateConfig);
+
+                function activateConfig(config, oldConfig) {
+                    if (config !== oldConfig) {
+                        scope.isActive = !!config;
+                        scope.item = scope.isActive ? {} : null;
+                        scope.config = config;
+                        activate();
                     }
-                });
+                }
+
+                function activateItem(item) {
+                    scope.isActive = !!item;
+                    activate();
+                }
+
+                function activate() {
+                    if (scope.isActive) {
+                        desks.initialize()
+                            .then(fetchDesks)
+                            .then(fetchStages)
+                            .then(fetchMacros);
+                    }
+                }
 
                 scope.close = function() {
                     if (scope.$parent.views) {
@@ -1225,7 +1254,12 @@
                     } else {
                         scope.item = null;
                     }
+
                     $location.search('fetch', null);
+
+                    if (scope.config) {
+                        scope.config.reject();
+                    }
                 };
 
                 scope.selectDesk = function(desk) {
@@ -1238,6 +1272,7 @@
                 scope.selectStage = function(stage) {
                     scope.selectedStage = stage;
                 };
+
                 scope.selectMacro = function(macro) {
                     if (scope.selectedMacro === macro) {
                         scope.selectedMacro = null;
@@ -1245,6 +1280,7 @@
                         scope.selectedMacro = macro;
                     }
                 };
+
                 scope.send = function(open) {
                     var deskId = scope.selectedDesk._id;
                     var stageId = scope.selectedStage._id || scope.selectedDesk.incoming_stage;
@@ -1254,7 +1290,15 @@
                     } else if (scope.mode === 'archive') {
                         return sendContent(deskId, stageId, scope.selectedMacro, open);
                     } else if (scope.mode === 'ingest') {
-                        return sendIngest(deskId, stageId, scope.selectedMacro, open);
+                        if (scope.config) {
+                            scope.config.resolve({
+                                desk: deskId,
+                                stage: stageId,
+                                macro: scope.selectedMacro ? scope.selectedMacro.name : null
+                            });
+                        } else {
+                            return sendIngest(deskId, stageId, scope.selectedMacro, open);
+                        }
                     }
                 };
 
@@ -1279,20 +1323,15 @@
                         });
                 };
 
-                var runMacro = function(item, macro) {
-                    var p;
+                function runMacro(item, macro) {
                     if (macro) {
-                        p = macros.call(macro, item)
-                        .then(function(result) {
-                            return api.save('archive', item, extendItem({}, result));
-                        });
-                    } else {
-                        p = $q.when(item);
+                        return macros.call(macro, item, true);
                     }
-                    return p;
-                };
 
-                var sendAuthoring = function(deskId, stageId, macro, sendAndContinue) {
+                    return $q.when(item);
+                }
+
+                function sendAuthoring(deskId, stageId, macro, sendAndContinue) {
                     var deferred;
 
                     if (sendAndContinue) {
@@ -1331,9 +1370,9 @@
                     if (sendAndContinue) {
                         return deferred.promise;
                     }
-                };
+                }
 
-                var sendContent = function(deskId, stageId, macro, open) {
+                function sendContent(deskId, stageId, macro, open) {
                     var finalItem;
                     api.save('duplicate', {}, {desk: scope.item.task.desk}, scope.item)
                     .then(function(item) {
@@ -1360,25 +1399,14 @@
                             $rootScope.$broadcast('item:fetch');
                         }
                     });
-                };
+                }
 
-                var sendIngest = function(deskId, stageId, macro, open) {
-                    var finalItem;
-                    api.save('fetch', {}, {desk: deskId}, scope.item)
-                    .then(function(item) {
-                        return runMacro(item, macro);
-                    })
-                    .then(function(item) {
-                        finalItem = item;
-                        return api.find('tasks', item._id);
-                    })
-                    .then(function(_task) {
-                        scope.task = _task;
-                        api.save('tasks', scope.task, {
-                            task: _.extend(scope.task.task, {desk: deskId, stage: stageId})
-                        });
-                    })
-                    .then(function() {
+                function sendIngest(deskId, stageId, macro, open) {
+                    return send.oneAs(scope.item, {
+                        desk: deskId,
+                        stage: stageId,
+                        macro: macro ? macro.name : macro
+                    }).then(function(finalItem) {
                         notify.success(gettext('Item fetched.'));
                         if (open) {
                             $location.url('/authoring/' + finalItem._id);
@@ -1386,7 +1414,7 @@
                             $rootScope.$broadcast('item:fetch');
                         }
                     });
-                };
+                }
 
                 function fetchDesks() {
                     var p = desks.initialize()
@@ -1431,49 +1459,31 @@
         };
     }
 
-    ContentCreateDirective.$inject = ['api'];
-    function ContentCreateDirective(api) {
+    ContentCreateDirective.$inject = ['api', 'desks', 'templates'];
+    function ContentCreateDirective(api, desks, templates) {
         var NUM_ITEMS = 5;
+
         return {
             templateUrl: 'scripts/superdesk-authoring/views/sd-content-create.html',
             link: function(scope) {
+                scope.numItems = NUM_ITEMS;
                 scope.contentTemplates = null;
 
-                var fetchTemplates = function(numItems) {
-                    var params = {
-                        max_results: numItems || undefined,
-                        where: {template_type: 'create'}
-                    };
-                    api.content_templates.query(params)
+                scope.$watch(function() {
+                    return desks.activeDeskId;
+                }, function() {
+                    templates.fetchTemplates(1, NUM_ITEMS, 'create', desks.activeDeskId)
                     .then(function(result) {
                         scope.contentTemplates = result;
                     });
-                };
-
-                fetchTemplates(NUM_ITEMS);
+                });
             }
         };
     }
 
-    TemplateSelectDirective.$inject = ['api'];
-    function TemplateSelectDirective(api) {
+    TemplateSelectDirective.$inject = ['api', 'desks', 'templates'];
+    function TemplateSelectDirective(api, desks, templates) {
         var PAGE_SIZE = 10;
-
-        var fetchTemplates = function(page, keyword) {
-            page = page || 1;
-            var params = {
-                max_results: PAGE_SIZE,
-                page: page
-            };
-            var criteria = {template_type: 'create'};
-            if (keyword) {
-                criteria.template_name = {'$regex': keyword, '$options': '-i'};
-            }
-            params.where = JSON.stringify({
-                '$and': [criteria]
-            });
-            return api.content_templates.query(params);
-        };
 
         return {
             templateUrl: 'scripts/superdesk-authoring/views/sd-template-select.html',
@@ -1497,13 +1507,13 @@
                     scope.selectAction(template);
                 };
 
-                scope.$watch('options', function() {
-                    fetchTemplates(scope.options.page, scope.options.keyword)
+                scope.$watchCollection('options', function() {
+                    templates.fetchTemplates(scope.options.page, PAGE_SIZE, 'create', desks.activeDeskId, scope.options.keyword)
                     .then(function(result) {
                         scope.maxPage = Math.ceil(result._meta.total / PAGE_SIZE);
                         scope.templates = result;
                     });
-                }, true);
+                });
             }
         };
     }
@@ -1616,9 +1626,6 @@
                         superdesk.intent('author', 'article', data.item);
                     }],
                     filters: [{action: 'list', type: 'archive'}],
-                    condition: function(item) {
-                        return (item.lock_user === null || angular.isUndefined(item.lock_user));
-                    },
                     additionalCondition:['authoring', 'item', function(authoring, item) {
                         return authoring.itemActions(item).edit;
                     }]
@@ -1631,9 +1638,6 @@
                         superdesk.intent('kill', 'content_article', data.item);
                     }],
                     filters: [{action: 'list', type: 'archive'}],
-                    condition: function(item) {
-                        return (item.lock_user === null || angular.isUndefined(item.lock_user));
-                    },
                     additionalCondition:['authoring', 'item', function(authoring, item) {
                         return authoring.itemActions(item).kill;
                     }],
@@ -1664,9 +1668,6 @@
                         superdesk.intent('correct', 'content_article', data.item);
                     }],
                     filters: [{action: 'list', type: 'archive'}],
-                    condition: function(item) {
-                        return (item.lock_user === null || angular.isUndefined(item.lock_user));
-                    },
                     additionalCondition:['authoring', 'item', function(authoring, item) {
                         return authoring.itemActions(item).correct;
                     }],

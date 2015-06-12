@@ -414,6 +414,7 @@
     var app = angular.module('superdesk.desks', [
         'superdesk.users',
         'superdesk.authoring.widgets',
+        'superdesk.aggregate.widgets',
         'superdesk.aggregate.sidebar'
     ]);
 
@@ -607,7 +608,10 @@
                         });
                     },
                     getCurrentDeskId: function() {
-                        if (this.activeDeskId === 'personal' || !this.userDesks || !this.userDesks._items.length) {
+                        if (this.activeDeskId === 'personal' ||
+                            !this.userDesks ||
+                            !this.userDesks._items ||
+                            !this.userDesks._items.length) {
                             return 'personal';
                         }
                         if (!this.activeDeskId || !_.find(this.userDesks._items, {_id: this.activeDeskId})) {

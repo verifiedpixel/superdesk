@@ -36,6 +36,15 @@
 			<label translate>Pubstatus</label>
 			<div class="data">{{item.pubstatus}}</div>
 		</li>
+		<li ng-if="_isInProductionStates">
+			<label ng-if="_editable" translate>Not For Publication</label>
+			<span ng-if="_editable" tooltip="{{ item.marked_for_not_publication ? 'Not For Publication' : 'For Publication'  | translate }}" tooltip-placement="top">
+				<span ng-if="_editable" sd-switch ng-model="item.marked_for_not_publication"></span>
+			</span>
+			<label ng-if="!_editable" translate>
+				<span class="state-label not-for-publication" translate>Not for Publication</span>
+			</label>
+		</li>
 		<li ng-if="item.firstcreated">
 			<label translate>Created</label>
 			<div class="data" sd-reldate-complex ng-model="item.firstcreated"></div>
@@ -51,28 +60,28 @@
 		<li>
 			<label translate>Urgency</label>
 			<div class="data visible small" ng-if="metadata.newsvalue">
-				<div sd-meta-dropdown data-list="metadata.newsvalue" data-item="item.urgency" data-disabled="!_editable" data-field="value" data-change="autosave(item)"></div>
+				<div sd-meta-dropdown data-list="metadata.newsvalue" data-item="item.urgency" ng-disabled="!_editable" data-field="value" data-change="autosave(item)"></div>
 			</div>
 		</li>
 		<li>
 			<label translate>Priority</label>
 			<div class="data visible small" ng-if="metadata.priority">
-				<div sd-meta-dropdown data-list="metadata.priority" data-item="item.priority" data-disabled="!_editable" data-field="qcode" data-change="autosave(item)"></div>
+				<div sd-meta-dropdown data-list="metadata.priority" data-item="item.priority" ng-disabled="!_editable" data-field="qcode" data-change="autosave(item)"></div>
 			</div>
 		</li>
 		<li class="terms-box">
 			<label translate>Subject</label>
-			<div sd-meta-terms data-item="item" data-field="subject" data-unique="qcode" data-list="metadata.subjectcodes" data-disabled="!_editable" data-change="autosave(item)"></div>
+			<div sd-meta-terms data-item="item" data-field="subject" data-unique="qcode" data-list="metadata.subjectcodes" ng-disabled="!_editable" data-change="autosave(item)"></div>
 		</li>
 		<li>
 			<label translate>ANPA category</label>
 			<div class="data visible" ng-if="metadata.categories">
-				<div sd-meta-dropdown data-list="metadata.categories" data-item="item['anpa-category']" data-disabled="!_editable" data-change="autosave(item)"></div>
+				<div sd-meta-dropdown data-list="metadata.categories" data-item="item['anpa-category']" ng-disabled="!_editable" data-change="autosave(item)"></div>
 			</div>
 		</li>
 		<li class="terms-box">
 			<label translate>Genre</label>
-			<div sd-meta-terms data-item="item" data-field="genre" data-unique="value" data-list="metadata.genre" data-disabled="!_editable" data-change="autosave(item)" data-postprocessing="processGenre()"></div>
+			<div sd-meta-terms data-item="item" data-field="genre" data-unique="value" data-list="metadata.genre" ng-disabled="!_editable" data-change="autosave(item)" data-postprocessing="processGenre()"></div>
 		</li>
 		<li>
 			<label translate>Usageterms</label>
@@ -88,7 +97,7 @@
 		</li>
 		<li class="terms-box">
 			<label translate>Place</label>
-			<div sd-meta-terms data-item="item" data-field="place" data-unique="value" data-change="autosave(item)" data-list="metadata.locators" data-disabled="!_editable"></div>
+			<div sd-meta-terms data-item="item" data-field="place" data-unique="value" data-change="autosave(item)" data-list="metadata.locators" ng-disabled="!_editable"></div>
 		</li>
 		<li class="terms-box">
 			<label translate>Keywords</label>
@@ -158,12 +167,12 @@
 			</li>
 		</ul>
 	</div>
-	<div sd-toggle-box data-title="Publishing" data-open="true">
+	<div sd-toggle-box data-title="Publishing" data-open="true" ng-hide="['published', 'killed', 'corrected'].indexOf(item.state)!=-1">
 		<ul class="basic-list">
 			<li class="auto">
 				<label translate>Publish Schedule</label>
-				<div sd-datepicker ng-model="item.publish_schedule_date"></div>
-				<div sd-timepicker ng-model="item.publish_schedule_time"></div>
+				<div sd-datepicker ng-model="item.publish_schedule_date" ng-disabled="!_editable"></div>
+				<div sd-timepicker ng-model="item.publish_schedule_time" ng-disabled="!_editable"></div>
 			</li>
 		</ul>
 	</div>
