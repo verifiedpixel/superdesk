@@ -1,0 +1,13 @@
+<div class="stage">
+    <div sd-content-group-header></div>
+    <div class="stage-content"
+        sd-content-card-items
+        ng-if="agg.getState(group._id)"
+        data-stage="group._id"
+        data-allowed="true"
+        data-show-empty="false"
+        data-action="agg.preview(item)"
+        data-selected="agg.selected"
+        data-filter="agg.query">
+    </div>
+</div>

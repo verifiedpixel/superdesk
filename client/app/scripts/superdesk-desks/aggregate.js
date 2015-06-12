@@ -49,10 +49,23 @@
         .then(angular.bind(this, function() {
             return preferencesService.get(PREFERENCES_KEY)
                 .then(angular.bind(this, function(preference) {
-                    this.groups = preference != null && preference.groups ? preference.groups : [];
+                    this.groups = preference != null && preference.groups ? info(preference.groups) : [];
                     this.loading = false;
                 }));
         }));
+
+        /**
+         * Add header/subheader info to groups
+         */
+        function info(groups) {
+            angular.forEach(groups, function(group) {
+                var stage = group.type === 'stage' ? self.stageLookup[group._id] : null;
+                group.header = group.type === 'search' ? self.searchLookup[group._id].name : self.deskLookup[stage.desk].name;
+                group.subheader = group.type === 'stage' ? stage.name : null;
+            });
+
+            return groups;
+        }
 
         this.preview = function(item) {
             this.selected = item;
@@ -88,11 +101,13 @@
             if (this.groups.length > 0) {
                 return this.groups;
             }
+
             if (!this.allStages) {
-                this.allStages = Object.keys(this.stageLookup).map(function(key) {
-                    return {_id: key, type: 'stage'};
-                });
+                this.allStages = info(_.map(this.stageLookup, function(stage) {
+                    return {_id: stage._id, type: 'stage'};
+                }));
             }
+
             return this.allStages;
         };
 
@@ -271,7 +286,7 @@
         };
     }
 
-    angular.module('superdesk.aggregate.sidebar', ['superdesk.authoring.widgets', 'superdesk.desks'])
+    angular.module('superdesk.aggregate', ['superdesk.authoring.widgets', 'superdesk.desks'])
     .config(['authoringWidgetsProvider', function(authoringWidgetsProvider) {
         authoringWidgetsProvider
         .widget('aggregate', {

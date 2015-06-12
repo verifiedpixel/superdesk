@@ -1,7 +1,7 @@
 describe('templates', function() {
     'use strict';
 
-    beforeEach(module('superdesk.aggregate.sidebar'));
+    beforeEach(module('superdesk.aggregate'));
 
     describe('aggregate widget controller', function() {
         var scope, ctrl;
@@ -10,14 +10,17 @@ describe('templates', function() {
             scope = $rootScope.$new();
             ctrl = $controller('AggregateCtrl', {$scope: scope});
         }));
+
         it('can fetch the saved state on init', inject(function(storage) {
             storage.clear();
             expect(ctrl.state).toEqual({});
         }));
+
         it('can assume unset state is true', inject(function(storage) {
             storage.clear();
             expect(ctrl.getState('test')).toBe(true);
         }));
+
         it('can switch state', inject(function(storage) {
             storage.clear();
             ctrl.switchState('test');
@@ -25,6 +28,7 @@ describe('templates', function() {
             ctrl.switchState('test');
             expect(ctrl.getState('test')).toBe(true);
         }));
+
         it('can remember state', inject(function($rootScope, $controller) {
             ctrl.switchState('test');
             expect(ctrl.getState('test')).toBe(false);
