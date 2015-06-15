@@ -549,8 +549,8 @@
     function contentConfig(superdesk) {
         /* globals: gettext */
         superdesk
-            .activity('/workspace/content', {
-                label: gettext('Workspace'),
+            .activity('/workspace/production', {
+                label: gettext('Production'),
                 priority: 100,
                 controller: 'Content',
                 controllerAs: 'content',
