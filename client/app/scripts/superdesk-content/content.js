@@ -103,7 +103,7 @@
 
     ContentGroupDirective.$inject = ['search', 'api', 'superdesk', 'desks', '$timeout'];
     function ContentGroupDirective(search, api, superdesk, desks, $timeout) {
-        var ITEM_HEIGHT = 58,
+        var ITEM_HEIGHT = 57,
             ITEMS_COUNT = 5,
             BUFFER = 8,
             UP = -1,

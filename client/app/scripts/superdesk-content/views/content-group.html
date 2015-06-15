@@ -6,7 +6,6 @@
                 class="list-item-view"
                 tabindex="0">
                 <div sd-media-box
-                    class="media-box media-{{ :: item.type }}"
                     ng-class="{active: item === selected, archived: item.archived || item.created, locked: lock.isLocked}"
                     ng-click="select(item)"></div>
             </li>
