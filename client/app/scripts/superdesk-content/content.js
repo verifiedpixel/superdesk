@@ -188,8 +188,6 @@
                         from = Math.max(0, start - BUFFER),
                         to = Math.min(scope.total, start + ITEMS_COUNT + BUFFER);
 
-                    console.log('render', top, start, from, to);
-
                     if (parseInt(list.style.height, 10) !== scope.total * ITEM_HEIGHT) {
                         list.style.height = (scope.total * ITEM_HEIGHT) + 'px';
                     }
@@ -199,7 +197,6 @@
                     return apiquery().then(function(items) {
                         scope.$applyAsync(function() {
                             if (scope.total !== items._meta.total) {
-                                console.log(scope.total, items._meta.total);
                                 scope.total = items._meta.total;
                                 list.style.height = (scope.total * ITEM_HEIGHT) + 'px';
                             }
