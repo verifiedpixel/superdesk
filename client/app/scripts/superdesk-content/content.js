@@ -103,23 +103,21 @@
 
     ContentGroupDirective.$inject = ['search', 'api', 'superdesk', 'desks', '$timeout'];
     function ContentGroupDirective(search, api, superdesk, desks, $timeout) {
-        var ITEM_HEIGHT = 57,
-           ITEMS_COUNT = 8,
-           BUFFER = 8,
-           UP = -1,
-           DOWN = 1,
-           MOVES = {
-               38: UP,
-               40: DOWN
-           };
+        var ITEM_HEIGHT = 58,
+            ITEMS_COUNT = 5,
+            BUFFER = 8,
+            UP = -1,
+            DOWN = 1,
+            ENTER_KEY = 13,
+            MOVES = {
+                38: UP,
+                40: DOWN
+            };
 
         return {
+            require: '^sdListLayout',
             templateUrl: 'scripts/superdesk-content/views/content-group.html',
-            link: function(scope, elem) {
-
-                scope.uuid = function(item) {
-                    return item._id;
-                };
+            link: function(scope, elem, attrs, listLayout) {
 
                 scope.view = 'compact';
                 scope.page = 1;
@@ -127,10 +125,10 @@
                 scope.cacheNextItems = [];
                 scope.cachePreviousItems = [];
 
-                scope.edit = edit;
+                scope.uuid = uuid;
+                scope.select = select;
                 scope.preview = preview;
                 scope.renderNew = renderNew;
-                scope.select = select;
 
                 scope.$watch('group', queryItems);
                 scope.$on('task:stage', handleStage);
@@ -138,6 +136,7 @@
 
                 var list = elem[0].getElementsByClassName('inline-content-items')[0],
                     scrollElem = elem.find('.stage-content').first();
+
                 scrollElem.on('keydown', handleKey);
                 scrollElem.on('scroll', handleScroll);
                 scope.$on('$destroy', function() {
@@ -154,8 +153,13 @@
                     }
                 }
 
-                function select(view) {
-                    scope.selected = view;
+                function select(item) {
+                    scope.selected = item;
+                }
+
+                function preview(item) {
+                    select(item);
+                    listLayout.openItem(item);
                 }
 
                 function queryItems() {
@@ -265,6 +269,10 @@
                         $timeout.cancel(updateTimeout);
                         move(MOVES[code], event);
                         handleScroll(); // make sure we scroll after moving
+                    } else if (code === ENTER_KEY) {
+                        scope.$applyAsync(function() {
+                            preview(scope.selected);
+                        });
                     }
                 }
 
@@ -309,14 +317,8 @@
             }
         };
 
-        function preview(item) {
-            desks.setWorkspace(item.task.desk, item.task.stage);
-            superdesk.intent('read_only', 'content_article', item);
-        }
-
-        function edit(item) {
-            desks.setWorkspace(item.task.desk, item.task.stage);
-            superdesk.intent('author', 'article', item);
+        function uuid(item) {
+            return item._id;
         }
     }
 

@@ -4,8 +4,11 @@
         <ul class="inline-content-items compact-view list-view">
             <li ng-repeat="item in items track by uuid(item)"
                 class="list-item-view"
-                ng-class="{active: item === selected.preview || item._id === selected.fetch}">
-                <div sd-media-box></div>
+                tabindex="0">
+                <div sd-media-box
+                    class="media-box media-{{ :: item.type }}"
+                    ng-class="{active: item === selected, archived: item.archived || item.created, locked: lock.isLocked}"
+                    ng-click="select(item)"></div>
             </li>
         </ul>
     </div>

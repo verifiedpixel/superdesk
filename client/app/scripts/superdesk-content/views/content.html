@@ -2,7 +2,6 @@
     <div class="list-layout" ng-class="layout.view" ng-show="!layout.view.min">
         <div class="subnav">
             <div class="button-stack right-stack">   
-
                 <div class="navbtn dropdown strict highlights-dropdown" 
                     dropdown sd-package-highlights-dropdown 
                     ng-if="type === 'archive' && selected.desk">
@@ -55,7 +54,7 @@
 
     <div class="item-layout" ng-class="layout.view">
         <div sd-authoring-embedded
-            data-item="selected.preview"
+            data-item="layout.item"
             data-action="view"
             data-layout="layout"
         ></div>
