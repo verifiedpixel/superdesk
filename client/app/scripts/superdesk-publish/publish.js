@@ -30,6 +30,9 @@
             label: 'File',
             templateUrl: 'scripts/superdesk-publish/views/file-config.html'
         },
+        pull: {
+            label: 'Pull'
+        },
         PublicArchive: {
             label: 'Public Archive',
             templateUrl: 'scripts/superdesk-publish/views/public-archive-config.html'
@@ -299,8 +302,8 @@
         $scope.reload();
     }
 
-    SubscribersDirective.$inject = ['gettext', 'notify', 'api', 'adminPublishSettingsService', 'modal', 'metadata'];
-    function SubscribersDirective(gettext, notify, api, adminPublishSettingsService, modal, metadata) {
+    SubscribersDirective.$inject = ['gettext', 'notify', 'api', 'adminPublishSettingsService', 'modal', 'metadata', 'filters', '$q'];
+    function SubscribersDirective(gettext, notify, api, adminPublishSettingsService, modal, metadata, filters, $q) {
         return {
             templateUrl: 'scripts/superdesk-publish/views/subscribers.html',
             link: function ($scope) {
@@ -331,13 +334,35 @@
                 }
 
                 var fetchPublishFilters = function() {
-                    api.query('publish_filters').then(function(filters) {
+                    return api.query('publish_filters').then(function(filters) {
                         $scope.publishFilters = filters._items;
                     });
                 };
 
+                var initGlobalFilters = function() {
+                    if (!$scope.subscriber) {
+                        return;
+                    }
+
+                    if (!$scope.subscriber.global_filters) {
+                        $scope.subscriber.global_filters = {};
+                    }
+
+                    _.each($scope.globalFilters, function(filter) {
+                        if (!(filter._id in $scope.subscriber.global_filters)) {
+                            $scope.subscriber.global_filters[filter._id] = true;
+                        }
+                    });
+                };
+
+                var fetchGlobalPublishFilters = function() {
+                    return filters.getGlobalPublishFilters().then(function(filters) {
+                        $scope.globalFilters = filters;
+                    });
+                };
+
                 function fetchPublishErrors() {
-                    adminPublishSettingsService.fetchPublishErrors().then(function(result) {
+                    return adminPublishSettingsService.fetchPublishErrors().then(function(result) {
                         $scope.all_errors = result._items[0].all_errors;
                     });
                 }
@@ -351,7 +376,6 @@
                 };
 
                 $scope.saveNewDestination = function() {
-                    $scope.subscriber.destinations = $scope.subscriber.destinations || [];
                     $scope.subscriber.destinations.push($scope.newDestination);
                     $scope.newDestination = null;
                 };
@@ -380,6 +404,8 @@
                                         angular.isDefined(response.data._issues.name.unique)) {
                                         notify.error(gettext('Error: Subscriber with Name ' + $scope.subscriber.name +
                                             ' already exists.'));
+                                    } else if (angular.isDefined(response.data._issues.destinations)) {
+                                        notify.error(gettext('Error: Subscriber must have at least one destination.'));
                                     }
                                 } else {
                                     notify.error(gettext('Error: Failed to save Subscriber.'));
@@ -389,14 +415,23 @@
                 };
 
                 $scope.edit = function(subscriber) {
-                    $scope.origSubscriber = subscriber || {};
-                    $scope.subscriber = _.create($scope.origSubscriber);
-                    $scope.subscriber.critical_errors = $scope.origSubscriber.critical_errors;
-                    $scope.subscriber.publish_filter = $scope.origSubscriber.publish_filter || {};
+                    var promises = [];
+                    promises.push(fetchPublishErrors());
+                    promises.push(fetchPublishFilters());
+                    promises.push(fetchGlobalPublishFilters());
 
-                    $scope.subscriber.publish_filter.filter_type = $scope.subscriber.publish_filter.filter_type  || 'blocking';
-                    fetchPublishErrors();
-                    fetchPublishFilters();
+                    $q.all(promises).then(function() {
+                        $scope.origSubscriber = subscriber || {};
+                        $scope.subscriber = _.create($scope.origSubscriber);
+                        $scope.subscriber.critical_errors = $scope.origSubscriber.critical_errors;
+                        $scope.subscriber.publish_filter = $scope.origSubscriber.publish_filter || {};
+                        $scope.subscriber.destinations = $scope.subscriber.destinations || [];
+                        $scope.subscriber.global_filters =  $scope.origSubscriber.global_filters || {};
+                        $scope.subscriber.publish_filter.filter_type = $scope.subscriber.publish_filter.filter_type  || 'blocking';
+                        initGlobalFilters();
+                    }, function() {
+                        notify.error(gettext('Subscriber could not be initialized!'));
+                    });
                 };
 
                 $scope.remove = function(subscriber) {
@@ -491,6 +526,18 @@
                 type: 'http',
                 backend: {
                     rel: 'io_errors'
+                }
+            });
+            apiProvider.api('publish_filters', {
+                type: 'http',
+                backend: {
+                    rel: 'publish_filters'
+                }
+            });
+            apiProvider.api('publish_filter_test', {
+                type: 'http',
+                backend: {
+                    rel: 'publish_filter_test'
                 }
             });
         }]);

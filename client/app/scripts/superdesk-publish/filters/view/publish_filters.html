@@ -12,7 +12,9 @@
             <li ng-repeat="filter in publishFilters track by filter._id" class="clearfix">
                 <div class="header">
 	                <h6>{{:: filter.name }}</h6>
+                    <i>{{:: filter.is_global?'[Global]':'' }}</i>
                     <div class="actions">
+                        <button ng-click="productionTest(filter)" title="{{:: 'Test Publish Filter' | translate }}"><i class="svg-icon-ok"></i></button>
                         <button ng-click="edit(filter)" title="{{:: 'Edit Publish Filter' | translate }}"><i class="icon-pencil"></i></button>
                         <button ng-click="remove(filter)" title="{{:: 'Remove Publish Filter' | translate }}"><i class="icon-trash"></i></button>
                     </div>
@@ -33,6 +35,15 @@
                 <div class="field">
                     <label for="publishFilter-name" translate>Name</label>
                     <input type="text" id="publishFilter-name" required ng-model="publishFilter.name">
+                </div>
+
+                <div class="field">
+                    <label class="right">
+                        {{:: 'Global' | translate }}
+                        <span tooltip="{{ publishFilter.is_global ? 'Global' : 'Parochial'  | translate }}" tooltip-placement="right">
+                            <span class="pull-right" sd-switch ng-model="publishFilter.is_global"></span>
+                        </span>
+                    </label>
                 </div>
 
                 <div class="filter-tags" ng-repeat="filterRow in publishFilter.publish_filter">
@@ -98,5 +109,7 @@
         <button class="btn btn-primary" ng-click="save()" ng-disabled="!editForm.$valid" translate>Save</button>
     </div>
 </div>
-</div>
 
+<div>
+    <div ng-if="productionTest" ng-include="'scripts/superdesk-publish/filters/view/production-test.html'"></div>
+</div>

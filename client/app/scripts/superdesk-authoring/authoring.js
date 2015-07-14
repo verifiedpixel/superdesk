@@ -11,7 +11,7 @@
         urgency: null,
         priority: null,
         subject: [],
-        'anpa-category': {},
+        'anpa_category': [],
         genre: [],
         groups: [],
         usageterms: null,
@@ -28,7 +28,7 @@
         marked_for_not_publication: false,
         pubstatus: null,
         more_coming: false,
-        restrictions: ''
+        targeted_for: []
     });
 
     var DEFAULT_ACTIONS = Object.freeze({
@@ -319,11 +319,16 @@
 
             stripHtml(diff);
             autosave.stop(item);
-            return api.save('archive', item, diff).then(function(_item) {
-                item._autosave = null;
-                item._locked = lock.isLocked(item);
-                return item;
-            });
+
+            if (_.size(diff) > 0) {
+                return api.save('archive', item, diff).then(function(_item) {
+                    item._autosave = null;
+                    item._locked = lock.isLocked(item);
+                    return item;
+                });
+            } else {
+                return $q.when(origItem);
+            }
         };
 
         /**

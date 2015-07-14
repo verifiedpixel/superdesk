@@ -10,7 +10,7 @@
         <ul class="pills-list provider-list">
             <li ng-repeat="subscriber in subscribers._items track by subscriber._id" class="clearfix">
                 <div class="header">
-                    <h6>{{:: subscriber.name }}</h6>
+                    <h6>{{:: subscriber.name }} <span class="label offProvider" ng-if="!subscriber.is_active" translate>Not Active</span></h6>
                     <div class="actions">
                         <button ng-click="edit(subscriber)" title="{{:: 'Edit Subscriber' | translate }}"><i class="icon-pencil"></i></button>
                     </div>
@@ -20,7 +20,7 @@
     </div>
 </div>
 
-<div sd-modal data-model="subscriber" class="subscriber-modal modal-big">
+<div sd-modal data-model="subscriber" class="subscriber-modal modal-big moz-scroll-fix">
     <div class="modal-header"> <a href="" class="close" ng-click="cancel()"><i class="icon-close-small"></i></a>
         <h3 translate ng-show="subscriber._id" translate>Edit Subscriber "{{ origSubscriber.name }}"</h3>
         <h3 translate ng-hide="subscriber._id" translate>Add New Subscriber</h3>
@@ -50,6 +50,13 @@
                         </div>
 
                         <div class="field">
+                            <label for="subType" translate>Subscriber Type</label>
+                            <select id="subType" ng-model="subscriber.subscriber_type" ng-options="s.value as s.name for s in subTypes" required>
+                                <option value=""></option>
+                            </select>
+                        </div>
+
+                        <div class="field">
                             <label for="media-type" translate>Media Type</label>
                             <select id="media-type" class="input" ng-model="subscriber.media_type">
                                 <option value="media" translate>Media</option>
@@ -63,22 +70,6 @@
                             <select id="geoRestrictions" ng-model="subscriber.geo_restrictions" ng-options="g.value as g.name for g in geoRestrictions">
                                 <option value=""></option>
                             </select>
-                        </div>
-
-                        <div class="field">
-                            <label for="subType" translate>Type</label>
-                            <select id="subType" ng-model="subscriber.subscriber_type" ng-options="s.value as s.name for s in subTypes">
-                                <option value=""></option>
-                            </select>
-                        </div>
-
-                        <div class="field">
-                          <label class="right">
-                            {{:: 'Can Send Takes Package(s)' | translate }}
-                            <span tooltip="{{ subscriber.can_send_takes_packages ? 'Can\'t Send Takes Package(s)' : 'Can Send Takes Package(s)'  | translate }}" tooltip-placement="right">
-                              <span class="pull-right" id="subscriber-can_send_takes_packages" sd-switch ng-model="subscriber.can_send_takes_packages"></span>
-                            </span>
-                          </label>
                         </div>
 
                         <div class="field">
@@ -130,12 +121,27 @@
                             </div>
                         </div>
                     </tab>
+
+                    <tab heading="Applied Global Filters" class="TabContent">
+                        <div class="content privileges-settings">
+                            <div class="horizontal">
+                                <div class="roles-list">
+                                    <div ng-repeat="gf in globalFilters track by gf._id | orderBy:name" class="field">
+                                        <label>
+                                            {{:: gf.name}}
+                                            <span sd-switch ng-model="subscriber.global_filters[gf._id]"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </tab>
                 </tabset>
             </fieldset>
         </form>
     </div>
     <div class="modal-footer">
         <button class="btn btn-default" ng-click="cancel()" translate>Cancel</button>
-        <button class="btn btn-primary" ng-click="save()" ng-disabled="!editForm.$valid" translate>Save</button>
+        <button class="btn btn-primary" ng-click="save()" ng-disabled="subscriber.destinations.length === 0" translate>Save</button>
     </div>
 </div>

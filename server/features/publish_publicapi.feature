@@ -17,7 +17,7 @@ Feature: Publish content to the public API
         	"original_creator": "#CONTEXT_USER_ID#",
         	"versioncreated": "2015-06-01T22:19:08+0000",
         	"subject": [{"name": "medical research", "parent": "07000000", "qcode": "07005000"}],
-        	"anpa-category": {"qcode": "a"},
+        	"anpa_category": [{"qcode": "a"}],
         	"task": {
         		"desk": "#desks._id#",
         		"stage": "#desks.incoming_stage#",
@@ -41,7 +41,7 @@ Feature: Publish content to the public API
 		When we post to "/subscribers" with success
 		"""
 		{
-		  "name":"Channel 3","media_type":"media", "can_send_takes_packages": true, "sequence_num_settings":{"min" : 1, "max" : 10}, "email": "test@test.com",
+		  "name":"Channel 3","media_type":"media", "subscriber_type": "digital", "sequence_num_settings":{"min" : 1, "max" : 10}, "email": "test@test.com",
 		  "destinations":[{"name":"Test","format": "nitf", "delivery_type":"email","config":{"recipients":"test@test.com"}}]
 		}
 		"""
