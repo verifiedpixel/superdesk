@@ -76,7 +76,7 @@ def json_match(context_data, response_data):
             if key not in response_data:
                 print(key, ' not in ', response_data)
                 return False
-            if not context_data[key]:
+            if context_data[key] == "__any_value__":
                 test_key_is_present(key, context_data, response_data)
                 continue
             if not json_match(context_data[key], response_data[key]):
@@ -1179,6 +1179,7 @@ def get_spiked_content(context, item_id):
     assert_200(context.response)
     response_data = json.loads(context.response.get_data())
     assert_equal(response_data['state'], 'spiked')
+    assert_equal(response_data['operation'], 'spike')
 
 
 @then('we get unspiked content "{id}"')
@@ -1188,6 +1189,7 @@ def get_unspiked_content(context, id):
     assert_200(context.response)
     response_data = json.loads(context.response.get_data())
     assert_equal(response_data['state'], 'draft')
+    assert_equal(response_data['operation'], 'unspike')
     # Tolga Akin (05/11/14)
     # Expiry value doesn't get set to None properly in Elastic.
     # Discussed with Petr so we'll look into this later
@@ -1413,6 +1415,11 @@ def step_impl_when_publish_url(context, item_id, pub_type, state):
     data = json.dumps(context_data)
     context.response = context.client.patch(get_prefixed_url(context.app, '/archive/{}/{}'.format(pub_type, item_id)),
                                             data=data, headers=headers)
+    resp = parse_json_response(context.response)
+    linked_packages = resp.get('linked_in_packages', [])
+    if linked_packages:
+        take_package = linked_packages[0].get('package', '')
+        set_placeholder(context, 'archive.{}.take_package'.format(item_id), take_package)
 
 
 @then('the ingest item is routed based on routing scheme and rule "{rule_name}"')
