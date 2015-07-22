@@ -24,45 +24,6 @@ define([
         'superdesk.asset'
     ]);
 
-    app.value('providerTypes', {
-        aap: {
-            label: 'AAP',
-            templateUrl: 'scripts/superdesk-ingest/views/settings/aapConfig.html'
-        },
-        reuters: {
-            label: 'Reuters',
-            templateUrl: 'scripts/superdesk-ingest/views/settings/reutersConfig.html'
-        },
-        rss: {
-            label: 'RSS',
-            templateUrl: 'scripts/superdesk-ingest/views/settings/rssConfig.html'
-        },
-        afp: {
-            label: 'AFP',
-            templateUrl: 'scripts/superdesk-ingest/views/settings/afpConfig.html'
-        },
-        ftp: {
-            label: 'FTP',
-            templateUrl: 'scripts/superdesk-ingest/views/settings/ftp-config.html'
-        },
-        teletype: {
-            label: 'Teletype',
-            templateUrl: 'scripts/superdesk-ingest/views/settings/teletypeConfig.html'
-        },
-        email: {
-            label: 'Email',
-            templateUrl: 'scripts/superdesk-ingest/views/settings/emailConfig.html'
-        },
-        dpa: {
-            label: 'DPA',
-            templateUrl: 'scripts/superdesk-ingest/views/settings/aapConfig.html'
-        },
-        search: {
-            label: 'Search provider',
-            templateUrl: 'scripts/superdesk-ingest/views/settings/searchConfig.html'
-        }
-    });
-
     var PROVIDER_DASHBOARD_DEFAULTS = {
         show_log_messages: true,
         show_ingest_count: true,
@@ -362,15 +323,52 @@ define([
         };
     }
 
-    IngestSourcesContent.$inject = ['providerTypes', 'gettext', 'notify', 'api', '$location', 'modal', 'asset'];
-    function IngestSourcesContent(providerTypes, gettext, notify, api, $location, modal, asset) {
+    IngestSourcesContent.$inject = ['gettext', 'notify', 'api', '$location', 'modal', 'asset'];
+    function IngestSourcesContent(gettext, notify, api, $location, modal, asset) {
         return {
             templateUrl: asset.templateUrl('superdesk-ingest/views/settings/ingest-sources-content.html'),
             link: function($scope) {
                 $scope.provider = null;
                 $scope.origProvider = null;
 
-                $scope.types = providerTypes;
+                $scope.types = {
+                    aap: {
+                        label: 'AAP',
+                        templateUrl: 'scripts/superdesk-ingest/views/settings/aapConfig.html'
+                    },
+                    reuters: {
+                        label: 'Reuters',
+                        templateUrl: 'scripts/superdesk-ingest/views/settings/reutersConfig.html'
+                    },
+                    rss: {
+                        label: 'RSS',
+                        templateUrl: 'scripts/superdesk-ingest/views/settings/rssConfig.html'
+                    },
+                    afp: {
+                        label: 'AFP',
+                        templateUrl: 'scripts/superdesk-ingest/views/settings/afpConfig.html'
+                    },
+                    ftp: {
+                        label: 'FTP',
+                        templateUrl: 'scripts/superdesk-ingest/views/settings/ftp-config.html'
+                    },
+                    teletype: {
+                        label: 'Teletype',
+                        templateUrl: 'scripts/superdesk-ingest/views/settings/teletypeConfig.html'
+                    },
+                    email: {
+                        label: 'Email',
+                        templateUrl: 'scripts/superdesk-ingest/views/settings/emailConfig.html'
+                    },
+                    dpa: {
+                        label: 'DPA',
+                        templateUrl: 'scripts/superdesk-ingest/views/settings/aapConfig.html'
+                    },
+                    search: {
+                        label: 'Search provider',
+                        templateUrl: 'scripts/superdesk-ingest/views/settings/searchConfig.html'
+                    }
+                }; 
                 $scope.minutes = [0, 1, 2, 3, 4, 5, 8, 10, 15, 30, 45];
                 $scope.seconds = [0, 5, 10, 15, 30, 45];
                 $scope.hours = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
