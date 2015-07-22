@@ -334,39 +334,39 @@ define([
                 $scope.types = {
                     aap: {
                         label: 'AAP',
-                        templateUrl: 'scripts/superdesk-ingest/views/settings/aapConfig.html'
+                        templateUrl: asset.templateUrl('superdesk-ingest/views/settings/aapConfig.html')
                     },
                     reuters: {
                         label: 'Reuters',
-                        templateUrl: 'scripts/superdesk-ingest/views/settings/reutersConfig.html'
+                        templateUrl: asset.templateUrl('superdesk-ingest/views/settings/reutersConfig.html')
                     },
                     rss: {
                         label: 'RSS',
-                        templateUrl: 'scripts/superdesk-ingest/views/settings/rssConfig.html'
+                        templateUrl: asset.templateUrl('superdesk-ingest/views/settings/rssConfig.html')
                     },
                     afp: {
                         label: 'AFP',
-                        templateUrl: 'scripts/superdesk-ingest/views/settings/afpConfig.html'
+                        templateUrl: asset.templateUrl('superdesk-ingest/views/settings/afpConfig.html')
                     },
                     ftp: {
                         label: 'FTP',
-                        templateUrl: 'scripts/superdesk-ingest/views/settings/ftp-config.html'
+                        templateUrl: asset.templateUrl('superdesk-ingest/views/settings/ftp-config.html')
                     },
                     teletype: {
                         label: 'Teletype',
-                        templateUrl: 'scripts/superdesk-ingest/views/settings/teletypeConfig.html'
+                        templateUrl: asset.templateUrl('superdesk-ingest/views/settings/teletypeConfig.html')
                     },
                     email: {
                         label: 'Email',
-                        templateUrl: 'scripts/superdesk-ingest/views/settings/emailConfig.html'
+                        templateUrl: asset.templateUrl('superdesk-ingest/views/settings/emailConfig.html')
                     },
                     dpa: {
                         label: 'DPA',
-                        templateUrl: 'scripts/superdesk-ingest/views/settings/aapConfig.html'
+                        templateUrl: asset.templateUrl('superdesk-ingest/views/settings/aapConfig.html')
                     },
                     search: {
                         label: 'Search provider',
-                        templateUrl: 'scripts/superdesk-ingest/views/settings/searchConfig.html'
+                        templateUrl: asset.templateUrl('superdesk-ingest/views/settings/searchConfig.html')
                     }
                 }; 
                 $scope.minutes = [0, 1, 2, 3, 4, 5, 8, 10, 15, 30, 45];
