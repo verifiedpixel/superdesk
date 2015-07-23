@@ -117,12 +117,12 @@ function CommentTextDirective($compile) {
 }
 
 angular.module('superdesk.authoring.comments', ['superdesk.authoring.widgets', 'mentio', 'superdesk.api'])
-    .config(['authoringWidgetsProvider', function(authoringWidgetsProvider) {
+    .config(['authoringWidgetsProvider', 'assetProvider', function(authoringWidgetsProvider, asset) {
         authoringWidgetsProvider
             .widget('comments', {
                 icon: 'comments',
                 label: gettext('Comments'),
-                template: 'scripts/superdesk-authoring/comments/views/comments-widget.html',
+                template: asset.templateUrl('superdesk-authoring/comments/views/comments-widget.html'),
                 order: 3,
                 side: 'right',
                 display: {authoring: true, packages: true}

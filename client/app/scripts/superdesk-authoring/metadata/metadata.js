@@ -390,12 +390,12 @@ function MetadataService(api, $q) {
 }
 
 angular.module('superdesk.authoring.metadata', ['superdesk.authoring.widgets'])
-    .config(['authoringWidgetsProvider', function(authoringWidgetsProvider) {
+    .config(['authoringWidgetsProvider', 'assetProvider', function(authoringWidgetsProvider, asset) {
         authoringWidgetsProvider
             .widget('metadata', {
                 icon: 'info',
                 label: gettext('Info'),
-                template: 'scripts/superdesk-authoring/metadata/views/metadata-widget.html',
+                template: asset.templateUrl('superdesk-authoring/metadata/views/metadata-widget.html'),
                 order: 1,
                 side: 'right',
                 display: {authoring: true, packages: true}
