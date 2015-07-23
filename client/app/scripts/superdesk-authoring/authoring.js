@@ -1556,7 +1556,7 @@
     }
 
     ArticleEditDirective.$inject = ['autosave', 'authoring', 'asset'];
-    function ArticleEditDirective(autosave, authoring) {
+    function ArticleEditDirective(autosave, authoring, asset) {
         return {
             templateUrl: asset.templateUrl('superdesk-authoring/views/article-edit.html'),
             link: function(scope) {
