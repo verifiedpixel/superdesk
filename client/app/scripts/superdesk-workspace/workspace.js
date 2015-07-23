@@ -187,10 +187,10 @@
         }
     }
 
-    WorkspaceDropdownDirective.$inject = ['desks', 'workspaces', '$route', 'preferencesService', '$location', 'reloadService'];
-    function WorkspaceDropdownDirective(desks, workspaces, $route, preferencesService, $location, reloadService) {
+    WorkspaceDropdownDirective.$inject = ['desks', 'workspaces', '$route', 'preferencesService', '$location', 'reloadService', 'asset'];
+    function WorkspaceDropdownDirective(desks, workspaces, $route, preferencesService, $location, reloadService, asset) {
         return {
-            templateUrl: 'scripts/superdesk-workspace/views/workspace-dropdown.html',
+            templateUrl: asset.templateUrl('superdesk-workspace/views/workspace-dropdown.html'),
             link: function(scope) {
 
                 scope.selectDesk = function(desk) {
@@ -242,10 +242,10 @@
         };
     }
 
-    EditWorkspaceDirective.$inject = ['workspaces'];
-    function EditWorkspaceDirective(workspaces) {
+    EditWorkspaceDirective.$inject = ['workspaces', 'asset'];
+    function EditWorkspaceDirective(workspaces, asset) {
         return {
-            templateUrl: 'scripts/superdesk-workspace/views/edit-workspace-modal.html',
+            templateUrl: asset.templateUrl('superdesk-workspace/views/edit-workspace-modal.html'),
             scope: true,
             link: function(scope) {
                 scope.workspaces = workspaces;
