@@ -458,11 +458,11 @@
             });
     }
 
-    UserRolesDirective.$inject = ['api', 'gettext', 'notify', 'modal'];
-    function UserRolesDirective(api, gettext, notify, modal) {
+    UserRolesDirective.$inject = ['api', 'gettext', 'notify', 'modal', 'asset'];
+    function UserRolesDirective(api, gettext, notify, modal, asset) {
         return {
             scope: true,
-            templateUrl: 'scripts/superdesk-users/views/settings-roles.html',
+            templateUrl: asset.templateUrl('superdesk-users/views/settings-roles.html'),
             link: function(scope) {
                 var _orig = null;
                 scope.editRole = null;
@@ -547,11 +547,11 @@
         };
     }
 
-    RolesPrivilegesDirective.$inject = ['api', 'gettext', 'notify', '$q'];
-    function RolesPrivilegesDirective(api, gettext, notify, $q) {
+    RolesPrivilegesDirective.$inject = ['api', 'gettext', 'notify', '$q', 'asset'];
+    function RolesPrivilegesDirective(api, gettext, notify, $q, asset) {
         return {
             scope: true,
-            templateUrl: 'scripts/superdesk-users/views/settings-privileges.html',
+            templateUrl: asset.templateUrl('superdesk-users/views/settings-privileges.html'),
             link: function(scope) {
 
                 api('roles').query()
@@ -1061,12 +1061,12 @@
                 }
             };
         }])
-        .directive('sdUserPrivileges', ['api', 'gettext', 'notify', function(api, gettext, notify) {
+        .directive('sdUserPrivileges', ['api', 'gettext', 'notify', 'asset', function(api, gettext, notify, asset) {
             return {
                 scope: {
                     user: '='
                 },
-                templateUrl: 'scripts/superdesk-users/views/user-privileges.html',
+                templateUrl: asset.templateUrl('superdesk-users/views/user-privileges.html'),
                 link: function(scope) {
                     api('privileges').query().
                     then(function(result) {
