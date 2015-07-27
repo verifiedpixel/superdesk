@@ -225,6 +225,11 @@
                 this.filter({not: {term: {state: 'spiked'}}});
             }
 
+            // remove the older version of digital package as part for base filtering.
+            this.filter({not: {and: [{term: {_type: 'published'}},
+                {term: {package_type: 'takes'}},
+                {term: {last_published_version: false}}]}});
+
             buildFilters(params, this);
         }
 
@@ -1242,7 +1247,8 @@
                 category: superdesk.MENU_MAIN,
                 label: gettext('Search'),
                 controller: SearchController,
-                templateUrl: asset.templateUrl('superdesk-search/views/search.html')
+                templateUrl: asset.templateUrl('superdesk-search/views/search.html'),
+                sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html'
             });
         }]);
 
