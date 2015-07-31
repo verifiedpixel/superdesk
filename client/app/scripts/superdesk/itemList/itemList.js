@@ -409,7 +409,7 @@ function(ItemList, notify, itemPinService, gettext, $timeout, asset) {
         }
     };
 }])
-.directive('sdRelatedItemListWidget', ['ItemList', 'notify', 'itemPinService', 'gettext', 'asset'
+.directive('sdRelatedItemListWidget', ['ItemList', 'notify', 'itemPinService', 'gettext', 'asset',
 function(ItemList, notify, itemPinService, gettext, asset) {
     return {
         scope: {
