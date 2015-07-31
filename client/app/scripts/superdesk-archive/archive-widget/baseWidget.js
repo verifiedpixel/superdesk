@@ -2,8 +2,11 @@
     'use strict';
 
     angular.module('superdesk.widgets.base', ['superdesk.itemList'])
-        .factory('BaseWidgetController', function BaseWidgetControllerFactory() {
+        .factory('BaseWidgetController', ['asset', function BaseWidgetControllerFactory(asset) {
             return function BaseWidgetController($scope) {
+                $scope.getTemplateUrl = function(templateUrl) {
+                    return asset.templateUrl(templateUrl);
+                };
                 $scope.options = $scope.options || {};
                 $scope.itemListOptions = $scope.itemListOptions || {};
                 $scope.actions = $scope.actions || {};
@@ -17,5 +20,5 @@
                     $scope.options.item = $scope.item;
                 }
             };
-        });
+        }]);
 })();

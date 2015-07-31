@@ -1248,7 +1248,7 @@
                 label: gettext('Search'),
                 controller: SearchController,
                 templateUrl: asset.templateUrl('superdesk-search/views/search.html'),
-                sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html'
+                sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html')
             });
         }]);
 

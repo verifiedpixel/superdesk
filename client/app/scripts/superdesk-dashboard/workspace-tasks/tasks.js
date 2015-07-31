@@ -288,14 +288,14 @@ angular.module('superdesk.workspace.tasks', [])
 
 .service('tasks', TasksService)
 
-.config(['superdeskProvider', function(superdesk) {
+.config(['superdeskProvider', 'assetProvider', function(superdesk, asset) {
 
     superdesk.activity('/workspace/tasks', {
         label: gettext('Workspace'),
         controller: TasksController,
-        templateUrl: 'scripts/superdesk-dashboard/workspace-tasks/views/workspace-tasks.html',
-        topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
-        sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
+        templateUrl: asset.templateUrl('superdesk-dashboard/workspace-tasks/views/workspace-tasks.html'),
+        topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
+        sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html'),
         beta: true,
         filters: [{action: 'view', type: 'task'}]
     });
