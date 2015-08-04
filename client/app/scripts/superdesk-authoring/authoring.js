@@ -1765,7 +1765,7 @@
                     label: gettext('Authoring Read Only'),
                     templateUrl: asset.templateUrl('superdesk-authoring/views/authoring.html'),
                     topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
-                    sideTemplateUrl: asset.temaplteUrl('superdesk-dashboard/views/workspace-sidenav.html'),
+                    sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html'),
                     controller: AuthoringController,
                     filters: [{action: 'read_only', type: 'content_article'}],
                     resolve: {
