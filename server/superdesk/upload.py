@@ -36,7 +36,7 @@ def get_upload_as_data_uri(media_id):
         response = app.response_class(
             data,
             mimetype=media_file.content_type,
-            headers={'Access-Control-Allow-Origin': '*'}
+            headers={'Access-Control-Allow-Origin': '*'},
             direct_passthrough=True)
         response.content_length = media_file.length
         response.last_modified = media_file.upload_date
