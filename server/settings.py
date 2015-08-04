@@ -21,7 +21,7 @@ try:
 except ImportError:
     from urlparse import urlparse
 
-from publicapi.settings import PUBLICAPI_MONGO_DBNAME  # noqa @UnusedImport
+from publicapi.settings import MONGO_DBNAME as PUBLICAPI_MONGO_DBNAME  # noqa @UnusedImport
 
 
 def env(variable, fallback_value=None):
@@ -140,6 +140,7 @@ INSTALLED_APPS = [
     'superdesk.macro_register',
     'superdesk.commands',
     'superdesk.data_consistency',
+    'superdesk.locators.locators',
 
     'apps.archive',
     'apps.stages',
@@ -227,8 +228,10 @@ LDAP_BASE_FILTER = env('LDAP_BASE_FILTER', '')
 LDAP_USER_FILTER = env('LDAP_USER_FILTER', "(&(objectCategory=user)(objectClass=user)(sAMAccountName={}))")
 
 # LDAP User Attributes to fetch. Keys would be LDAP Attribute Name and Value would be Supderdesk Model Attribute Name
-LDAP_USER_ATTRIBUTES = {'givenName': 'first_name', 'sn': 'last_name', 'displayName': 'display_name',
-                        'mail': 'email', 'ipPhone': 'phone'}
+LDAP_USER_ATTRIBUTES = json.loads(env('LDAP_USER_ATTRIBUTES',
+                                      '{"givenName": "first_name", "sn": "last_name", '
+                                      '"displayName": "display_name", "mail": "email", '
+                                      '"ipPhone": "phone"}'))
 
 if LDAP_SERVER:
     INSTALLED_APPS.append('apps.auth.ldap')

@@ -15,7 +15,7 @@ from superdesk.errors import SuperdeskApiError, InvalidStateTransitionError
 from superdesk import get_resource_service
 from apps.archive.archive import SOURCE as ARCHIVE
 from apps.content import LINKED_IN_PACKAGES, PACKAGE_TYPE, TAKES_PACKAGE, ITEM_TYPE, \
-    ITEM_TYPE_COMPOSITE, PACKAGE, LAST_TAKE
+    PACKAGE, LAST_TAKE, CONTENT_TYPE
 from apps.archive.common import ASSOCIATIONS, MAIN_GROUP, SEQUENCE, PUBLISH_STATES, ITEM_REF, insert_into_versions
 from .package_service import get_item_ref, create_root_group
 
@@ -55,6 +55,8 @@ class TakesPackageService():
             target_ref = get_item_ref(target)
             sequence = self.__next_sequence__(sequence)
             target_ref[SEQUENCE] = sequence
+            takes_package[SEQUENCE] = target_ref[SEQUENCE]
+            takes_package[LAST_TAKE] = target['_id']
             main_group[ASSOCIATIONS].append(target_ref)
 
         if link is not None:
@@ -63,6 +65,7 @@ class TakesPackageService():
             main_group[ASSOCIATIONS].append(link_ref)
             takes_package[SEQUENCE] = link_ref[SEQUENCE]
             takes_package[LAST_TAKE] = link['_id']
+            link[SEQUENCE] = link_ref[SEQUENCE]
 
     def __next_sequence__(self, seq):
         return seq + 1
@@ -77,7 +80,8 @@ class TakesPackageService():
         sequence = self.__next_sequence__(sequence)
         headline = self.__strip_take_info__(target.get('headline', ''))
         take_key = self.__strip_take_info__(target.get('anpa_take_key', ''))
-        to['headline'] = '{}={}'.format(headline, sequence)
+        to['event_id'] = target.get('event_id')
+        to['headline'] = headline
         to['anpa_take_key'] = '{}={}'.format(take_key, sequence)
         if target.get(config.CONTENT_STATE) in PUBLISH_STATES:
             to['anpa_take_key'] = '{} (reopens)'.format(take_key)
@@ -90,12 +94,14 @@ class TakesPackageService():
 
     def package_story_as_a_take(self, target, takes_package, link):
         takes_package.update({
-            ITEM_TYPE: ITEM_TYPE_COMPOSITE,
+            ITEM_TYPE: CONTENT_TYPE.COMPOSITE,
             PACKAGE_TYPE: TAKES_PACKAGE,
             'headline': target.get('headline'),
-            'abstract': target.get('abstract'),
+            'abstract': target.get('abstract')
         })
-        for field in ['anpa-category', 'pubstatus', 'slugline', 'urgency', 'subject', 'dateline', 'publish_schedule']:
+        for field in ['anpa_category', 'pubstatus', 'slugline',
+                      'urgency', 'subject', 'dateline',
+                      'publish_schedule', 'event_id', 'rewrite_of']:
             takes_package[field] = target.get(field)
         takes_package.setdefault(config.VERSION, 1)
 
@@ -135,20 +141,25 @@ class TakesPackageService():
             resolve_document_version(takes_package, ARCHIVE, 'PATCH', takes_package)
             archive_service.patch(takes_package_id, takes_package)
 
+        if link.get(SEQUENCE):
+            archive_service.patch(link[config.ID_FIELD], {SEQUENCE: link[SEQUENCE]})
+
         insert_into_versions(id_=takes_package_id)
 
         return link
 
-    def can_spike_takes_package_item(self, doc):
+    def is_last_takes_package_item(self, doc):
         """
         checks whether if the item is the last item of the takes package.
         if the item is not the last item then raise exception
-        :param dict doc: take of a spike package
+        :param dict doc: take of a package
         """
         if doc and doc.get(LINKED_IN_PACKAGES):
             package_id = self.get_take_package_id(doc)
             if package_id:
                 takes_package = get_resource_service(ARCHIVE).find_one(req=None, _id=package_id)
+                if LAST_TAKE not in takes_package:
+                    return True
                 return takes_package[LAST_TAKE] == doc['_id']
 
         return True
@@ -179,3 +190,21 @@ class TakesPackageService():
                     except:
                         logger.exception("Unexpected error while spiking items of takes package")
                         break
+
+    def get_first_take_in_takes_package(self, item):
+        """
+        Returns the id of the first take in the takes package.
+        :param dict item: document
+        :return str: id of the first take else None
+        """
+        package = self.get_take_package(item)
+        if package:
+            groups = package.get('groups', [])
+            refs = next((group.get('refs') for group in groups if group['id'] == 'main'), None)
+            if refs:
+                ref = next((ref for ref in refs if ref.get(SEQUENCE) == 1
+                            and ref.get(ITEM_REF, '') != item.get(config.ID_FIELD, '')), None)
+                if ref:
+                    return ref.get(ITEM_REF, None)
+
+        return None

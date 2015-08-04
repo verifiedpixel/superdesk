@@ -75,5 +75,32 @@ describe('monitoring', function() {
                 term: {'state': 'spiked'}
             });
         }));
+
+        it('can get criteria for stage with search', inject(function(cards) {
+            var card = {_id: '123', query: 'test'};
+            var criteria = cards.criteria(card);
+            expect(criteria.source.query.filtered.query.query_string.query).toBe('test');
+        }));
+
+        it('can get criteria for personal with search', inject(function(cards, session) {
+            var card = {type: 'personal', query: 'test'};
+            session.identity = {_id: 'foo'};
+            var criteria = cards.criteria(card);
+            expect(criteria.source.query.filtered.query.query_string.query).toBe('test');
+        }));
+
+        it('can get criteria for spike with search', inject(function(cards) {
+            var card = {_id: '123', type: 'spike', query: 'test'};
+            var criteria = cards.criteria(card);
+            expect(criteria.source.query.filtered.query.query_string.query).toBe('test');
+        }));
+
+        it('can get criteria for file type filter', inject(function(cards) {
+            var card = {_id: '123', fileType: JSON.stringify(['text'])};
+            var criteria = cards.criteria(card);
+            expect(criteria.source.post_filter.and).toContain({
+                terms: {type: ['text']}
+            });
+        }));
     });
 });

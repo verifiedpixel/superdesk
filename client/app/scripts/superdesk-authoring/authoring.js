@@ -18,7 +18,7 @@
         ednote: null,
         place: [],
         located: null,
-        dateline: '',
+        dateline: null,
         language: null,
         unique_name: '',
         keywords: [],
@@ -206,7 +206,7 @@
          * @param {Object} orig
          * @param {boolean} isDirty $scope dirty status.
          */
-        this.close = function closeAuthoring(diff, orig, isDirty) {
+        this.close = function closeAuthoring(diff, orig, isDirty, closeItem) {
             var promise = $q.when();
             if (this.isEditable(diff)) {
                 if (isDirty) {
@@ -223,7 +223,9 @@
                         autosave.drop(orig);
                     }
 
-                    return lock.unlock(diff);
+                    if (!closeItem){
+                        return lock.unlock(diff);
+                    }
                 });
             }
 
@@ -702,7 +704,6 @@
                 var _closing;
 
                 $scope.privileges = privileges.privileges;
-                $scope.content = new ContentCtrl($scope);
                 $scope.dirty = false;
                 $scope.views = {send: false};
                 $scope.stage = null;
@@ -765,7 +766,18 @@
                     .then(function(result) {
                         $scope.stage = result;
                     });
+                    desks.fetchDeskById($scope.origItem.task.desk).then(function (desk) {
+                        $scope.deskName = desk.name;
+                    });
                 }
+
+                /*
+                 * Open list of items in selected stage
+                 */
+                $scope.openStage = function openStage() {
+                    desks.setWorkspace($scope.item.task.desk, $scope.item.task.stage);
+                    superdesk.intent('view', 'content');
+                };
 
                 /**
                  * Create a new version
@@ -894,7 +906,8 @@
                 $scope.close = function() {
                     var referrerUrl;
                     _closing = true;
-                    authoring.close($scope.item, $scope.origItem, $scope.dirty).then(function () {
+
+                    authoring.close($scope.item, $scope.origItem, $scope.save_enabled()).then(function () {
                         if (sessionStorage.getItem('previewUrl')) {
                             referrerUrl = sessionStorage.getItem('previewUrl');
                             sessionStorage.removeItem('previewUrl');
@@ -902,6 +915,13 @@
                             referrerUrl = $scope.referrerUrl;
                         }
                         $location.url(referrerUrl);
+                    });
+                };
+
+                $scope.closeOpenNew = function(createFunction, paramValue) {
+                    _closing = true;
+                    authoring.close($scope.item, $scope.origItem, $scope.dirty, true).then(function() {
+                        createFunction(paramValue);
                     });
                 };
 
@@ -982,6 +1002,7 @@
                 }
 
                 // init
+                $scope.content = new ContentCtrl($scope);
                 $scope.closePreview();
                 $scope.$on('savework', function(e, msg) {
                     var changeMsg = msg;
@@ -1024,11 +1045,6 @@
                         refreshItem();
                     }
                 });
-
-                $scope.openStage = function openStage() {
-                    desks.setWorkspace($scope.item.task.desk, $scope.item.task.stage);
-                    superdesk.intent('view', 'content');
-                };
 
                 $scope.$on('item:publish:wrong:format', function(_e, data) {
                     if (data.item === $scope.item._id) {
@@ -1554,12 +1570,46 @@
         };
     }
 
-    ArticleEditDirective.$inject = ['autosave', 'authoring', 'asset'];
-    function ArticleEditDirective(autosave, authoring, asset) {
+    ArticleEditDirective.$inject = ['autosave', 'authoring', 'metadata', 'session', '$filter', '$timeout', 'asset'];
+    function ArticleEditDirective(autosave, authoring, metadata, session, $filter, $timeout, asset) {
         return {
             templateUrl: asset.templateUrl('superdesk-authoring/views/article-edit.html'),
             link: function(scope) {
                 scope.limits = authoring.limits;
+
+                scope.$watch('item', function(item) {
+                    if (angular.isDefined(item)) {
+                        item._datelinedate = '';
+
+                        if (angular.isDefined(item.dateline) && angular.isDefined(item.dateline.date)) {
+                            item._datelinedate = $filter('formatDatelinesDate')(item.dateline.located, item.dateline.date);
+                        }
+                    }
+                });
+
+                metadata.initialize().then(function() {
+                    scope.metadata = metadata.values;
+                });
+
+                scope.updateDateline = function(item, city) {
+                    if (angular.isUndefined(item.dateline.located) ||
+                        (angular.isDefined(item.dateline.located) && item.dateline.located.city !== city)) {
+                        if (city === '') {
+                            item.dateline.located = null;
+                            item.dateline.text = '';
+                        } else {
+                            item.dateline.located = {'city': city, 'city_code': city, 'tz': 'UTC',
+                                'dateline': 'city', 'country': '', 'country_code': '', 'state_code': '', 'state': ''};
+                        }
+                    }
+
+                    if (angular.isDefined(item.dateline.located)) {
+                        item._datelinedate = $filter('formatDatelinesDate')(item.dateline.located, item.dateline.date);
+                        item.dateline.text = $filter('previewDateline')(item.dateline.located, item.dateline.source, item.dateline.date);
+                    } else {
+                        item._datelinedate = '';
+                    }
+                };
             }
         };
     }
@@ -1608,6 +1658,7 @@
                     label: gettext('Authoring'),
                     templateUrl: asset.templateUrl('superdesk-authoring/views/authoring.html'),
                     topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
+                    sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html'),
                     controller: AuthoringController,
                     filters: [{action: 'author', type: 'article'}],
                     resolve: {
@@ -1635,6 +1686,7 @@
                     label: gettext('Kill item'),
                     priority: 100,
                     icon: 'remove',
+                    group: 'corrections',
                     controller: ['data', 'superdesk', function(data, superdesk) {
                         superdesk.intent('kill', 'content_article', data.item);
                     }],
@@ -1651,6 +1703,7 @@
                     label: gettext('Authoring Kill'),
                     templateUrl: asset.templateUrl('superdesk-authoring/views/authoring.html'),
                     topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
+                    sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html'),
                     controller: AuthoringController,
                     filters: [{action: 'kill', type: 'content_article'}],
                     resolve: {
@@ -1665,6 +1718,7 @@
                     label: gettext('Correct item'),
                     priority: 100,
                     icon: 'pencil',
+                    group: 'corrections',
                     controller: ['data', 'superdesk', function(data, superdesk) {
                         superdesk.intent('correct', 'content_article', data.item);
                     }],
@@ -1681,6 +1735,7 @@
                     label: gettext('Authoring Correct'),
                     templateUrl: asset.templateUrl('superdesk-authoring/views/authoring.html'),
                     topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
+                    sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html'),
                     controller: AuthoringController,
                     filters: [{action: 'correct', type: 'content_article'}],
                     resolve: {
@@ -1710,6 +1765,7 @@
                     label: gettext('Authoring Read Only'),
                     templateUrl: asset.templateUrl('superdesk-authoring/views/authoring.html'),
                     topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
+                    sideTemplateUrl: asset.temaplteUrl('superdesk-dashboard/views/workspace-sidenav.html'),
                     controller: AuthoringController,
                     filters: [{action: 'read_only', type: 'content_article'}],
                     resolve: {
@@ -1777,21 +1833,52 @@
         };
     }
 
-    headerInfoDirective.$inject = ['metadata', 'familyService'];
-    function headerInfoDirective(metadata, familyService) {
+    headerInfoDirective.$inject = ['familyService', 'authoringWidgets', 'authoring'];
+    function headerInfoDirective(familyService, authoringWidgets, authoring) {
         return {
             templateUrl: 'scripts/superdesk-authoring/views/header-info.html',
-            link: function (scope, elem, attrs) {
+            require: '^sdAuthoringWidgets',
+            link: function (scope, elem, attrs, WidgetsManagerCtrl) {
                 scope.$watch('item', function (item) {
                     if (!item) {
                         return;
                     }
 
                     scope.loaded = true;
+
+                    /*
+                     * Related items
+                     */
                     familyService.fetchItems(scope.item.family_id || scope.item._id, scope.item)
-                            .then(function (items) {
-                                scope.relatedItems = items;
-                            });
+                        .then(function (items) {
+                            scope.relatedItems = items;
+                        });
+
+                    var relatedItemWidget = _.filter(authoringWidgets, function (widget) {
+                        return widget._id === 'related-item';
+                    });
+
+                    scope.activateWidget = function () {
+                        WidgetsManagerCtrl.activate(relatedItemWidget[0]);
+                    };
+
+                    /*
+                     * Slider for Urgency and News Value
+                     */
+                    scope.sliderUpdate = function(item, field) {
+
+                        var o = {};
+
+                        if (angular.isDefined(item)) {
+                            o[field] = item.name;
+                        } else {
+                            o[field] = null;
+                        }
+
+                        _.extend(scope.item, o);
+                        authoring.autosave(scope.item);
+                    };
+
                 });
             }
         };

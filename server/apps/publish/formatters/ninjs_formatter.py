@@ -20,7 +20,7 @@ class NINJSFormatter(Formatter):
     NINJS Formatter
     """
     direct_copy_properties = ['versioncreated', 'usageterms', 'subject', 'language', 'headline',
-                              'urgency', 'pubstatus', 'mimetype', 'renditions', 'place', 'located',
+                              'urgency', 'pubstatus', 'mimetype', 'renditions', 'place',
                               '_created', '_updated', 'body_text', 'body_html']
 
     def format(self, article, subscriber):
@@ -36,6 +36,11 @@ class NINJSFormatter(Formatter):
                 ninjs['byline'] = self._get_byline(article)
             except:
                 pass
+
+            located = article.get('dateline', {}).get('located', {}).get('city')
+            if located:
+                ninjs['located'] = article.get('dateline', {}).get('located', {}).get('city', '')
+
             for copy_property in self.direct_copy_properties:
                 if copy_property in article:
                     ninjs[copy_property] = article[copy_property]
@@ -67,8 +72,11 @@ class NINJSFormatter(Formatter):
         return article['type']
 
     def _get_associations(self, article):
-        associations = set()
+        associations = dict()
         for group in article['groups']:
             for ref in group['refs']:
                 if 'guid' in ref:
-                    associations.add(ref['guid'])
+                    associations[group['id']] = {}
+                    associations[group['id']]['_id'] = ref['residRef']
+                    associations[group['id']]['type'] = ref['type']
+        return associations

@@ -104,7 +104,7 @@ function MetadataDropdownDirective(asset) {
                 var o = {};
 
                 if (angular.isDefined(item)) {
-                    o[scope.field] = (scope.field === 'anpa_category') ? item : item.name;
+                    o[scope.field] = (scope.field === 'place') ? [item] : item.name;
                 } else {
                     o[scope.field] = null;
                 }
@@ -224,17 +224,20 @@ function MetadataListEditingDirective(asset) {
                 $event.stopPropagation();
             };
 
-            scope.terms = [];
+            scope.terms = scope.list;
+            scope.activeList = false;
             scope.selectedTerm = '';
             var uniqueField = scope.unique || 'qcode';
 
             scope.searchTerms = function(term) {
                 if (!term) {
-                    scope.terms = [];
+                    scope.terms = scope.list;
+                    scope.activeList = false;
                 } else {
                     scope.terms = _.filter(scope.list, function(t) {
                         var searchObj = {};
                         searchObj[uniqueField] = t[uniqueField];
+                        scope.activeList = true;
                         return ((t.name.toLowerCase().indexOf(term.toLowerCase()) !== -1) &&
                             !_.find(scope.item[scope.field], searchObj));
                     });
@@ -278,61 +281,66 @@ function MetadataListEditingDirective(asset) {
     };
 }
 
-MetadataSliderDirective.$inject = ['desks', 'asset'];
-function MetadataSliderDirective(desks, asset) {
+MetadataSliderDirective.$inject = ['asset'];
+function MetadataSliderDirective(asset) {
     return {
         scope: {
-            list: '=',
-            disabled: '=ngDisabled',
             item: '=',
+            fieldprefix: '@',
             field: '@',
-            change: '&'
+            disabled: '=ngDisabled',
+            list: '=',
+            change: '&',
+            postprocessing: '&',
+            header: '@'
         },
         templateUrl: asset.templateUrl('superdesk-authoring/metadata/views/metadata-slider.html'),
-        link: function(scope) {
-            scope.$watch('list', function (list) {
-                if (!list) {
-                    return;
-                }
+        link: function(scope, element) {
+            scope.locators = scope.list;
+            scope.selectedTerm = '';
 
-                var maxValue = scope.list.length,
-                    currentValue = scope.item[scope.field],
-                    sliderDisabled = scope.disabled;
-
-                $('.sd-slider').slider({
-                    range: 'max',
-                    min: 0,
-                    max: maxValue,
-                    value: currentValue,
-                    disabled: sliderDisabled,
-                    create: function () {
-                        $(this).find('.ui-slider-thumb').css('left', (currentValue * 100) / maxValue + '%');
-                    },
-                    slide: function (event, ui) {
-                        $(this).find('.ui-slider-thumb').css('left', (ui.value * 100) / maxValue + '%').text(ui.value);
-                        select(scope.list[ui.value - 1]);
-                    },
-                    start: function () {
-                        $(this).find('.ui-slider-thumb').addClass('ui-slider-thumb-active');
-                    },
-                    stop: function () {
-                        $(this).find('.ui-slider-thumb').removeClass('ui-slider-thumb-active');
+            scope.$watch('item', function(item) {
+                if (angular.isDefined(item)) {
+                    if (angular.isDefined(scope.fieldprefix) && angular.isDefined(item[scope.fieldprefix]) &&
+                        angular.isDefined(item[scope.fieldprefix][scope.field])) {
+                        scope.selectedTerm = item[scope.fieldprefix][scope.field].city;
+                    } else if (angular.isDefined(item[scope.field])) {
+                        scope.selectedTerm = item[scope.field].city;
                     }
-                });
+                }
             });
 
-            function select(item) {
-                var o = {};
-
-                if (angular.isDefined(item)) {
-                    o[scope.field] = (scope.field === 'anpa_category') ? item : item.name;
+            scope.searchLocator = function(locator_to_find) {
+                if (!locator_to_find) {
+                    scope.locators = scope.list;
                 } else {
-                    o[scope.field] = null;
+                    scope.locators = _.filter(scope.list, function(t) {
+                        return ((t.city.toLowerCase().indexOf(locator_to_find.toLowerCase()) !== -1));
+                    });
+                }
+                return scope.locators;
+            };
+
+            scope.selectLocator = function(locator) {
+                if (locator) {
+                    if (angular.isDefined(scope.fieldprefix)) {
+                        if (angular.isUndefined(scope.item[scope.fieldprefix])) {
+                            scope.item[scope.fieldprefix] = {};
+                        }
+
+                        scope.item[scope.fieldprefix][scope.field] = locator;
+                    } else {
+                        scope.item[scope.field] = locator;
+                    }
+
+                    scope.selectedTerm = locator.city;
                 }
 
-                _.extend(scope.item, o);
-                scope.change({item: scope.item});
-            }
+                var selectedLocator = {item: scope.item, city: scope.selectedTerm};
+
+                scope.postprocessing(selectedLocator);
+                scope.change(selectedLocator);
+            };
         }
     };
 }
@@ -384,11 +392,19 @@ function MetadataService(api, $q) {
 
             self.subjectScope.change({item: self.subjectScope.item});
         },
+        fetchCities: function() {
+            var self = this;
+            return api.get('/cities').then(function(result) {
+                self.values.cities = result._items;
+            });
+        },
         initialize: function() {
             if (!this.loaded) {
                 this.loaded = this.fetchMetadataValues()
-                    .then(angular.bind(this, this.fetchSubjectcodes));
+                    .then(angular.bind(this, this.fetchSubjectcodes))
+                    .then(angular.bind(this, this.fetchCities));
             }
+
             return this.loaded;
         }
     };
@@ -414,5 +430,5 @@ angular.module('superdesk.authoring.metadata', ['superdesk.authoring.widgets'])
     .directive('sdMetaTerms', MetadataListEditingDirective)
     .directive('sdMetaDropdown', MetadataDropdownDirective)
     .directive('sdMetaWordsList', MetadataWordsListEditingDirective)
-    .directive('sdMetaSlider', MetadataSliderDirective);
+    .directive('sdMetaLocators', MetadataLocatorsDirective);
 })();

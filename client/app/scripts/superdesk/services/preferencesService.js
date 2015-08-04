@@ -1,14 +1,13 @@
-define(['angular', 'lodash'], function(angular, _) {
+define(['angular'], function(angular) {
     'use strict';
 
-    return angular.module('superdesk.preferences', ['superdesk.notify', 'superdesk.services.storage', 'superdesk.session'])
+    return angular.module('superdesk.preferences', ['superdesk.notify', 'superdesk.session'])
 
-        .service('preferencesService', ['$injector', '$rootScope', '$q', 'storage', 'session', 'notify', 'gettext',
-            function PreferencesService($injector, $rootScope, $q, storage, session, notify, gettext) {
+        .service('preferencesService', ['$injector', '$rootScope', '$q', 'session', 'notify', 'gettext',
+            function PreferencesService($injector, $rootScope, $q, session, notify, gettext) {
                 var USER_PREFERENCES = 'user_preferences',
                     SESSION_PREFERENCES = 'session_preferences',
                     ACTIVE_PRIVILEGES = 'active_privileges',
-                    PREFERENCES = 'preferences',
                     ACTIONS = 'allowed_actions',
                     userPreferences = {
                         'feature:preview': 1,
@@ -19,67 +18,60 @@ define(['angular', 'lodash'], function(angular, _) {
                         'agg:view': 1,
                         'workspace:active': 1
                     },
-                    original_preferences = null,
-                    defaultPreferences = {};
+                    preferences,
+                    preferencesPromise;
 
-                defaultPreferences[USER_PREFERENCES] = {};
-                defaultPreferences[SESSION_PREFERENCES] = {};
-                defaultPreferences[ACTIVE_PRIVILEGES] = {};
-                defaultPreferences[ACTIONS] = {};
+                $rootScope.$watch(function() {
+                    return session.token;
+                }, resetPreferences);
 
-                function saveLocally(preferences, type) {
-                    if (type && original_preferences) {
-                        angular.extend(original_preferences[type], preferences[type]);
-                    } else {
-                        original_preferences = preferences;
-                    }
-
-                    original_preferences._etag = preferences._etag;
-                    storage.setItem(PREFERENCES, original_preferences);
-                }
-
-                function loadLocally() {
-                    if (!original_preferences) {
-                        original_preferences = storage.getItem(PREFERENCES);
-                    }
-
-                    return original_preferences;
-                }
-
-                this.remove = function() {
-                    storage.removeItem(PREFERENCES);
-                    original_preferences = null;
-                };
-
+                /**
+                 * Get privileges for current user.
+                 *
+                 * @returns {Promise}
+                 */
                 this.getPrivileges = function getPrivileges() {
                     return this.get().then(function() {
-                        var preferences = loadLocally();
                         return preferences[ACTIVE_PRIVILEGES] || {};
                     });
                 };
 
+                /**
+                 * Get available content actions for current user.
+                 *
+                 * @returns {Promise}
+                 */
                 this.getActions = function getActions() {
                     return this.get().then(function() {
-                        var preferences = loadLocally();
                         return preferences[ACTIONS] || [];
                     });
                 };
 
-                function getPreferences(sessionId, key) {
-                    var api = $injector.get('api');
-
-                    if (!sessionId) {
-                        return $q.reject();
-                    }
-
-                    return api.find('preferences', sessionId, null, true).then(function(preferences) {
-                        _.defaults(preferences, defaultPreferences);
-                        saveLocally(preferences);
-                        return processPreferences(preferences, key);
-                    });
+                /**
+                 * Fetch preferences from server and store local copy.
+                 * On next call it will remove local copy and fetch again.
+                 */
+                function getPreferences() {
+                    preferences = null;
+                    preferencesPromise = session.getIdentity()
+                        .then(function() {
+                            var api = $injector.get('api');
+                            return api.find('preferences', session.sessionId, null, true)
+                                .then(function(_preferences) {
+                                    preferences = _preferences;
+                                    initPreferences(preferences);
+                                    return preferences;
+                                });
+                        });
                 }
 
-                function processPreferences(preferences, key){
+                /**
+                 * Get preference value from user or session preferences based on key.
+                 *
+                 * @param {string} key
+                 * @returns {Object}
+                 */
+                function getValue(key){
                     if (!key) {
                         return preferences[USER_PREFERENCES];
                     } else if (userPreferences[key]) {
@@ -89,27 +81,22 @@ define(['angular', 'lodash'], function(angular, _) {
                     }
                 }
 
-                this.get = function(key, sessionId) {
-
-                    var original_prefs = loadLocally();
-                    sessionId = sessionId || session.sessionId || $rootScope.sessionId;
-
-                    if (!original_prefs) {
-
-                        if (sessionId) {
-                            return getPreferences(sessionId, key);
-                        } else {
-                            return session.getIdentity().then(function() {
-                                return getPreferences(session.sessionId, key);
-                            });
-                        }
-
-                    } else {
-
-                        return $q.when(processPreferences(original_prefs, key));
+                /**
+                 * Get preference value, in case preferences are not loaded yet it will fetch it.
+                 *
+                 * @param {string} key
+                 * @returns {Promise}
+                 */
+                this.get = function(key) {
+                    if (!preferencesPromise) {
+                        getPreferences();
                     }
 
-                    return $q.reject();
+                    return preferencesPromise.then(returnValue);
+
+                    function returnValue() {
+                        return getValue(key);
+                    }
                 };
 
                 /**
@@ -145,7 +132,7 @@ define(['angular', 'lodash'], function(angular, _) {
                  * @param {object} _updates
                  */
                 function scheduleUpdate(type, _updates) {
-                    angular.extend(original_preferences[type], _updates);
+                    angular.extend(preferences[type], _updates);
 
                     // schedule commit
                     if (!updates) {
@@ -168,10 +155,9 @@ define(['angular', 'lodash'], function(angular, _) {
                     var api = $injector.get('api'),
                     serverUpdates = updates;
                     updates = null;
-                    return api.save('preferences', loadLocally(), serverUpdates)
+                    return api.save('preferences', preferences, serverUpdates)
                         .then(function(result) {
-                            original_preferences._etag = result._etag;
-                            storage.setItem(PREFERENCES, original_preferences);
+                            preferences._etag = result._etag;
                             deferUpdate.resolve(result);
                             return result;
                         }, function(response) {
@@ -183,8 +169,29 @@ define(['angular', 'lodash'], function(angular, _) {
                         });
                 }
 
-                $rootScope.$watch(function() {
-                    return session.sessionId;
-                }, getPreferences);
+                /**
+                 * Make preferences reload after session expiry - token is set from something to null.
+                 */
+                function resetPreferences(newId, oldId) {
+                    if (oldId && !newId) {
+                        preferencesPromise = null;
+                    }
+                }
+
+                /**
+                 * Make sure all segments are presented in preferences.
+                 */
+                function initPreferences(preferences) {
+                    angular.forEach([
+                        USER_PREFERENCES,
+                        SESSION_PREFERENCES,
+                        ACTIVE_PRIVILEGES,
+                        ACTIONS
+                    ], function(key) {
+                        if (preferences[key] == null) {
+                            preferences[key] = {};
+                        }
+                    });
+                }
             }]);
 });

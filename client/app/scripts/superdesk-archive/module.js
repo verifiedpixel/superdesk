@@ -159,6 +159,7 @@ define([
                     controller: require('./controllers/list'),
                     templateUrl: require.toUrl('./views/list.html'),
                     topTemplateUrl: require.toUrl('../superdesk-dashboard/views/workspace-topnav.html'),
+                    sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
                     filters: [
                         {action: 'view', type: 'content'}
                     ],
@@ -210,7 +211,7 @@ define([
                         return authoring.itemActions(item).unspike;
                     }]
                 })
-                .activity('duplicate-content', {
+                .activity('duplicate', {
                     label: gettext('Duplicate'),
                     icon: 'copy',
                     controller: ['$location', 'data', function($location, data) {
@@ -225,7 +226,7 @@ define([
                         return authoring.itemActions(item).duplicate;
                     }]
                 })
-                .activity('copy-content', {
+                .activity('copy', {
                     label: gettext('Copy'),
                     icon: 'copy',
                     monitor: true,
@@ -251,7 +252,7 @@ define([
                         return authoring.itemActions(item).copy;
                     }]
                 })
-                .activity('New Take', {
+                .activity('newtake', {
                     label: gettext('New Take'),
                     icon: 'plus-small',
                     filters: [{action: 'list', type: 'archive'}],
@@ -275,10 +276,11 @@ define([
                                 });
                         }]
                 })
-                .activity('Re-write', {
+                .activity('rewrite', {
                     label: gettext('Re-write'),
                     icon: 'multi-star-color',
                     filters: [{action: 'list', type: 'archive'}],
+                    group: 'corrections',
                     privileges: {archive: 1},
                     condition: function(item) {
                         return (item.lock_user === null || angular.isUndefined(item.lock_user));
@@ -288,28 +290,20 @@ define([
                     }],
                     controller: ['data', '$location', 'api', 'notify', 'session', 'desks', 'superdesk',
                         function(data, $location, api, notify, session, desks, superdesk) {
-                            var pick_fields = ['family_id', 'abstract', 'anpa_category',
-                                                'pubstatus', 'slugline', 'urgency', 'subject', 'dateline',
-                                                'priority', 'byline', 'dateline', 'headline'];
-                            var update_item = {};
-                            update_item =  _.pick(angular.extend(update_item, data.item), pick_fields);
-                            update_item.related_to = data.item._id;
-                            update_item.anpa_take_key = 'update';
-                            update_item.task = {};
-
                             session.getIdentity()
                                 .then(function(user) {
-                                    update_item.task.desk = user.desk? user.desk: desks.getCurrentDeskId();
-                                    update_item.state = 'in_progress';
-                                    return api.archive.save({}, update_item);
+                                    return api.save('archive_rewrite', {}, {}, data.item);
                                 })
                                 .then(function(new_item) {
-                                    notify.success(gettext('Update Created.'));
-                                    superdesk.intent('author', 'article', new_item);
+                                    notify.success(gettext('Rewrite Created.'));
+                                    superdesk.intent('author', 'article', new_item._id);
                                 }, function(response) {
-                                    notify.error(gettext('Failed to generate update.'));
+                                    if (angular.isDefined(response.data._message)) {
+                                        notify.error(gettext('Failed to generate rewrite: ' + response.data._message));
+                                    } else {
+                                        notify.error(gettext('There is an error. Failed to generate rewrite.'));
+                                    }
                                 });
-
                         }]
                 });
         }])
@@ -337,6 +331,12 @@ define([
                 type: 'http',
                 backend: {
                     rel: 'archive'
+                }
+            });
+            apiProvider.api('archive_rewrite', {
+                type: 'http',
+                backend: {
+                    rel: 'archive_rewrite'
                 }
             });
         }]);

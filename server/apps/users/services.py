@@ -12,6 +12,7 @@ import flask
 import logging
 from flask import current_app as app
 from eve.utils import config
+from settings import OrganizationNameAbbreviation
 from superdesk.activity import add_activity, ACTIVITY_CREATE, ACTIVITY_UPDATE
 from superdesk.services import BaseService
 from superdesk.utils import is_hashed, get_hash
@@ -278,6 +279,7 @@ class UsersService(BaseService):
         doc.setdefault('display_name', get_display_name(doc))
         doc.pop('password', None)
         doc.setdefault('is_enabled', doc.get('is_active'))
+        doc['dateline_source'] = OrganizationNameAbbreviation
 
     def user_is_waiting_activation(self, doc):
         return doc.get('needs_activation', False)
@@ -381,16 +383,29 @@ class ADUsersService(UsersService):
     Service class for UsersResource and should be used when AD is active.
     """
 
-    readonly_fields = ['username', 'display_name', 'password', 'email', 'phone', 'first_name', 'last_name']
+    readonly_fields = ['email', 'phone', 'first_name', 'last_name']
 
     def on_fetched(self, doc):
         super().on_fetched(doc)
         for document in doc['_items']:
-            document['_readonly'] = ADUsersService.readonly_fields
+            self.set_defaults(document)
 
     def on_fetched_item(self, doc):
         super().on_fetched_item(doc)
-        doc['_readonly'] = ADUsersService.readonly_fields
+        self.set_defaults(doc)
+
+    def set_defaults(self, doc):
+        """
+        Set the readonly fields for LDAP user.
+        :param dict doc: user
+        """
+        readonly = {}
+        user_attributes = config.LDAP_USER_ATTRIBUTES
+        for value in user_attributes.values():
+            if value in self.readonly_fields:
+                readonly[value] = True
+
+        doc['_readonly'] = readonly
 
 
 class RolesService(BaseService):

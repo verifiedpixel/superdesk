@@ -147,7 +147,7 @@
                 return $q.when(value);
             } else {
                 var criteria = {
-                    max_results: perPage
+                    max_results: page * perPage
                 };
                 if (search) {
                     criteria.where = JSON.stringify({
@@ -193,8 +193,8 @@
         return userservice;
     }
 
-    UserListController.$inject = ['$scope', '$location', 'api', 'lodash'];
-    function UserListController($scope, $location, api, _) {
+    UserListController.$inject = ['$scope', '$location', 'api'];
+    function UserListController($scope, $location, api) {
         var DEFAULT_SIZE = 25;
 
         $scope.selected = {user: null};
@@ -328,8 +328,8 @@
         $scope.profile = $scope.user._id === session.identity._id;
     }
 
-    ChangeAvatarController.$inject = ['$scope', 'upload', 'session', 'urls', 'betaService', 'lodash'];
-    function ChangeAvatarController($scope, upload, session, urls, beta, _) {
+    ChangeAvatarController.$inject = ['$scope', 'upload', 'session', 'urls', 'betaService'];
+    function ChangeAvatarController($scope, upload, session, urls, beta) {
 
         $scope.methods = [
             {id: 'upload', label: gettext('Upload from computer')},
@@ -873,9 +873,9 @@
         }])
 
         .directive('sdUserEdit', ['api', 'gettext', 'notify', 'usersService', 'userList', 'session',
-            '$location', '$route', 'superdesk', 'features', 'asset', 'privileges', 'desks', 'keyboardManager', 'lodash',
+            '$location', '$route', 'superdesk', 'features', 'asset', 'privileges', 'desks', 'keyboardManager',
         function(api, gettext, notify, usersService, userList, session, $location, $route, superdesk, features,
-                 asset, privileges, desks, keyboardManager, _) {
+                 asset, privileges, desks, keyboardManager) {
 
             return {
                 templateUrl: asset.templateUrl('superdesk-users/views/edit-form.html'),
@@ -998,7 +998,6 @@
                         scope._active = usersService.isActive(user);
                         scope._pending = usersService.isPending(user);
                         scope.profile = scope.user._id === session.identity._id;
-
                         scope.userDesks = [];
                         if (angular.isDefined(user) && angular.isDefined(user._links)) {
                             desks.fetchUserDesks(user).then(function(response) {
@@ -1013,25 +1012,29 @@
                 }
             };
         }])
-        .directive('sdUserPreferences', ['api', 'session', 'preferencesService', 'notify', 'asset',
-            function(api, session, preferencesService, notify, asset) {
+        .directive('sdUserPreferences', ['api', 'session', 'preferencesService', 'notify', 'asset', 'metadata', '$timeout',
+            function(api, session, preferencesService, notify, asset, metadata, $timeout) {
             return {
                 templateUrl: asset.templateUrl('superdesk-users/views/user-preferences.html'),
-                link: function(scope, elem, attrs) {
-
+                link: function(scope, element, attrs) {
                     var orig;
+
                     preferencesService.get().then(function(result) {
                         orig = result;
                         buildPreferences(orig);
+
+                        scope.datelineSource = session.identity.dateline_source;
+                        scope.datelinePreview = scope.preferences['dateline:located'].located;
                     });
 
                     scope.cancel = function() {
                         scope.userPrefs.$setPristine();
                         buildPreferences(orig);
+
+                        scope.datelinePreview = scope.preferences['dateline:located'].located;
                     };
 
                     scope.save = function() {
-
                         var update = patch();
 
                         preferencesService.update(update).then(function() {
@@ -1041,6 +1044,21 @@
                             });
                     };
 
+                    scope.changeDatelinePreview = function(preferences, city) {
+                        if (angular.isUndefined(preferences.located) || preferences.located.city !== city) {
+                            if (city === '') {
+                                preferences.located = null;
+                            } else {
+                                preferences.located = {'city': city, 'city_code': city, 'alt_name': city, 'tz': 'UTC',
+                                    'dateline': 'city', 'country': '', 'country_code': '', 'state_code': '', 'state': ''};
+                            }
+                        }
+
+                        $timeout(function () {
+                            scope.datelinePreview = preferences.located;
+                        });
+                    };
+
                     function buildPreferences(struct) {
                         scope.preferences = {};
                         _.each(struct, function(val, key) {
@@ -1048,11 +1066,24 @@
                                 scope.preferences[key] = _.create(val);
                             }
                         });
+
+                        if (angular.isUndefined(metadata.values) || angular.isUndefined(metadata.values.cities)) {
+                            metadata.initialize().then(function() {
+                                scope.cities = metadata.values.cities;
+                            });
+                        } else {
+                            scope.cities = metadata.values.cities;
+                        }
                     }
 
                     function patch() {
                         var p = {};
                         _.each(orig, function(val, key) {
+                            if (key === 'dateline:located') {
+                                var $input = element.find('.input-term > input');
+                                scope.changeDatelinePreview(scope.preferences[key], $input[0].value);
+                            }
+
                             p[key] = _.extend(val, scope.preferences[key]);
                         });
                         return p;
@@ -1282,9 +1313,36 @@
                 templateUrl: asset.templateUrl('superdesk-users/views/mentions.html'),
                 link: function(scope, elem) {
                     scope.users = [];
+                    scope.fetching = false;
+                    scope.prefix = '';
+
+                    var container = elem.children()[0];
+                    elem.children().bind('scroll', function() {
+                        if (container.scrollTop + container.offsetHeight >= container.scrollHeight - 3) {
+                            container.scrollTop = container.scrollTop - 3;
+                            scope.fetchNext();
+                        }
+                    });
+
+                    scope.fetchNext = function() {
+                        if (!scope.fetching) {
+                            var page = scope.users.length / 10 + 1;
+                            scope.fetching = true;
+
+                            userList.get(scope.prefix, page, 10)
+                            .then(function(result) {
+                                _.each(_.sortBy(result._items.slice((page - 1) * 10, page * 10), 'username'), function(item) {
+                                    scope.users.push(item);
+                                });
+
+                                scope.fetching = false;
+                            });
+                        }
+                    };
 
                     // filter user by given prefix
                     scope.searchUsers = function(prefix) {
+                        scope.prefix = prefix;
 
                         return userList.get(prefix, 1, 10)
                         .then(function(result) {

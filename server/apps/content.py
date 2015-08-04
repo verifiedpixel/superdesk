@@ -18,13 +18,16 @@ PACKAGE = 'package'
 PACKAGE_TYPE = 'package_type'
 TAKES_PACKAGE = 'takes'
 ITEM_TYPE = 'type'
-ITEM_TYPE_COMPOSITE = 'composite'
 LAST_TAKE = 'last_take'
 
 not_analyzed = {'type': 'string', 'index': 'not_analyzed'}
 
 pub_status = ['usable', 'withhold', 'canceled']
 PUB_STATUS = namedtuple('PUBSTATUS', ['USABLE', 'HOLD', 'CANCELED'])(*pub_status)
+content_type = ['text', 'preformatted', 'audio', 'video', 'picture', 'graphic', 'composite']
+CONTENT_TYPE = namedtuple('CONTENT_TYPE',
+                          ['TEXT', 'PREFORMATTED', 'AUDIO', 'VIDEO',
+                           'PICTURE', 'GRAPHIC', 'COMPOSITE'])(*content_type)
 
 metadata_schema = {
     # Identifiers
@@ -38,11 +41,6 @@ metadata_schema = {
         'unique': True,
     },
     'unique_name': {
-        'type': 'string',
-        'unique': True,
-        'mapping': not_analyzed
-    },
-    'parent_id': {
         'type': 'string',
         'unique': True,
         'mapping': not_analyzed
@@ -129,7 +127,7 @@ metadata_schema = {
     # Story Metadata
     ITEM_TYPE: {
         'type': 'string',
-        'allowed': ['text', 'preformatted', 'audio', 'video', 'picture', 'graphic', ITEM_TYPE_COMPOSITE],
+        'allowed': content_type,
         'default': 'text',
         'mapping': not_analyzed
     },
@@ -224,8 +222,14 @@ metadata_schema = {
         'nullable': True,
     },
     'dateline': {
-        'type': 'string',
+        'type': 'dict',
         'nullable': True,
+        'schema': {
+            'located': {'type': 'dict'},
+            'date': {'type': 'datetime'},
+            'source': {'type': 'string'},
+            'text': {'type': 'string'}
+        }
     },
     'expiry': {
         'type': 'datetime'
@@ -252,14 +256,20 @@ metadata_schema = {
         'type': 'list'
     },
 
-    # Not Categorized
+    # aka Locator as per NewML Specification
     'place': {
-        'type': 'list'
-    },
-    'located': {
-        'type': 'string',
+        'type': 'list',
         'nullable': True,
+        'schema': {
+            'type': 'dict',
+            'schema': {
+                'qcode': {'type': 'string'},
+                'name': {'type': 'string'}
+            }
+        }
     },
+
+    # Not Categorized
     'creditline': {
         'type': 'string'
     },

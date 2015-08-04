@@ -19,8 +19,8 @@
             };
         }])
 
-        .directive('sdMenuWrapper', ['$route', 'superdesk', 'betaService', 'userNotifications', 'asset',
-        function($route, superdesk, betaService, userNotifications, asset) {
+        .directive('sdMenuWrapper', ['$route', 'superdesk', 'betaService', 'userNotifications', 'asset', 'lodash',
+        function($route, superdesk, betaService, userNotifications, asset, _) {
             return {
                 require: '^sdSuperdeskView',
                 templateUrl: asset.templateUrl('superdesk/menu/views/menu.html'),
@@ -75,6 +75,7 @@
                     }, function(route) {
                         scope.currentRoute = route || null;
                         setActiveMenuItem(scope.currentRoute);
+                        ctrl.flags.workspace = route ? !!route.sideTemplateUrl : false;
                     });
 
                     scope.notifications = userNotifications;

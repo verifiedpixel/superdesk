@@ -1319,6 +1319,7 @@ define([
                 templateUrl: asset.templateUrl('superdesk-archive/views/list.html'),
                 category: '/workspace',
                 topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
+                sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html'),
                 privileges: {ingest: 1}
             })
             .activity('/settings/ingest', {

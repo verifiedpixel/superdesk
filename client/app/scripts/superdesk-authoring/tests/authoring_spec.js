@@ -76,7 +76,7 @@ describe('authoring', function() {
             spyOn(api, 'save').and.returnValue($q.when({}));
             spyOn(lock, 'unlock').and.returnValue($q.when({}));
 
-            var lockedItem = {guid: GUID, _id: GUID, _locked: true, lock_user: 'user:5'};
+            var lockedItem = {guid: GUID, _id: GUID, _locked: true, lock_user: 'user:5', task: 'desk:1'};
             var $scope = startAuthoring(lockedItem, 'edit');
             $rootScope.$digest();
 
@@ -87,7 +87,7 @@ describe('authoring', function() {
         }));
 
     it('can autosave and save an item', inject(function(api, $q, $timeout, $rootScope) {
-        var $scope = startAuthoring({guid: GUID, _id: GUID}, 'edit'),
+        var $scope = startAuthoring({guid: GUID, _id: GUID, task: 'desk:1'}, 'edit'),
             headline = 'test headline';
 
         expect($scope.dirty).toBe(false);
@@ -117,7 +117,7 @@ describe('authoring', function() {
     }));
 
     it('can save while item is being autosaved', inject(function($rootScope, $timeout, $q, api) {
-        var $scope = startAuthoring({headline: 'test'}, 'edit');
+        var $scope = startAuthoring({headline: 'test', task: 'desk:1'}, 'edit');
 
         $scope.item.body_html = 'test';
         $rootScope.$digest();
@@ -195,7 +195,7 @@ describe('authoring', function() {
             expect(done).toHaveBeenCalled();
         }));
 
-        it('can unlocks on close editable item without changes made',
+        it('can unlock on close editable item without changes made',
         inject(function(authoring, confirm, lock, $rootScope) {
             expect(authoring.isEditable(ITEM)).toBe(true);
             authoring.close(ITEM, false);
@@ -221,6 +221,25 @@ describe('authoring', function() {
 
             expect(authoring.save).toHaveBeenCalledWith(ITEM, edit);
             expect(lock.unlock).toHaveBeenCalled();
+        }));
+
+        it('confirms if an item is dirty on opening new or existing item and not unlocking on save',
+        inject(function(authoring, confirm, lock, $q, $rootScope) {
+            var edit = Object.create(ITEM);
+            edit.headline = 'test';
+
+            authoring.close(edit, ITEM, true, true);
+            $rootScope.$digest();
+
+            expect(confirm.confirm).toHaveBeenCalled();
+            expect(lock.unlock).not.toHaveBeenCalled();
+
+            spyOn(authoring, 'save').and.returnValue($q.when());
+            confirmDefer.resolve();
+            $rootScope.$digest();
+
+            expect(authoring.save).toHaveBeenCalledWith(ITEM, edit);
+            expect(lock.unlock).not.toHaveBeenCalled();
         }));
 
         it('can unlock an item', inject(function(authoring, session, confirm, autosave) {

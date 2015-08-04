@@ -8,6 +8,7 @@
         .directive('sdMonitoringView', MonitoringViewDirective)
         .directive('sdMonitoringGroup', MonitoringGroupDirective)
         .directive('sdMonitoringGroupHeader', MonitoringGroupHeader)
+        .directive('sdItemActionsMenu', ItemActionsMenu)
         .config(configureMonitoring)
         .config(configureSpikeMonitoring);
 
@@ -49,8 +50,21 @@
          * @param {string} queryString
          */
         function getCriteria(card, queryString) {
-            var params = (card.type === 'spike') ? {spike: true}: {};
-            var query = search.query(card.type === 'search' ? card.search.filter.query : params);
+            var params = (card.type === 'search') ? JSON.parse(JSON.stringify(card.search.filter.query)): {};
+            params.spike = (card.type === 'spike');
+            if (card.fileType) {
+                params.type = card.fileType;
+            }
+
+            if (card.type === 'search') {
+                if (card.query) {
+                    params.q = '(' + card.query + ') ' + card.search.filter.query.q;
+                }
+            } else {
+                params.q = card.query;
+            }
+
+            var query = search.query(params);
 
             switch (card.type) {
                 case 'search':
@@ -179,6 +193,8 @@
                 scope.viewSingleGroup = viewSingleGroup;
 
                 scope.$watch('group', queryItems);
+                scope.$watch('group.query', queryItems);
+                scope.$watch('group.fileType', queryItems);
                 scope.$on('task:stage', handleStage);
                 scope.$on('ingest:update', update);
 
@@ -367,5 +383,80 @@
         function uuid(item) {
             return item._id;
         }
+    }
+
+    ItemActionsMenu.$inject = ['superdesk', 'activityService', 'workflowService'];
+    function ItemActionsMenu(superdesk, activityService, workflowService) {
+        return {
+            scope: {
+                item: '=',
+                active: '='
+            },
+            templateUrl: 'scripts/superdesk-monitoring/views/item-actions-menu.html',
+            link: function(scope) {
+                /**
+                 * Populate scope actions when dropdown is opened.
+                 *
+                 * @param {boolean} isOpen
+                 */
+                scope.toggleActions = function(isOpen) {
+                    scope.actions = isOpen ? getActions(scope.item) : scope.actions;
+                    scope.open = isOpen;
+                };
+
+                /**
+                 * Stope event propagation so that click on dropdown menu
+                 * won't select that item for preview/authoring.
+                 *
+                 * @param {Event} event
+                 */
+                scope.stopEvent = function(event) {
+                    event.stopPropagation();
+                };
+
+                scope.run = function(activity) {
+                    return activityService.start(activity, {data: {item: scope.item}});
+                };
+
+                /**
+                 * Get available actions for given item.
+                 *
+                 * This is not context aware, it will return everything.
+                 *
+                 * @param {object} item
+                 * @return {object}
+                 */
+                function getActions(item) {
+                    var intent = {action: 'list', type: getType(item)};
+                    var groups = {};
+                    superdesk.findActivities(intent, item).forEach(function(activity) {
+                        if (workflowService.isActionAllowed(scope.item, activity.action)) {
+                            var group = activity.group || 'default';
+                            groups[group] = groups[group] || [];
+                            groups[group].push(activity);
+                        }
+                    });
+                    return groups;
+                }
+
+                /**
+                 * Get actions type based on item state. Used with activity filter.
+                 *
+                 * @param {Object} item
+                 * @return {string}
+                 */
+                function getType(item) {
+                    if (item.state === 'spiked') {
+                        return 'spike';
+                    }
+
+                    if (item.state === 'ingested') {
+                        return 'ingest';
+                    }
+
+                    return 'archive';
+                }
+            }
+        };
     }
 })();
