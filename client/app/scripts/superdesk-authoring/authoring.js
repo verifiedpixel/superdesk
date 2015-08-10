@@ -470,7 +470,8 @@
                         current_item.task && current_item.task.desk &&
                         user_privileges.publish;
 
-                action.edit = current_item.type !== 'composite' && current_item.state !== 'spiked' && lockedByMe;
+                action.edit = !(current_item.type === 'composite' && current_item.package_type === 'takes') &&
+                                current_item.state !== 'spiked' && lockedByMe;
                 action.unspike = current_item.state === 'spiked' && user_privileges.unspike;
                 action.spike = current_item.state !== 'spiked' && user_privileges.spike &&
                     (angular.isUndefined(current_item.takes) || current_item.takes.last_take === current_item._id);
@@ -695,10 +696,11 @@
         'macros',
         '$timeout',
         '$q',
-        '$window'
+        '$window',
+        'modal'
     ];
     function AuthoringDirective(superdesk, notify, gettext, desks, authoring, api, session, lock, privileges,
-                                ContentCtrl, $location, referrer, macros, $timeout, $q, $window) {
+                                ContentCtrl, $location, referrer, macros, $timeout, $q, $window, modal) {
         return {
             link: function($scope) {
                 var _closing;
@@ -711,6 +713,7 @@
                 $scope.isMediaType = _.contains(['audio', 'video', 'picture'], $scope.origItem.type);
                 $scope.action = $scope.action || ($scope._editable ? 'edit' : 'view');
                 $scope.itemActions = authoring.itemActions($scope.origItem);
+                $scope.highlight = !!$scope.origItem.highlight;
 
                 $scope.$watch('origItem', function(new_value, old_value) {
                     $scope.itemActions = null;
@@ -802,6 +805,30 @@
                         }
                     });
                 };
+
+                /**
+                 * Export the list of highlights as a text item.
+                 */
+                $scope.exportHighlight = function(item) {
+                    if ($scope.save_enabled()) {
+                        modal.confirm(gettext('You have unsaved changes, do you want to continue.'))
+                            .then(function() {
+                                _exportHighlight(item._id);
+                            }
+                        );
+                    } else {
+                        _exportHighlight(item._id);
+                    }
+                };
+
+                function _exportHighlight(_id) {
+                    api.generate_highlights.save({}, {'package': _id})
+                    .then(function(item) {
+                        superdesk.intent('author', 'article', item);
+                    }, function(response) {
+                        notify.error(gettext('Error creating highlight.'));
+                    });
+                }
 
                 function validatePublishSchedule(item) {
                     if (_.contains(['published', 'killed', 'corrected'], item.state)) {
@@ -896,7 +923,7 @@
                 };
 
                 $scope.deschedule = function() {
-                    $scope.item.publish_schedule = false;
+                    $scope.item.publish_schedule = null;
                     return $scope.save();
                 };
 
@@ -1335,7 +1362,17 @@
                     return !authoring.isPublished(scope.item) && _.contains(['text', 'preformatted'], scope.item.type);
                 };
 
+                /**
+                 * Send the current item (take) to different desk or stage and create a new take.
+                 * If publish_schedule is set then the user cannot schedule the take.
+                 */
                 scope.sendAndContinue = function () {
+                    // cannot schedule takes.
+                    if (scope.item && scope.item.publish_schedule) {
+                        notify.error(gettext('Takes cannot be scheduled.'));
+                        return;
+                    }
+
                     var spellcheckErrors = spellcheck.countErrors();
                     if (spellcheckErrors > 0) {
                         confirm.confirmSpellcheck(spellcheckErrors)
@@ -1353,6 +1390,7 @@
                     var deskId = scope.selectedDesk._id;
                     var stageId = scope.selectedStage._id || scope.selectedDesk.incoming_stage;
                     var activeDeskId = desks.getCurrentDeskId();
+
                     scope.item.more_coming = true;
                     return sendAuthoring(deskId, stageId, scope.selectedMacro, true)
                         .then(function() {
@@ -1362,7 +1400,7 @@
                             notify.success(gettext('New take created.'));
                             $location.url('/authoring/' + item._id);
                         }, function(err) {
-                            notify.error('Failed to send and continue.');
+                            notify.error(gettext('Failed to send and continue.'));
                         });
                 }
 
@@ -1507,14 +1545,15 @@
         };
     }
 
-    ContentCreateDirective.$inject = ['api', 'desks', 'templates', 'asset'];
-    function ContentCreateDirective(api, desks, templates, asset) {
+    ContentCreateDirective.$inject = ['api', 'desks', 'templates', 'asset', 'ContentCtrl'];
+    function ContentCreateDirective(api, desks, templates, asset, ContentCtrl) {
         var NUM_ITEMS = 5;
 
         return {
             templateUrl: asset.templateUrl('superdesk-authoring/views/sd-content-create.html'),
             link: function(scope) {
                 scope.contentTemplates = null;
+                scope.content = new ContentCtrl(scope);
 
                 scope.$watch(function() {
                     return desks.activeDeskId;
@@ -1620,7 +1659,9 @@
             'superdesk.authoring.widgets',
             'superdesk.authoring.metadata',
             'superdesk.authoring.comments',
-            'superdesk.authoring.versions',
+            'superdesk.authoring.versioning',
+            'superdesk.authoring.versioning.versions',
+            'superdesk.authoring.versioning.history',
             'superdesk.authoring.workqueue',
             'superdesk.authoring.packages',
             'superdesk.authoring.find-replace',

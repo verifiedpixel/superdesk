@@ -4,26 +4,27 @@ define([
     'require',
     './group-dates-directive',
     './reldate-directive',
-    './reldate-directive-complex'
+    './reldate-directive-complex',
+    './absdate-directive'
 ], function(angular, moment, require) {
     'use strict';
 
     function DateTimeDirective() {
-
-        function renderDate(date, elem) {
-            var momentDate = moment(date);
-            elem.html(momentDate.fromNow());
-            elem.attr('title', momentDate.format('LLLL'));
-        }
-
         return {
             scope: {date: '='},
             link: function datetimeLink(scope, elem) {
-                scope.$watch('date', function watchDate(date) {
-                    if (date) {
-                        renderDate(date, elem);
-                    }
-                });
+                scope.$watch('date', renderDate);
+
+                /**
+                 * Render relative date within given directive
+                 *
+                 * @param {string} date iso date
+                 */
+                function renderDate(date) {
+                    var momentDate = moment(date);
+                    elem.text(momentDate.fromNow());
+                    elem.attr('title', momentDate.format('LLLL'));
+                }
             }
         };
     }
@@ -33,6 +34,7 @@ define([
         .directive('sdGroupDates', require('./group-dates-directive'))
         .directive('sdReldate', require('./reldate-directive'))
         .directive('sdReldateComplex', require('./reldate-directive-complex'))
+        .directive('sdAbsdate', require('./absdate-directive'))
         .directive('sdDatetime', DateTimeDirective)
 
         .filter('reldate', function reldateFactory() {

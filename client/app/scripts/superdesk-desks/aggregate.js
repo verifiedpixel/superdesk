@@ -26,8 +26,8 @@
         this.searchLookup = {};
         this.deskLookup = {};
         this.stageLookup = {};
-        this.fileTypes = ['all', 'text', 'photo', 'composite', 'video', 'audio'];
-        this.selectedFileType = 'all';
+        this.fileTypes = ['all', 'text', 'picture', 'composite', 'video', 'audio'];
+        this.selectedFileType = [];
         this.monitoringSearch = false;
 
         desks.initialize()
@@ -75,7 +75,10 @@
          * @return boolean
          */
         this.hasFileType = function(fileType) {
-            return this.selectedFileType === fileType;
+            if (fileType === 'all') {
+                return this.selectedFileType.length === 0;
+            }
+            return this.selectedFileType.indexOf(fileType) > -1;
         };
 
         /**
@@ -83,8 +86,18 @@
          * param {string} fileType
          */
         this.setFileType = function(fileType) {
-            this.selectedFileType = fileType;
-            var value = (fileType === 'all') ? null: JSON.stringify([fileType]);
+            if (fileType === 'all') {
+                this.selectedFileType = [];
+            } else {
+                var index = this.selectedFileType.indexOf(fileType);
+                if (index > -1) {
+                    this.selectedFileType.splice(index, 1);
+                } else {
+                    this.selectedFileType.push(fileType);
+                }
+            }
+
+            var value = (this.selectedFileType.length === 0) ? null: JSON.stringify(this.selectedFileType);
 
             _.each(this.groups, function(item) {
                 item.fileType = value;
@@ -228,7 +241,7 @@
 
             if (!this.allDesks) {
                 this.allDesks = Object.keys(this.deskLookup).map(function(key) {
-                    return {_id: key, type: 'spike'};
+                    return {_id: key, type: 'spike', header: self.deskLookup[key].name};
                 });
             }
             return this.allDesks;
@@ -455,21 +468,8 @@
     }
 
     angular.module('superdesk.aggregate', ['superdesk.authoring.widgets', 'superdesk.desks'])
-    .config(['authoringWidgetsProvider', function(authoringWidgetsProvider) {
-        authoringWidgetsProvider
-        .widget('aggregate', {
-            icon: 'view',
-            label: gettext('Aggregate'),
-            template: 'scripts/superdesk-desks/views/aggregate.html',
-            order: 1,
-            side: 'left',
-            extended: true,
-            display: {authoring: true, packages: false}
-        });
-    }])
     .controller('AggregateCtrl', AggregateCtrl)
     .directive('sdAggregateSettings', AggregateSettingsDirective)
-    .directive('sdSortGroups', SortGroupsDirective)
-    ;
+    .directive('sdSortGroups', SortGroupsDirective);
 
 })();

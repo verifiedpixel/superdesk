@@ -7,23 +7,10 @@
     top: @nav-height;
     left: 0;
     right: 0;
-    bottom: 30px;
+    bottom: 0;
 
     .subnav {
         top: 0;
-    }
-
-    .dropdown-monitoring-settings{
-        padding-left: 20px;
-        padding-right: 0px;
-        height: 48px;
-        margin-top: -10px;
-        border-left: 1px solid #dfdfdf;
-    }
-
-    .dropdown-monitoring-menu{
-        margin-top: 35px;
-        margin-right: -14px;
     }
 
     .monitoring-preview-layout{
@@ -51,6 +38,13 @@
 
             .stage-content {
                 overflow-y: scroll;
+                box-shadow: @block-shadow-depth-2;
+                .compact-view, .mlist-view {
+                    box-shadow: none;
+                }
+                .inline-content-items {
+                    margin-bottom: 0;
+                }
                 &.limited {
                     max-height: 285px;
                 }

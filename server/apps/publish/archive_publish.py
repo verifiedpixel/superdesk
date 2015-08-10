@@ -16,7 +16,8 @@ from eve.versioning import resolve_document_version
 from eve.utils import config, ParsedRequest
 from eve.validation import ValidationError
 
-from apps.content import PUB_STATUS, CONTENT_TYPE, ITEM_TYPE
+from superdesk.metadata.item import PUB_STATUS, CONTENT_TYPE, ITEM_TYPE, GUID_FIELD, ITEM_STATE, CONTENT_STATE
+from superdesk.metadata.packages import SEQUENCE
 from apps.publish.subscribers import SUBSCRIBER_TYPES
 from settings import DEFAULT_SOURCE_VALUE_FOR_MANUAL_ARTICLES
 import superdesk
@@ -26,13 +27,14 @@ from superdesk.notification import push_notification
 from superdesk.services import BaseService
 from superdesk import get_resource_service
 from apps.archive.archive import ArchiveResource, SOURCE as ARCHIVE
+from apps.archive.common import validate_schedule
 from superdesk.utc import utcnow
 from superdesk.workflow import is_workflow_state_transition_valid
 from apps.publish.formatters import get_formatter
 from apps.common.components.utils import get_component
 from apps.item_autosave.components.item_autosave import ItemAutosave
 from apps.archive.common import item_url, get_user, insert_into_versions, \
-    set_sign_off, SEQUENCE, GUID_FIELD, item_operations, ITEM_OPERATION
+    set_sign_off, item_operations, ITEM_OPERATION
 from apps.packages import TakesPackageService
 from apps.publish.published_item import LAST_PUBLISHED_VERSION
 
@@ -77,31 +79,43 @@ class BasePublishService(BaseService):
 
     non_digital = partial(filter, lambda s: s.get('subscriber_type', '') != SUBSCRIBER_TYPES.DIGITAL)
     digital = partial(filter, lambda s: s.get('subscriber_type', '') == SUBSCRIBER_TYPES.DIGITAL)
+    takes_package_service = TakesPackageService()
 
     def on_update(self, updates, original):
         if original.get('marked_for_not_publication', False):
             raise SuperdeskApiError.badRequestError(
                 message='Cannot publish an item which is marked as Not for Publication')
 
-        if not is_workflow_state_transition_valid(self.publish_type, original[config.CONTENT_STATE]):
+        if not is_workflow_state_transition_valid(self.publish_type, original[ITEM_STATE]):
             raise InvalidStateTransitionError()
 
         updated = original.copy()
-        updates.update(updates)
+        updated.update(updates)
         validate_item = {'act': self.publish_type, 'type': original['type'], 'validate': updated}
+
+        takes_package = self.takes_package_service.get_take_package(original) or {}
+        # validate if take can be published
+        if self.publish_type == 'publish' and takes_package \
+            and not self.takes_package_service.can_publish_take(takes_package,
+                                                                updates.get(SEQUENCE, original.get(SEQUENCE, 1))):
+            raise PublishQueueError.previous_take_not_published_error(
+                Exception("Previous takes are not published."))
+
+        # validate the publish schedule
+        validate_schedule(updated.get('publish_schedule'), takes_package.get(SEQUENCE, 1))
         validation_errors = get_resource_service('validate').post([validate_item])
 
         if validation_errors[0]:
             raise ValidationError(validation_errors)
 
         # We do not allow packages to be published if any items in the package do not validate
-        if original[ITEM_TYPE] == CONTENT_TYPE.COMPOSITE:
+        if original[ITEM_TYPE] == CONTENT_TYPE.COMPOSITE and not takes_package:
             items = [ref.get('residRef') for group in original.get('groups', [])
                      for ref in group.get('refs', []) if 'residRef' in ref]
             if items:
                 for guid in items:
                     doc = super().find_one(req=None, _id=guid)
-                    validate_item = {'act': self.publish_type, 'type': doc['type'], 'validate': doc}
+                    validate_item = {'act': self.publish_type, 'type': doc[ITEM_TYPE], 'validate': doc}
                     validation_errors = get_resource_service('validate').post([validate_item])
                     if validation_errors[0]:
                         raise ValidationError(validation_errors)
@@ -110,11 +124,11 @@ class BasePublishService(BaseService):
                         raise ValidationError(['A packaged item is locked'])
 
     def on_updated(self, updates, original):
-        self.update_published_collection(published_item_id=original['_id'])
-        original = get_resource_service('archive').find_one(req=None, _id=original['_id'])
+        self.update_published_collection(published_item_id=original[config.ID_FIELD])
+        original = get_resource_service(ARCHIVE).find_one(req=None, _id=original[config.ID_FIELD])
         updates.update(original)
         user = get_user()
-        push_notification('item:updated', item=str(original['_id']), user=str(user.get('_id')))
+        push_notification('item:updated', item=str(original[config.ID_FIELD]), user=str(user.get(config.ID_FIELD)))
 
     def update(self, id, updates, original):
         """
@@ -129,33 +143,32 @@ class BasePublishService(BaseService):
 
             set_sign_off(updates, original)
             queued_digital = False
-            package_id = None
+            package = None
 
             if original[ITEM_TYPE] != CONTENT_TYPE.COMPOSITE:
                 # if target_for is set the we don't to digital client.
                 if not updates.get('targeted_for', original.get('targeted_for')):
                     # check if item is in a digital package
-                    package_id = TakesPackageService().get_take_package_id(original)
+                    package = self.takes_package_service.get_take_package(original)
 
-                    if package_id:
-                        queued_digital, takes_package = self._publish_takes_package(package_id, updates,
-                                                                                    original, last_updated)
+                    if package:
+                        queued_digital = self._publish_takes_package(package, updates, original, last_updated)
                     else:
                         # if text or preformatted item is going to be sent to digital subscribers, package it as a take
                         if self.sending_to_digital_subscribers(original):
                             # takes packages are only created for these types
-                            if original['type'] in (CONTENT_TYPE.TEXT, CONTENT_TYPE.PREFORMATTED):
+                            if original[ITEM_TYPE] in [CONTENT_TYPE.TEXT, CONTENT_TYPE.PREFORMATTED]:
                                 updated = copy(original)
                                 updated.update(updates)
                                 # create a takes package
-                                package_id = TakesPackageService().package_story_as_a_take(updated, {}, None)
-                                original = get_resource_service('archive').find_one(req=None, _id=original['_id'])
-                                queued_digital, takes_package = self._publish_takes_package(package_id, updates,
-                                                                                            original, last_updated)
+                                package_id = self.takes_package_service.package_story_as_a_take(updated, {}, None)
+                                package = get_resource_service(ARCHIVE).find_one(req=None, _id=package_id)
+                                queued_digital = self._publish_takes_package(package, updates,
+                                                                             original, last_updated)
 
                 # queue only text items
                 queued_wire = \
-                    self.publish(doc=original, updates=updates, target_media_type=WIRE if package_id else None)
+                    self.publish(doc=original, updates=updates, target_media_type=WIRE if package else None)
 
                 queued = queued_digital or queued_wire
                 if not queued:
@@ -164,7 +177,8 @@ class BasePublishService(BaseService):
             self._set_version_last_modified_and_state(original, updates, last_updated)
             self._update_archive(original=original, updates=updates, should_insert_into_versions=False)
             push_notification('item:publish', item=str(id), unique_name=original['unique_name'],
-                              desk=str(original.get('task', {}).get('desk', '')), user=str(user.get('_id', '')))
+                              desk=str(original.get('task', {}).get('desk', '')),
+                              user=str(user.get(config.ID_FIELD, '')))
         except SuperdeskApiError as e:
             raise e
         except KeyError as e:
@@ -174,20 +188,19 @@ class BasePublishService(BaseService):
             logger.exception("Something bad happened while publishing %s".format(id))
             raise SuperdeskApiError.internalError(message="Failed to publish the item: {}".format(str(e)))
 
-    def _publish_takes_package(self, package_id, updates, original, last_updated):
+    def _publish_takes_package(self, package, updates, original, last_updated):
         """
         Process the takes to form digital master file content and publish.
-        :param str package_id: Takes package id
-        :param dict updates: updates for the takes packages
-        :param dict original: original takes packages document
+        :param dict package: Takes package
+        :param dict updates: updates for the take
+        :param dict original: original takes
         :param datetime.datetime last_updated: datetime for the updates
-        :return: (bool, dict) boolean flag indicating takes package is queued or not,
-                dict containing takes package
+        :return bool: boolean flag indicating takes package is queued or not
         """
 
-        package, package_updates = self.process_takes(updates_of_take_to_be_published=updates,
-                                                      original_of_take_to_be_published=original,
-                                                      package_id=package_id)
+        package_updates = self.process_takes(updates_of_take_to_be_published=updates,
+                                             original_of_take_to_be_published=original,
+                                             package=package)
 
         self._set_version_last_modified_and_state(package, package_updates, last_updated)
         self._update_archive(package, package_updates)
@@ -197,7 +210,7 @@ class BasePublishService(BaseService):
         queued_digital = self.publish(doc=package, updates=None, target_media_type=DIGITAL)
 
         self.update_published_collection(published_item_id=package[config.ID_FIELD])
-        return queued_digital, package
+        return queued_digital
 
     def _publish_package_items(self, package, updates, last_updated):
         """
@@ -222,7 +235,7 @@ class BasePublishService(BaseService):
 
     def _set_version_last_modified_and_state(self, original, updates, last_updated):
         """
-        Sets config.VERSION, config.LAST_UPDATED, config.CONTENT_STATE in updates document.
+        Sets config.VERSION, config.LAST_UPDATED, ITEM_STATE in updates document.
         :param dict original: original document
         :param dict updates: updates related to the original document
         :param datetime last_updated: datetime of the updates.
@@ -259,27 +272,25 @@ class BasePublishService(BaseService):
         :param dict updates: updates related to document
         """
         updates['publish_schedule'] = None
-        updates[config.CONTENT_STATE] = self.published_state
+        updates[ITEM_STATE] = self.published_state
 
-    def process_takes(self, updates_of_take_to_be_published, package_id, original_of_take_to_be_published=None):
+    def process_takes(self, updates_of_take_to_be_published, package, original_of_take_to_be_published=None):
         """
         Primary rule for publishing a Take in Takes Package is: all previous takes must be published before a take
         can be published.
 
-        This method validates if the take(s) previous to this article are published. If not published then raises error.
         Also, generates body_html of the takes package and make sure the metadata for the package is the same as the
         metadata of the take to be published.
 
-        :param updates_of_take_to_be_published: The take to be published
-        :return: Takes Package document and body_html of the Takes Package
-        :raises:
-            1. Article Not Found Error: If take identified by GUID in the Takes Package is not found in archive.
-            2. Previous Take Not Published Error
+        :param dict updates_of_take_to_be_published: updates for the take to be published
+        :param dict package: Takes package to publish
+        :param dict original_of_take_to_be_published: original of the take to be published
+        :return: Takes Package Updates
         """
 
-        package = super().find_one(req=None, _id=package_id)
+        takes = self.takes_package_service.get_published_takes(package)
         body_html = updates_of_take_to_be_published.get('body_html', original_of_take_to_be_published['body_html'])
-        package_updates = {'body_html': body_html + '<br>'}
+        package_updates = {}
 
         groups = package.get('groups', [])
         if groups:
@@ -294,33 +305,31 @@ class BasePublishService(BaseService):
                     sequence_num_of_take_to_be_published = r[SEQUENCE]
                     break
 
-            if sequence_num_of_take_to_be_published:
-                if self.published_state != "killed":
-                    for sequence in range(sequence_num_of_take_to_be_published, 0, -1):
-                        previous_take_ref = next(ref for ref in take_refs if ref.get(SEQUENCE) == sequence)
-                        if previous_take_ref[GUID_FIELD] != take_article_id:
-                            previous_take = super().find_one(req=None, _id=previous_take_ref[GUID_FIELD])
+            if takes and self.published_state != 'killed':
+                body_html_list = [take.get('body_html', '') for take in takes]
+                if self.published_state == 'published':
+                    body_html_list.append(body_html)
+                else:
+                    body_html_list[sequence_num_of_take_to_be_published - 1] = body_html
 
-                            if not previous_take:
-                                raise PublishQueueError.article_not_found_error(
-                                    Exception("Take with id %s not found" % previous_take_ref[GUID_FIELD]))
+                package_updates['body_html'] = '<br>'.join(body_html_list)
+            else:
+                package_updates['body_html'] = body_html
 
-                            if previous_take and previous_take[config.CONTENT_STATE] not in ['published', 'corrected']:
-                                raise PublishQueueError.previous_take_not_published_error(
-                                    Exception("Take with id {} is not published in Takes Package with id {}"
-                                              .format(previous_take_ref[GUID_FIELD], package[config.ID_FIELD])))
+            metadata_tobe_copied = ['headline', 'abstract', 'anpa_category', 'pubstatus', 'slugline', 'urgency',
+                                    'subject', 'byline', 'dateline', 'publish_schedule']
 
-                            package_updates['body_html'] = \
-                                previous_take['body_html'] + '<br>' + package_updates['body_html']
+            updated_take = original_of_take_to_be_published.copy()
+            updated_take.update(updates_of_take_to_be_published)
+            metadata_from = updated_take
+            if self.published_state == 'corrected':
+                # get the last take metadata
+                metadata_from = takes[-1]
 
-                metadata_tobe_copied = ['headline', 'abstract', 'anpa_category', 'pubstatus', 'slugline', 'urgency',
-                                        'subject', 'byline', 'dateline', 'publish_schedule']
+            for metadata in metadata_tobe_copied:
+                package_updates[metadata] = metadata_from.get(metadata)
 
-                for metadata in metadata_tobe_copied:
-                    package_updates[metadata] = \
-                        updates_of_take_to_be_published.get(metadata, original_of_take_to_be_published.get(metadata))
-
-        return package, package_updates
+        return package_updates
 
     def publish(self, doc, updates, target_media_type=None):
         """
@@ -496,7 +505,7 @@ class BasePublishService(BaseService):
                         for pub_seq_num, formatted_doc in formatted_docs:
                             publish_queue_item = dict()
                             publish_queue_item['item_id'] = doc['_id']
-                            publish_queue_item['item_version'] = doc[config.VERSION] + 1
+                            publish_queue_item['item_version'] = doc[config.VERSION]
                             publish_queue_item['formatted_item'] = formatted_doc
                             publish_queue_item['subscriber_id'] = subscriber['_id']
                             publish_queue_item['destination'] = destination
@@ -507,9 +516,9 @@ class BasePublishService(BaseService):
                             publish_queue_item['headline'] = doc.get('headline', None)
 
                             self.set_state(doc, publish_queue_item)
-                            if publish_queue_item.get(config.CONTENT_STATE):
-                                publish_queue_item['publishing_action'] = publish_queue_item.get(config.CONTENT_STATE)
-                                del publish_queue_item[config.CONTENT_STATE]
+                            if publish_queue_item.get(ITEM_STATE):
+                                publish_queue_item['publishing_action'] = publish_queue_item.get(ITEM_STATE)
+                                del publish_queue_item[ITEM_STATE]
                             else:
                                 publish_queue_item['publishing_action'] = self.published_state
 
@@ -604,7 +613,7 @@ class ArchivePublishService(BasePublishService):
         """
         updates[ITEM_OPERATION] = ITEM_PUBLISH
         if original.get('publish_schedule') or updates.get('publish_schedule'):
-            updates[config.CONTENT_STATE] = 'scheduled'
+            updates[ITEM_STATE] = CONTENT_STATE.SCHEDULED
         else:
             super().set_state(original, updates)
 
@@ -632,8 +641,8 @@ class ArchivePublishService(BasePublishService):
             subscribers = list(self.non_digital(subscribers))
 
         # Step 3
-        if doc.get(ITEM_TYPE) == CONTENT_TYPE.TEXT or doc.get(ITEM_TYPE) == CONTENT_TYPE.PREFORMATTED:
-            first_take = TakesPackageService().get_first_take_in_takes_package(doc)
+        if doc.get(ITEM_TYPE) in [CONTENT_TYPE.TEXT, CONTENT_TYPE.PREFORMATTED]:
+            first_take = self.takes_package_service.get_first_take_in_takes_package(doc)
             if first_take:
                 # if first take is published then subsequent takes should to same subscribers.
                 query = {'$and': [{'item_id': first_take},
@@ -656,7 +665,6 @@ class KillPublishResource(BasePublishResource):
 class KillPublishService(BasePublishService):
     publish_type = 'kill'
     published_state = 'killed'
-    takes_service = TakesPackageService()
 
     def __init__(self, datasource=None, backend=None):
         super().__init__(datasource=datasource, backend=backend)
@@ -664,7 +672,7 @@ class KillPublishService(BasePublishService):
     def on_update(self, updates, original):
         updates[ITEM_OPERATION] = ITEM_KILL
         super().on_update(updates, original)
-        self.takes_service.process_killed_takes_package(original)
+        self.takes_package_service.process_killed_takes_package(original)
 
     def update(self, id, updates, original):
         """
@@ -692,7 +700,7 @@ class KillPublishService(BasePublishService):
         :param updates: Updates of the original document
         :param original: Document to kill
         """
-        package = self.takes_service.get_take_package(original)
+        package = self.takes_package_service.get_take_package(original)
         last_updated = updates.get(config.LAST_UPDATED, utcnow())
         if package:
             for ref in[ref for group in package.get('groups', []) if group['id'] == 'main'
@@ -771,7 +779,7 @@ class CorrectPublishService(BasePublishService):
 
         if subscribers:
             # step 2
-            if not TakesPackageService().get_take_package_id(doc):
+            if not self.takes_package_service.get_take_package_id(doc):
                 # Step 3
                 active_subscribers = get_resource_service('subscribers').get(req=None, lookup={'is_active': True})
                 subscribers_yet_to_receive = [a for a in active_subscribers

@@ -1188,7 +1188,7 @@ define([
                         '$and': where
                     });
 
-                    api.activity.query(criteria).then(function (result) {
+                    api.query('activity', criteria).then(function (result) {
                         scope.log_messages = result._items;
                     });
                 }
@@ -1338,7 +1338,7 @@ define([
             })
             .activity('fetchAs', {
                 label: gettext('Fetch As'),
-                icon: 'archive',
+                icon: 'fetch-as',
                 controller: ['data', 'send', function(data, send) {
                     send.allAs([data.item]);
                 }],

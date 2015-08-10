@@ -10,7 +10,6 @@
 
 
 from datetime import datetime
-from uuid import uuid4
 
 from eve.utils import config
 import flask
@@ -20,28 +19,17 @@ from pytz import timezone
 
 from superdesk.celery_app import update_key
 from superdesk.utc import utcnow, get_expiry_date
-from settings import SERVER_DOMAIN, OrganizationNameAbbreviation
+from settings import OrganizationNameAbbreviation
 from superdesk import get_resource_service
-from apps.content import metadata_schema
+from superdesk.metadata.item import metadata_schema, ITEM_STATE, CONTENT_STATE
 from superdesk.workflow import set_default_state, is_workflow_state_transition_valid
 import superdesk
 from apps.archive.archive import SOURCE as ARCHIVE
-from apps.content import PACKAGE_TYPE, TAKES_PACKAGE
+from superdesk.metadata.item import GUID_NEWSML, GUID_FIELD, GUID_TAG, not_analyzed
+from superdesk.metadata.packages import PACKAGE_TYPE, TAKES_PACKAGE, SEQUENCE
+from superdesk.metadata.utils import generate_guid
 from superdesk.errors import SuperdeskApiError, IdentifierGenerationError
-from apps.content import not_analyzed
 
-GUID_TAG = 'tag'
-GUID_FIELD = 'guid'
-GUID_NEWSML = 'newsml'
-FAMILY_ID = 'family_id'
-INGEST_ID = 'ingest_id'
-ASSOCIATIONS = 'refs'
-ITEM_REF = 'residRef'
-ID_REF = 'idRef'
-MAIN_GROUP = 'main'
-ROOT_GROUP = 'root'
-SEQUENCE = 'sequence'
-PUBLISH_STATES = ['published', 'killed', 'corrected', 'scheduled']
 CUSTOM_HATEOAS = {'self': {'title': 'Archive', 'href': '/archive/{_id}'}}
 ITEM_OPERATION = 'operation'
 ITEM_CREATE = 'create'
@@ -131,23 +119,6 @@ def on_duplicate_item(doc):
 def update_dates_for(doc):
     for item in ['firstcreated', 'versioncreated']:
         doc.setdefault(item, utcnow())
-
-
-def generate_guid(**hints):
-    """Generate a GUID based on given hints"""
-    newsml_guid_format = 'urn:newsml:%(domain)s:%(timestamp)s:%(identifier)s'
-    tag_guid_format = 'tag:%(domain)s:%(year)d:%(identifier)s'
-
-    if not hints.get('id'):
-        hints['id'] = str(uuid4())
-
-    t = datetime.today()
-
-    if hints['type'].lower() == GUID_TAG:
-        return tag_guid_format % {'domain': SERVER_DOMAIN, 'year': t.year, 'identifier': hints['id']}
-    elif hints['type'].lower() == GUID_NEWSML:
-        return newsml_guid_format % {'domain': SERVER_DOMAIN, 'timestamp': t.isoformat(), 'identifier': hints['id']}
-    return None
 
 
 def get_user(required=False):
@@ -332,8 +303,8 @@ def update_state(original, updates):
     is changed to 'in-progress'.
     """
 
-    original_state = original.get(config.CONTENT_STATE)
-    if original_state not in ['ingested', 'in_progress', 'scheduled']:
+    original_state = original.get(ITEM_STATE)
+    if original_state not in {CONTENT_STATE.INGESTED, CONTENT_STATE.PROGRESS, CONTENT_STATE.SCHEDULED}:
         if original.get(PACKAGE_TYPE) == TAKES_PACKAGE:
             # skip any state transition validation for takes packages
             # also don't change the stage of the package
@@ -341,9 +312,9 @@ def update_state(original, updates):
         if not is_workflow_state_transition_valid('save', original_state):
             raise superdesk.InvalidStateTransitionError()
         elif is_assigned_to_a_desk(original):
-            updates[config.CONTENT_STATE] = 'in_progress'
+            updates[ITEM_STATE] = CONTENT_STATE.PROGRESS
         elif not is_assigned_to_a_desk(original):
-            updates[config.CONTENT_STATE] = 'draft'
+            updates[ITEM_STATE] = CONTENT_STATE.DRAFT
 
 
 def is_update_allowed(archive_doc):
@@ -352,8 +323,7 @@ def is_update_allowed(archive_doc):
     For instance, a published item shouldn't be allowed to update.
     """
 
-    state = archive_doc.get(config.CONTENT_STATE)
-    if state in ['killed']:
+    if archive_doc.get(ITEM_STATE) == CONTENT_STATE.KILLED:
         raise SuperdeskApiError.forbiddenError("Item isn't in a valid state to be updated.")
 
 
@@ -370,6 +340,25 @@ def handle_existing_data(doc, pub_status_value='usable', doc_type='archive'):
 
         if doc_type == 'archive' and 'marked_for_not_publication' not in doc:
             doc['marked_for_not_publication'] = False
+
+
+def validate_schedule(schedule, package_sequence=1):
+    """
+    Validates the publish schedule.
+    :param datetime schedule: schedule datetime
+    :param int package_sequence: takes package sequence.
+    :raises: SuperdeskApiError.badRequestError if following cases
+        - Not a valid datetime
+        - Less than current utc time
+        - if more than 1 takes exist in the package.
+    """
+    if schedule:
+        if not isinstance(schedule, datetime):
+            raise SuperdeskApiError.badRequestError("Schedule date is not recognized")
+        if schedule < utcnow():
+            raise SuperdeskApiError.badRequestError("Schedule cannot be earlier than now")
+        if package_sequence > 1:
+            raise SuperdeskApiError.badRequestError("Takes cannot be scheduled.")
 
 
 def item_schema(extra=None):

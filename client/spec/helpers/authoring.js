@@ -6,23 +6,51 @@ module.exports = new Authoring();
 function Authoring() {
 
     this.lock = element(by.css('[ng-click="lock()"]'));
-    this.publish = element(by.css('[ng-click="publish()"]'));
+    this.publish_button = element(by.css('[ng-click="publish()"]'));
     this.close_button = element(by.css('[ng-click="close()"]'));
+
+    this.navbarMenuBtn = $('.dropdown-toggle.sd-create-btn');
+    this.newEmptyPackageLink = element(by.id('create_package'));
+    this.infoIconsBox = $('.info-icons');
+
+    /**
+     * Find all file type icons in the item's info icons box matching the
+     * given file type.
+     *
+     * @param {string} itemType - the item type of interest, e.g. 'text',
+     *   'composite', 'picture', etc.
+     * @return {Object} a promise that is resolved with all DOM elements found
+     */
+    this.findItemTypeIcons = function (itemType) {
+        var selector = '.filetype-icon-' + itemType;
+        return this.infoIconsBox.all(by.css(selector));
+    };
 
     /**
      * Send item to given desk
      *
      * @param {string} desk Desk name
+     * @param {string} stage Stage name
      */
-    this.sendTo = function sendTo(desk) {
+    this.sendTo = function(desk, stage) {
+        element(by.id('send-to-btn')).click();
+        this.sendToSidebarOpened(desk, stage);
+    };
+
+    this.confirmSendTo = function() {
+        element(by.className('modal-content')).all(by.css('[ng-click="ok()"]')).click();
+    };
+
+    this.sendToSidebarOpened = function(desk, stage) {
         var sidebar = element(by.css('.send-to-pane')),
             dropdown = sidebar.element(by.css('.desk-select .dropdown-toggle'));
 
-        element(by.id('send-to-btn')).click();
         dropdown.waitReady();
         dropdown.click();
-
         sidebar.element(by.buttonText(desk)).click();
+        if (stage !== undefined) {
+            sidebar.element(by.buttonText(stage)).click();
+        }
         sidebar.element(by.buttonText('send')).click();
     };
 
@@ -30,8 +58,18 @@ function Authoring() {
         return element(by.className('svg-icon-add-to-list')).click();
     };
 
+    this.createTextItem = function() {
+        return element(by.css('[class="dropdown-toggle sd-create-btn"]')).click().then(function() {
+            return element(by.id('create_text_article')).click();
+        });
+    };
+
     this.close = function() {
         return this.close_button.click();
+    };
+
+    this.publish = function() {
+        return this.publish_button.click();
     };
 
     this.save = function() {
@@ -39,6 +77,10 @@ function Authoring() {
         return browser.wait(function() {
             return element(by.buttonText('SAVE')).getAttribute('disabled');
         });
+    };
+
+    this.edit = function() {
+        return element(by.id('Edit')).click();
     };
 
     this.showSearch = function() {
@@ -50,7 +92,12 @@ function Authoring() {
     };
 
     this.showVersions = function() {
-        return element(by.id('Versions')).click();
+        return element(by.id('Versioning')).click();
+    };
+
+    this.showHistory = function() {
+        this.showVersions();
+        return element(by.css('[ng-click="tab = \'history\'"]')).click();
     };
 
     this.getSearchItem = function(item) {
@@ -81,8 +128,21 @@ function Authoring() {
             });
     };
 
+    this.getGroupedItems = function(group) {
+        return element(by.css('[data-title="' + group.toLowerCase() + '"]'))
+            .all(by.repeater('child in item.childData'));
+    };
+
     this.getGroupItems = function(group) {
         return element(by.id(group.toUpperCase())).all(by.repeater('item in group.items'));
+    };
+
+    this.getHistoryItems = function() {
+        return element.all(by.repeater('version in versions'));
+    };
+
+    this.getHistoryItem = function(index) {
+        return this.getHistoryItems().get(index);
     };
 
     this.getGroupItem = function(group, item) {
@@ -121,7 +181,8 @@ function Authoring() {
     };
 
     this.markForHighlights = function() {
-        element(by.className('svg-icon-add-to-list')).click();
+        element(by.className('icon-dots-vertical')).click();
+        browser.actions().mouseMove(element(by.css('.highlights-toggle .dropdown-toggle'))).perform();
     };
 
     this.getSubnav = function() {

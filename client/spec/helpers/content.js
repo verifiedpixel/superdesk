@@ -9,8 +9,10 @@ function Content() {
 
     this.send = send;
 
-    this.setListView = function() {
-        nav('workspace/content');
+    this.setListView = function(noNavigate) {
+        if (noNavigate === undefined || !noNavigate) {
+            nav('workspace/content');
+        }
 
         var list = element(by.css('i.icon-th-list'));
         return list.isDisplayed()
@@ -75,6 +77,14 @@ function Content() {
             return element(by.css('.list-view')).isPresent();
         });
         return element.all(by.repeater('items._items')).count();
+    };
+
+    this.getItemCount = function () {
+        browser.wait(function() {
+            // make sure list is there before counting
+            return element(by.css('.list-view')).isPresent();
+        });
+        return element.all(by.repeater('item in items track by uuid(item)')).count();
     };
 
     /**

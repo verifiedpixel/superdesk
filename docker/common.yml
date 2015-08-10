@@ -17,8 +17,6 @@ logstash:
 kibana:
   build: kibana
   restart: always
-  ports:
-  - "5601:5601"
 
 elastic:
   image: elasticsearch:1.5
@@ -58,6 +56,7 @@ backend:
    - MAIL_PASSWORD=pwd
    - SENTRY_DSN
    - SUPERDESK_URL=http://127.0.0.1/api
+   - PUBLICAPI_URL=http://127.0.0.1/pubapi
    - SUPERDESK_CLIENT_URL=http://127.0.0.1
    - SUPERDESK_TESTING=True
   volumes:
@@ -69,6 +68,3 @@ frontend:
   command: sh -c "grunt build --server='http://127.0.0.1/api' --ws='ws://127.0.0.1/ws' && nginx"
   volumes:
    - ../results/client/unit:/opt/superdesk-client/unit-test-results
-  ports:
-   - "443:443"
-   - "80:80"
