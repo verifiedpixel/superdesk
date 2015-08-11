@@ -330,7 +330,7 @@ angular.module('superdesk.editor', [])
 
     .service('editor', EditorService)
 
-    .directive('sdTextEditor', ['editor', 'spellcheck', '$timeout', 'asset' function (editor, spellcheck, $timeout, asset) {
+    .directive('sdTextEditor', ['editor', 'spellcheck', '$timeout', 'asset', function (editor, spellcheck, $timeout, asset) {
 
         var config = {
             buttons: ['bold', 'italic', 'underline', 'quote', 'anchor'],
