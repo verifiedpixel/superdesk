@@ -166,8 +166,8 @@
         };
     }
 
-    MonitoringGroupDirective.$inject = ['cards', 'api', 'superdesk', 'desks', '$timeout'];
-    function MonitoringGroupDirective(cards, api, superdesk, desks, $timeout) {
+    MonitoringGroupDirective.$inject = ['cards', 'api', 'superdesk', 'desks', '$timeout', 'asset'];
+    function MonitoringGroupDirective(cards, api, superdesk, desks, $timeout, asset) {
         var ITEM_HEIGHT = 57,
             ITEMS_COUNT = 5,
             BUFFER = 8,
