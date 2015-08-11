@@ -104,7 +104,7 @@ function WorkqueueListDirective(asset) {
     };
 }
 
-ArticleDashboardDirective.$inject = ['asset']
+ArticleDashboardDirective.$inject = ['asset'];
 function ArticleDashboardDirective(asset) {
     return {
         templateUrl: asset.templateUrl('superdesk-authoring/views/dashboard-articles.html'),

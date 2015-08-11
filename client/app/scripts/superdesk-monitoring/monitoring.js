@@ -12,27 +12,27 @@
         .config(configureMonitoring)
         .config(configureSpikeMonitoring);
 
-    configureMonitoring.$inject = ['superdeskProvider'];
-    function configureMonitoring(superdesk) {
+    configureMonitoring.$inject = ['superdeskProvider', 'assetProvider'];
+    function configureMonitoring(superdesk, asset) {
         superdesk
             .activity('/workspace/monitoring', {
                 label: gettext('Monitoring'),
                 priority: 100,
-                templateUrl: 'scripts/superdesk-monitoring/views/monitoring.html',
-                topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
-                sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html'
+                templateUrl: asset.templateUrl('superdesk-monitoring/views/monitoring.html'),
+                topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
+                sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html')
             });
     }
 
-    configureSpikeMonitoring.$inject = ['superdeskProvider'];
-    function configureSpikeMonitoring(superdesk) {
+    configureSpikeMonitoring.$inject = ['superdeskProvider', 'assetProvider'];
+    function configureSpikeMonitoring(superdesk, asset) {
         superdesk
             .activity('/workspace/spike-monitoring', {
                 label: gettext('Spike Monitoring'),
                 priority: 100,
-                templateUrl: 'scripts/superdesk-monitoring/views/spike-monitoring.html',
-                topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
-                sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html'
+                templateUrl: asset.templateUrl('superdesk-monitoring/views/spike-monitoring.html'),
+                topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
+                sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html')
             });
     }
 

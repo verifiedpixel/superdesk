@@ -143,7 +143,7 @@ define([
             controllerAs: 'dashboard',
             templateUrl: asset.templateUrl('superdesk-dashboard/views/workspace.html'),
             topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
-            sideTemplateUrl: asset.templateUrl('scripts/superdesk-dashboard/views/workspace-sidenav.html'),
+            sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html'),
             priority: -1000,
             category: superdesk.MENU_MAIN,
             reloadOnSearch: true

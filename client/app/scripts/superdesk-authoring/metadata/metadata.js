@@ -281,8 +281,8 @@ function MetadataListEditingDirective(asset) {
     };
 }
 
-MetadataSliderDirective.$inject = ['asset'];
-function MetadataSliderDirective(asset) {
+MetadataLocatorsDirective.$inject = ['asset'];
+function MetadataLocatorsDirective(asset) {
     return {
         scope: {
             item: '=',
@@ -294,7 +294,8 @@ function MetadataSliderDirective(asset) {
             postprocessing: '&',
             header: '@'
         },
-        templateUrl: asset.templateUrl('superdesk-authoring/metadata/views/metadata-slider.html'),
+
+        templateUrl: asset.templateUrl('superdesk-authoring/metadata/views/metadata-locators.html'),
         link: function(scope, element) {
             scope.locators = scope.list;
             scope.selectedTerm = '';

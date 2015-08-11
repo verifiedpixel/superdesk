@@ -664,8 +664,8 @@
                 when: '/packaging/:_id/view',
                 label: gettext('Packaging Read Only'),
                 templateUrl: asset.templateUrl('superdesk-packaging/views/packaging.html'),
-                topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
-                sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
+                topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
+                sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html'),
                 controller: PackagingController,
                 filters: [{action: 'read_only', type: 'content_package'}],
                 resolve: {

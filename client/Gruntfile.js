@@ -19,24 +19,19 @@ module.exports = function (grunt) {
         livereloadPort: 35729,
         ngtemplates: {
             app: {
-                cwd: "app",
-                src: "scripts/**/*.html",
-                dest: "app/scripts/templates.js",
+                cwd: 'app',
+                src: 'scripts/**/*.html',
+                dest: 'app/scripts/templates.js',
                 options: {
                     htmlmin: {
                         collapseWhitespace: true,
                         collapseBooleanAttributes: true
                     },
                     bootstrap:  function(module, script) {
-                        return '\
-                        define(["angular"], function (angular) {\
-                            "use strict";\
-                            var templates = angular.module("templates", []);\
-                            templates.run(function($templateCache) {\
-                              ' + script + '\
-                            });\
-                            return templates;\
-                        });';
+                        return 'define(["angular"], function (angular) { "use strict";' +
+                            'var templates = angular.module("templates", []);' +
+                            'templates.run(function($templateCache) {' +
+                            script + ' });  return templates; });';
                     }
                 }
             }

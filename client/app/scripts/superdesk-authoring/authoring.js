@@ -1245,7 +1245,8 @@
             }
         };
     }
-    SendItem.$inject = ['$q', 'api', 'desks', 'notify', '$location', 'macros', '$rootScope', 'authoring', 'send', 'spellcheck', 'confirm', 'asset'];
+    SendItem.$inject = ['$q', 'api', 'desks', 'notify', '$location', 'macros', '$rootScope',
+        'authoring', 'send', 'spellcheck', 'confirm', 'asset'];
     function SendItem($q, api, desks, notify, $location, macros, $rootScope, authoring, send, spellcheck, confirm, asset) {
         return {
             scope: {

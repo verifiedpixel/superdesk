@@ -73,7 +73,8 @@
         });
     }
 
-    StageItemListDirective.$inject = ['search', 'api', 'superdesk', 'desks', 'cards', '$timeout', '$q', '$location', '$anchorScroll', 'asset'];
+    StageItemListDirective.$inject = ['search', 'api', 'superdesk', 'desks', 'cards', '$timeout',
+        '$q', '$location', '$anchorScroll', 'asset'];
     function StageItemListDirective(search, api, superdesk, desks, cards, $timeout, $q, $location, $anchorScroll, asset) {
         return {
             templateUrl: asset.templateUrl('superdesk-desks/views/stage-item-list.html'),
