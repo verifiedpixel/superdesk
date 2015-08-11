@@ -330,7 +330,7 @@ angular.module('superdesk.editor', [])
 
     .service('editor', EditorService)
 
-    .directive('sdTextEditor', ['editor', 'spellcheck', '$timeout', function (editor, spellcheck, $timeout) {
+    .directive('sdTextEditor', ['editor', 'spellcheck', '$timeout', 'asset' function (editor, spellcheck, $timeout, asset) {
 
         var config = {
             buttons: ['bold', 'italic', 'underline', 'quote', 'anchor'],
@@ -397,7 +397,7 @@ angular.module('superdesk.editor', [])
         return {
             scope: {type: '=', config: '=', language: '='},
             require: 'ngModel',
-            templateUrl: 'scripts/superdesk/editor/views/editor.html',
+            templateUrl: asset.templateUrl('superdesk/editor/views/editor.html'),
             link: function(scope, elem, attrs, ngModel) {
 
                 var editorElem,

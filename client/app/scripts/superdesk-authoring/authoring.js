@@ -1875,10 +1875,10 @@
         };
     }
 
-    headerInfoDirective.$inject = ['familyService', 'authoringWidgets', 'authoring'];
-    function headerInfoDirective(familyService, authoringWidgets, authoring) {
+    headerInfoDirective.$inject = ['familyService', 'authoringWidgets', 'authoring', 'asset'];
+    function headerInfoDirective(familyService, authoringWidgets, authoring, asset) {
         return {
-            templateUrl: 'scripts/superdesk-authoring/views/header-info.html',
+            templateUrl: asset.templateUrl('superdesk-authoring/views/header-info.html'),
             require: '^sdAuthoringWidgets',
             link: function (scope, elem, attrs, WidgetsManagerCtrl) {
                 scope.$watch('item', function (item) {

@@ -147,7 +147,7 @@ function TasksController($scope, $timeout, api, notify, desks, tasks) {
 }
 
 TaskPreviewDirective.$inject = ['tasks', 'desks', 'notify', 'asset'];
-function TaskPreviewDirective(tasks, desks, notify) {
+function TaskPreviewDirective(tasks, desks, notify, asset) {
     var promise = desks.initialize();
     return {
         templateUrl: asset.templateUrl('superdesk-dashboard/workspace-tasks/views/task-preview.html'),

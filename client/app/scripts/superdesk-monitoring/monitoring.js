@@ -146,9 +146,10 @@
      *
      * it's a directive so that it can be put together with authoring into some container directive
      */
-    function MonitoringViewDirective() {
+    MonitoringViewDirective.$inject = ['asset'];
+    function MonitoringViewDirective(asset) {
         return {
-            templateUrl: 'scripts/superdesk-monitoring/views/monitoring-view.html',
+            templateUrl: asset.templateUrl('superdesk-monitoring/views/monitoring-view.html'),
             controller: 'Monitoring',
             controllerAs: 'monitoring',
             scope: {
@@ -158,9 +159,10 @@
         };
     }
 
-    function MonitoringGroupHeader() {
+    MonitoringGroupHeader.$inject = ['asset'];
+    function MonitoringGroupHeader(asset) {
         return {
-            templateUrl: 'scripts/superdesk-monitoring/views/monitoring-group-header.html'
+            templateUrl: asset.templateUrl('superdesk-monitoring/views/monitoring-group-header.html')
         };
     }
 
@@ -178,7 +180,7 @@
             };
 
         return {
-            templateUrl: 'scripts/superdesk-monitoring/views/monitoring-group.html',
+            templateUrl: asset.templateUrl('superdesk-monitoring/views/monitoring-group.html'),
             require: ['^sdMonitoringView', '^sdAuthoringContainer'],
             scope: {
                 group: '=',
@@ -396,14 +398,14 @@
         }
     }
 
-    ItemActionsMenu.$inject = ['superdesk', 'activityService', 'workflowService'];
-    function ItemActionsMenu(superdesk, activityService, workflowService) {
+    ItemActionsMenu.$inject = ['superdesk', 'activityService', 'workflowService', 'asset'];
+    function ItemActionsMenu(superdesk, activityService, workflowService, asset) {
         return {
             scope: {
                 item: '=',
                 active: '='
             },
-            templateUrl: 'scripts/superdesk-monitoring/views/item-actions-menu.html',
+            templateUrl: asset.templateUrl('superdesk-monitoring/views/item-actions-menu.html'),
             link: function(scope) {
                 /**
                  * Populate scope actions when dropdown is opened.
