@@ -146,11 +146,11 @@ function TasksController($scope, $timeout, api, notify, desks, tasks) {
     });
 }
 
-TaskPreviewDirective.$inject = ['tasks', 'desks', 'notify'];
+TaskPreviewDirective.$inject = ['tasks', 'desks', 'notify', 'asset'];
 function TaskPreviewDirective(tasks, desks, notify) {
     var promise = desks.initialize();
     return {
-        templateUrl: 'scripts/superdesk-dashboard/workspace-tasks/views/task-preview.html',
+        templateUrl: asset.templateUrl('superdesk-dashboard/workspace-tasks/views/task-preview.html'),
         scope: {
             item: '=',
             close: '&onclose'
@@ -197,10 +197,10 @@ function TaskPreviewDirective(tasks, desks, notify) {
     };
 }
 
-TaskKanbanBoardDirective.$inject = [];
-function TaskKanbanBoardDirective() {
+TaskKanbanBoardDirective.$inject = ['asset'];
+function TaskKanbanBoardDirective(asset) {
     return {
-        templateUrl: 'scripts/superdesk-dashboard/workspace-tasks/views/kanban-board.html',
+        templateUrl: asset.templateUrl('superdesk-dashboard/workspace-tasks/views/kanban-board.html'),
         scope: {
             items: '=',
             status: '@',
@@ -215,11 +215,11 @@ function TaskKanbanBoardDirective() {
     };
 }
 
-AssigneeViewDirective.$inject = ['desks'];
-function AssigneeViewDirective(desks) {
+AssigneeViewDirective.$inject = ['desks', 'asset'];
+function AssigneeViewDirective(desks, asset) {
     var promise = desks.initialize();
     return {
-        templateUrl: 'scripts/superdesk-dashboard/workspace-tasks/views/assignee-view.html',
+        templateUrl: asset.templateUrl('superdesk-dashboard/workspace-tasks/views/assignee-view.html'),
         scope: {
             task: '=',
             name: '=',
@@ -271,9 +271,11 @@ function StagesCtrlFactory(api, desks) {
     };
 }
 
-function DeskStagesDirective() {
+
+DeskStagesDirective.$inject = ['asset'];
+function DeskStagesDirective(asset) {
     return {
-        templateUrl: 'scripts/superdesk-dashboard/workspace-tasks/views/desk-stages.html'
+        templateUrl: asset.templateUrl('superdesk-dashboard/workspace-tasks/views/desk-stages.html')
     };
 }
 
