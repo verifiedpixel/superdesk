@@ -73,13 +73,13 @@ define([
         .service('auth', require('./auth-service'))
         .service('authAdapter', require('./basic-auth-adapter'))
         .directive('sdLoginModal', require('./login-modal-directive'))
-        .config(['$httpProvider', 'superdeskProvider', 'assetProvider', function($httpProvider, superdesk, asset) {
+        .config(['$httpProvider', 'superdeskProvider', function($httpProvider, superdesk) {
             $httpProvider.interceptors.push(AuthInterceptor);
 
             superdesk
                 .activity('/reset-password/', {
                     controller: ResetPassworController,
-                    templateUrl: asset.templateUrl('superdesk/auth/reset-password.html'),
+                    templateUrl: require.toUrl('./reset-password.html'),
                     auth: false
                 });
         }])
