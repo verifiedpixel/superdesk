@@ -9,6 +9,7 @@
 # at https://www.sourcefabric.org/superdesk/license
 
 import imaplib
+import traceback
 from .ingest_service import IngestService
 from superdesk.upload import url_for_media
 from superdesk.errors import IngestEmailError
@@ -52,10 +53,10 @@ class EmailReaderService(IngestService):
                                 continue
                 imap.close()
             imap.logout()
-        except IngestEmailError:
-            raise
         except Exception as ex:
-            raise IngestEmailError.emailError(ex, provider)
+            raise IngestEmailError.emailError(
+                ex, provider, str(ex.args), traceback.format_exc()
+            )
         return new_items
 
     def prepare_href(self, href):
