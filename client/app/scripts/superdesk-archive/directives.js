@@ -178,7 +178,7 @@
                 }
             };
         }])
-        .directive('sdMediaMetadata', ['userList', 'asset', function(userList, asset) {
+        .directive('sdMediaMetadata', ['userList', 'archiveService', 'asset', function(userList, archiveService, asset) {
             return {
                 scope: {
                     item: '='
@@ -189,20 +189,22 @@
                     scope.$watch('item', reloadData);
 
                     function reloadData() {
-                        scope.originalCreator = null;
-                        scope.versionCreator = null;
+                        scope.originalCreator = scope.item.original_creator;
+                        scope.versionCreator = scope.item.version_creator;
 
-                        if (scope.item.original_creator) {
-                            userList.getUser(scope.item.original_creator)
-                            .then(function(user) {
-                                scope.originalCreator = user.display_name;
-                            });
-                        }
-                        if (scope.item.version_creator) {
-                            userList.getUser(scope.item.version_creator)
-                            .then(function(user) {
-                                scope.versionCreator = user.display_name;
-                            });
+                        if (!archiveService.isLegal(scope.item)) {
+                            if (scope.item.original_creator) {
+                                userList.getUser(scope.item.original_creator)
+                                    .then(function(user) {
+                                        scope.originalCreator = user.display_name;
+                                    });
+                            }
+                            if (scope.item.version_creator) {
+                                userList.getUser(scope.item.version_creator)
+                                    .then(function(user) {
+                                        scope.versionCreator = user.display_name;
+                                    });
+                            }
                         }
                     }
                 }
@@ -285,7 +287,11 @@
                 }
             };
         }])
+<<<<<<< HEAD
         .directive('sdMediaBox', ['$location', 'lock', 'multi', 'asset', function($location, lock, multi, asset) {
+=======
+        .directive('sdMediaBox', ['$location', 'lock', 'multi', 'archiveService', function($location, lock, multi, archiveService) {
+>>>>>>> 3a54612f7a04ae222bb9a1e7378a03a5fe78661b
             return {
                 restrict: 'A',
                 templateUrl: asset.templateUrl('superdesk-archive/views/media-box.html'),
@@ -348,6 +354,16 @@
 
                     scope.toggleSelected = function(item) {
                         multi.toggle(item);
+                    };
+
+                    /**
+                     * Get actions type based on item state. Used with activity filter.
+                     *
+                     * @param {Object} item
+                     * @returns {string}
+                     */
+                    scope.getType = function(item) {
+                        return archiveService.getType(item);
                     };
                 }
             };

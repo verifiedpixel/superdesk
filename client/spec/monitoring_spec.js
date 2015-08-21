@@ -158,7 +158,7 @@ describe('monitoring view', function() {
         monitoring.nextReorder();
         monitoring.saveSettings();
 
-        monitoring.previewAction(0, 0);
+        monitoring.openAction(0, 0);
         expect(monitoring.getPreviewTitle()).toBe('item6');
     });
 
@@ -173,7 +173,28 @@ describe('monitoring view', function() {
         monitoring.saveSettings();
 
         monitoring.openAction(0, 0);
-        expect(authoring.close_button.isDisplayed()).toBe(true);
+        expect(authoring.save_button.isDisplayed()).toBe(true);
     });
 
+    it('updates item group on single item spike-unspike', function() {
+        expect(monitoring.getGroupItems(1).count()).toBe(1);
+        monitoring.actionOnItem('Spike', 1, 0);
+        expect(monitoring.getGroupItems(1).count()).toBe(0);
+        monitoring.openSpiked();
+        expect(monitoring.getItemText(monitoring.getSpikedItem(0))).toBe('item5');
+        monitoring.unspikeItem(0);
+        expect(monitoring.getSpikedItems().count()).toBe(0);
+    });
+
+    it('updates item group on multiple item spike-unspike', function() {
+        expect(monitoring.getGroupItems(1).count()).toBe(1);
+        monitoring.selectItem(1, 0);
+        monitoring.spikeMultipleItems();
+        expect(monitoring.getGroupItems(1).count()).toBe(0);
+        monitoring.openSpiked();
+        expect(monitoring.getItemText(monitoring.getSpikedItem(0))).toBe('item5');
+        monitoring.selectSpikedItem(0);
+        monitoring.unspikeMultipleItems();
+        expect(monitoring.getSpikedItems().count()).toBe(0);
+    });
 });

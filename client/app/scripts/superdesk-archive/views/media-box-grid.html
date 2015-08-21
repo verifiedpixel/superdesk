@@ -13,7 +13,7 @@
             <span sd-item-container data-item="item" class="container"></span>
         </span>
 
-        <div class="selectbox" ng-show="hover || item.selected">
+        <div class="selectbox" ng-if="item._type !== 'legal_archive'" ng-show="hover || item.selected">
             <span sd-check ng-model="item.selected" ng-change="toggleSelected(item)"></span>
         </div>
     </div>
@@ -55,7 +55,7 @@
     <ul ng-if="extras.activity" class="item-functions"
         sd-activity-list
         data-item="item"
-        data-type="{{ spike ? 'spike' : ((type || item._type) === 'published'? 'archive': (type || item._type))}}"
+        data-type="{{getType(item)}}"
         data-action="{{extras.activity.action}}">
     </ul>
 </div>

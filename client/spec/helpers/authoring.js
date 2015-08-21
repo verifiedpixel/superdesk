@@ -8,10 +8,12 @@ function Authoring() {
     this.lock = element(by.css('[ng-click="lock()"]'));
     this.publish_button = element(by.css('[ng-click="publish()"]'));
     this.close_button = element(by.css('[ng-click="close()"]'));
+    this.save_button = element(by.css('[ng-click="save(item)"]'));
 
     this.navbarMenuBtn = $('.dropdown-toggle.sd-create-btn');
     this.newEmptyPackageLink = element(by.id('create_package'));
     this.infoIconsBox = $('.info-icons');
+    this.sendToButton = element(by.id('send-to-btn'));
 
     /**
      * Find all file type icons in the item's info icons box matching the
@@ -33,7 +35,7 @@ function Authoring() {
      * @param {string} stage Stage name
      */
     this.sendTo = function(desk, stage) {
-        element(by.id('send-to-btn')).click();
+        this.sendToButton.click();
         this.sendToSidebarOpened(desk, stage);
     };
 
@@ -195,14 +197,27 @@ function Authoring() {
             .toContain(highlight);
     };
 
+    var bodyHtml = element(by.model('item.body_html')).all(by.className('editor-type-html')).first();
+    var headline = element(by.model('item.headline')).all(by.className('editor-type-html')).first();
+    var abstract = element(by.model('item.abstract')).all(by.className('editor-type-html')).first();
+
     this.writeText = function (text) {
-        element(by.model('item.body_html')).all(by.className('editor-type-html')).sendKeys(text);
-    };
-    this.writeTextToHeadline = function (text) {
-        element(by.model('item.headline')).all(by.className('editor-type-html')).sendKeys(text);
-    };
-    this.writeTextToAbstract = function (text) {
-        element(by.model('item.abstract')).all(by.className('editor-type-html')).sendKeys(text);
+        bodyHtml.sendKeys(text);
     };
 
+    this.writeTextToHeadline = function (text) {
+        headline.sendKeys(text);
+    };
+
+    this.writeTextToAbstract = function (text) {
+        abstract.sendKeys(text);
+    };
+
+    this.getBodyText = function() {
+        return bodyHtml.getText();
+    };
+
+    this.getHeadlineText = function() {
+        return headline.getText();
+    };
 }

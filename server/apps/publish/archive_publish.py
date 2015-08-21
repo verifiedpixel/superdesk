@@ -16,8 +16,9 @@ from eve.versioning import resolve_document_version
 from eve.utils import config, ParsedRequest
 from eve.validation import ValidationError
 
-from superdesk.metadata.item import PUB_STATUS, CONTENT_TYPE, ITEM_TYPE, GUID_FIELD, ITEM_STATE, CONTENT_STATE
-from superdesk.metadata.packages import SEQUENCE
+from superdesk.metadata.item import PUB_STATUS, CONTENT_TYPE, ITEM_TYPE, GUID_FIELD, ITEM_STATE, CONTENT_STATE, \
+    PUBLISH_STATES
+from superdesk.metadata.packages import SEQUENCE, PACKAGE_TYPE, TAKES_PACKAGE
 from apps.publish.subscribers import SUBSCRIBER_TYPES
 from settings import DEFAULT_SOURCE_VALUE_FOR_MANUAL_ARTICLES
 import superdesk
@@ -27,7 +28,7 @@ from superdesk.notification import push_notification
 from superdesk.services import BaseService
 from superdesk import get_resource_service
 from apps.archive.archive import ArchiveResource, SOURCE as ARCHIVE
-from apps.archive.common import validate_schedule
+from apps.archive.common import validate_schedule, is_item_in_package
 from superdesk.utc import utcnow
 from superdesk.workflow import is_workflow_state_transition_valid
 from apps.publish.formatters import get_formatter
@@ -36,6 +37,7 @@ from apps.item_autosave.components.item_autosave import ItemAutosave
 from apps.archive.common import item_url, get_user, insert_into_versions, \
     set_sign_off, item_operations, ITEM_OPERATION
 from apps.packages import TakesPackageService
+from apps.packages.package_service import PackageService
 from apps.publish.published_item import LAST_PUBLISHED_VERSION
 
 logger = logging.getLogger(__name__)
@@ -80,6 +82,7 @@ class BasePublishService(BaseService):
     non_digital = partial(filter, lambda s: s.get('subscriber_type', '') != SUBSCRIBER_TYPES.DIGITAL)
     digital = partial(filter, lambda s: s.get('subscriber_type', '') == SUBSCRIBER_TYPES.DIGITAL)
     takes_package_service = TakesPackageService()
+    package_service = PackageService()
 
     def on_update(self, updates, original):
         if original.get('marked_for_not_publication', False):
@@ -87,7 +90,9 @@ class BasePublishService(BaseService):
                 message='Cannot publish an item which is marked as Not for Publication')
 
         if not is_workflow_state_transition_valid(self.publish_type, original[ITEM_STATE]):
-            raise InvalidStateTransitionError()
+            error_message = "Can't {} as item state is {}" if original[ITEM_TYPE] == CONTENT_TYPE.TEXT else \
+                "Can't {} as either package state or one of the items state is {}"
+            raise InvalidStateTransitionError(error_message.format(self.publish_type, original[ITEM_STATE]))
 
         updated = original.copy()
         updated.update(updates)
@@ -108,20 +113,9 @@ class BasePublishService(BaseService):
         if validation_errors[0]:
             raise ValidationError(validation_errors)
 
-        # We do not allow packages to be published if any items in the package do not validate
-        if original[ITEM_TYPE] == CONTENT_TYPE.COMPOSITE and not takes_package:
-            items = [ref.get('residRef') for group in original.get('groups', [])
-                     for ref in group.get('refs', []) if 'residRef' in ref]
-            if items:
-                for guid in items:
-                    doc = super().find_one(req=None, _id=guid)
-                    validate_item = {'act': self.publish_type, 'type': doc[ITEM_TYPE], 'validate': doc}
-                    validation_errors = get_resource_service('validate').post([validate_item])
-                    if validation_errors[0]:
-                        raise ValidationError(validation_errors)
-                    # check the locks on the items
-                    if doc.get('lock_session', None) and original['lock_session'] != doc['lock_session']:
-                        raise ValidationError(['A packaged item is locked'])
+        # validate the package if it is one
+        self._validate_package_contents(original, takes_package)
+        self._set_version_last_modified_and_state(original, updates, updates.get(config.LAST_UPDATED, utcnow()))
 
     def on_updated(self, updates, original):
         self.update_published_collection(published_item_id=original[config.ID_FIELD])
@@ -174,7 +168,6 @@ class BasePublishService(BaseService):
                 if not queued:
                     raise PublishQueueError.item_not_queued_error(Exception('Nothing is saved to publish queue'), None)
 
-            self._set_version_last_modified_and_state(original, updates, last_updated)
             self._update_archive(original=original, updates=updates, should_insert_into_versions=False)
             push_notification('item:publish', item=str(id), unique_name=original['unique_name'],
                               desk=str(original.get('task', {}).get('desk', '')),
@@ -218,17 +211,18 @@ class BasePublishService(BaseService):
         :param: package to publish
         :param datetime last_updated: datetime of the updates.
         """
-        items = [ref.get('residRef') for group in package.get('groups', [])
-                 for ref in group.get('refs', []) if 'residRef' in ref]
+
+        items = self.package_service.get_residrefs(package)
 
         if items:
             archive_publish = get_resource_service('archive_publish')
             for guid in items:
                 doc = super().find_one(req=None, _id=guid)
                 try:
-                    if doc[ITEM_TYPE] == CONTENT_TYPE.COMPOSITE:
-                        self._publish_package_items(doc)
-                    archive_publish.patch(id=doc.pop('_id'), updates=doc)
+                    if doc[ITEM_STATE] not in PUBLISH_STATES:
+                        if doc[ITEM_TYPE] == CONTENT_TYPE.COMPOSITE:
+                            self._publish_package_items(doc)
+                        archive_publish.patch(id=doc.pop('_id'), updates=doc)
                 except KeyError:
                     raise SuperdeskApiError.badRequestError("A non-existent content id is requested to publish")
             self.publish(package, updates, target_media_type=DIGITAL)
@@ -242,7 +236,7 @@ class BasePublishService(BaseService):
         """
 
         self.set_state(original, updates)
-        updates[config.LAST_UPDATED] = last_updated
+        updates.setdefault(config.LAST_UPDATED, last_updated)
 
         if original[config.VERSION] == updates.get(config.VERSION, original[config.VERSION]):
             resolve_document_version(document=updates, resource=ARCHIVE, method='PATCH', latest_doc=original)
@@ -595,6 +589,34 @@ class BasePublishService(BaseService):
         if doc.get(SEQUENCE):
             doc['headline'] = '{}={}'.format(doc['headline'], doc.get(SEQUENCE))
 
+    def _validate_package_contents(self, package, takes_package):
+        """
+        If the item passed is a package this function will ensure that the unpublished content validates and none of
+         the content is locked by other than the publishing session, also do not allow any killed or spiked content
+        :param package:
+        :param takes_package:
+        :raises: Validation exceptions if the validation fails
+        """
+        # Ensure it is the sort of thing we need to validate
+        if package[ITEM_TYPE] == CONTENT_TYPE.COMPOSITE and not takes_package and self.publish_type == ITEM_PUBLISH:
+            items = self.package_service.get_residrefs(package)
+
+            if items:
+                for guid in items:
+                    doc = super().find_one(req=None, _id=guid)
+                    # make sure no items are killed or locked
+                    if doc[ITEM_STATE] in (CONTENT_STATE.KILLED, CONTENT_STATE.SPIKED):
+                        raise ValidationError(['Package contains killed or spike item'])
+                    # don't validate items that already have published
+                    if doc[ITEM_STATE] != CONTENT_STATE.PUBLISHED:
+                        validate_item = {'act': self.publish_type, 'type': doc[ITEM_TYPE], 'validate': doc}
+                        validation_errors = get_resource_service('validate').post([validate_item])
+                        if validation_errors[0]:
+                            raise ValidationError(validation_errors)
+                    # check the locks on the items
+                    if doc.get('lock_session', None) and package['lock_session'] != doc['lock_session']:
+                        raise ValidationError(['A packaged item is locked'])
+
 
 class ArchivePublishResource(BasePublishResource):
     def __init__(self, endpoint_name, app, service):
@@ -621,9 +643,11 @@ class ArchivePublishService(BasePublishService):
         """
         Get the subscribers for this document based on the target_media_type for publishing.
         1. Get the list of all active subscribers.
+            a. Get the list of takes subscribers if Takes Package
         2. If targeted_for is set then exclude internet/digital subscribers.
         3. If takes package then subsequent takes are sent to same wire subscriber as first take.
         4. Filter the subscriber list based on the publish filter and global filters (if configured).
+            a. Publish to takes package subscribers if the takes package is received by the subscriber.
         :param dict doc: Document to publish/correct/kill
         :param str target_media_type: dictate if the doc being queued is a Takes Package or an Individual Article.
                 Valid values are - Wire, Digital. If Digital then the doc being queued is a Takes Package and if Wire
@@ -631,10 +655,16 @@ class ArchivePublishService(BasePublishService):
         :return: (list, list) List of filtered subscriber,
                 List of subscribers that have not received item previously (empty list in this case).
         """
-        subscribers, subscribers_yet_to_receive = [], []
+        subscribers, subscribers_yet_to_receive, takes_subscribers = [], [], []
         first_take = None
         # Step 1
         subscribers = list(get_resource_service('subscribers').get(req=None, lookup={'is_active': True}))
+
+        if doc.get(ITEM_TYPE) in [CONTENT_TYPE.COMPOSITE] and doc.get(PACKAGE_TYPE) == TAKES_PACKAGE:
+            # Step 1a
+            query = {'$and': [{'item_id': doc[config.ID_FIELD]},
+                              {'publishing_action': {'$in': [CONTENT_STATE.PUBLISHED, CONTENT_STATE.CORRECTED]}}]}
+            takes_subscribers = self._get_subscribers_for_previously_sent_items(query)
 
         # Step 2
         if doc.get('targeted_for'):
@@ -646,13 +676,18 @@ class ArchivePublishService(BasePublishService):
             if first_take:
                 # if first take is published then subsequent takes should to same subscribers.
                 query = {'$and': [{'item_id': first_take},
-                                  {'publishing_action': {'$in': ['published']}}]}
+                                  {'publishing_action': {'$in': [CONTENT_STATE.PUBLISHED]}}]}
                 subscribers = self._get_subscribers_for_previously_sent_items(query)
 
         # Step 4
         if not first_take:
             subscribers = self.filter_subscribers(doc, subscribers,
                                                   WIRE if doc.get('targeted_for') else target_media_type)
+
+        if takes_subscribers:
+            # Step 4a
+            subscribers_ids = set(s[config.ID_FIELD] for s in takes_subscribers)
+            subscribers = takes_subscribers + [s for s in subscribers if s[config.ID_FIELD] not in subscribers_ids]
 
         return subscribers, subscribers_yet_to_receive
 
@@ -670,6 +705,10 @@ class KillPublishService(BasePublishService):
         super().__init__(datasource=datasource, backend=backend)
 
     def on_update(self, updates, original):
+        # check if we are trying to kill and item that is contained in normal non takes package
+        if is_item_in_package(original):
+            raise SuperdeskApiError.badRequestError(message='This item is in a package' +
+                                                            ' it needs to be removed before the item can be killed')
         updates[ITEM_OPERATION] = ITEM_KILL
         super().on_update(updates, original)
         self.takes_package_service.process_killed_takes_package(original)
@@ -734,7 +773,7 @@ class KillPublishService(BasePublishService):
 
         subscribers, subscribers_yet_to_receive = [], []
         query = {'$and': [{'item_id': doc[config.ID_FIELD]},
-                          {'publishing_action': {'$in': ['published', 'corrected']}}]}
+                          {'publishing_action': {'$in': [CONTENT_STATE.PUBLISHED, CONTENT_STATE.CORRECTED]}}]}
         subscribers = self._get_subscribers_for_previously_sent_items(query)
 
         return subscribers, subscribers_yet_to_receive
@@ -773,7 +812,7 @@ class CorrectPublishService(BasePublishService):
         subscribers, subscribers_yet_to_receive = [], []
         # step 1
         query = {'$and': [{'item_id': doc[config.ID_FIELD]},
-                          {'publishing_action': {'$in': ['published', 'corrected']}}]}
+                          {'publishing_action': {'$in': [CONTENT_STATE.PUBLISHED, CONTENT_STATE.CORRECTED]}}]}
 
         subscribers = self._get_subscribers_for_previously_sent_items(query)
 

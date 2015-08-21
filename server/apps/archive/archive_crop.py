@@ -88,6 +88,11 @@ class ArchiveCropService(BaseService):
         """
         width = doc['CropRight'] - doc['CropLeft']
         height = doc['CropBottom'] - doc['CropTop']
+
+        if width < crop['width'] or height < crop['height']:
+            raise SuperdeskApiError.badRequestError(
+                message='Wrong crop size. Minimum crop size is {}x{}.'.format(crop['width'], crop['height']))
+
         doc_ratio = round(width / height, 1)
         spec_ratio = round(crop['width'] / crop['height'], 1)
         if doc_ratio != spec_ratio:
@@ -127,7 +132,7 @@ class ArchiveCropService(BaseService):
         try:
             cropped, out = crop_image(original_file, original_file.filename, crop_data)
             if cropped:
-                renditions[crop_name] = self._save_cropped_image(out, original_file)
+                renditions[crop_name] = self._save_cropped_image(out, original_file, doc)
                 get_resource_service(ARCHIVE).patch(original['_id'], {'renditions': renditions})
             else:
                 raise SuperdeskApiError.badRequestError('Saving crop failed: {}'.format(str(out)))
@@ -136,11 +141,12 @@ class ArchiveCropService(BaseService):
         except Exception as ex:
             raise SuperdeskApiError.badRequestError('Generating crop failed: {}'.format(str(ex)))
 
-    def _save_cropped_image(self, file_stream, file):
+    def _save_cropped_image(self, file_stream, file, doc):
         """
         Saves the cropped image and returns the crop dictionary
         :param file_stream: cropped image stream
         :param file: original image file
+        :param doc: crop data
         :return dict: Crop values
         :raises SuperdeskApiError.internalError
         """
@@ -155,6 +161,10 @@ class ArchiveCropService(BaseService):
             crop['media'] = file_id
             crop['mime_type'] = content_type
             crop['href'] = url_for_media(file_id)
+            crop['CropTop'] = doc.get('CropTop', None)
+            crop['CropLeft'] = doc.get('CropLeft', None)
+            crop['CropRight'] = doc.get('CropRight', None)
+            crop['CropBottom'] = doc.get('CropBottom', None)
             return crop
         except Exception as ex:
             try:

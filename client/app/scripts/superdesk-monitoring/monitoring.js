@@ -210,6 +210,8 @@
                 scope.$watch('group.fileType', queryItems);
                 scope.$on('task:stage', handleStage);
                 scope.$on('ingest:update', update);
+                scope.$on('item:spike', update);
+                scope.$on('item:unspike', update);
 
                 var list = elem[0].getElementsByClassName('inline-content-items')[0],
                     scrollElem = elem.find('.stage-content').first();
@@ -230,8 +232,8 @@
                     }
                 }
 
-                function edit(item) {
-                    authoring.edit(item);
+                function edit(item, lock) {
+                    authoring.edit(item, lock);
                 }
 
                 function select(item) {
@@ -398,8 +400,8 @@
         }
     }
 
-    ItemActionsMenu.$inject = ['superdesk', 'activityService', 'workflowService', 'asset'];
-    function ItemActionsMenu(superdesk, activityService, workflowService, asset) {
+    ItemActionsMenu.$inject = ['superdesk', 'activityService', 'workflowService', 'archiveService', 'asset'];
+    function ItemActionsMenu(superdesk, activityService, workflowService, archiveService, asset) {
         return {
             scope: {
                 item: '=',
@@ -459,15 +461,7 @@
                  * @return {string}
                  */
                 function getType(item) {
-                    if (item.state === 'spiked') {
-                        return 'spike';
-                    }
-
-                    if (item.state === 'ingested') {
-                        return 'ingest';
-                    }
-
-                    return 'archive';
+                    return archiveService.getType(item);
                 }
             }
         };

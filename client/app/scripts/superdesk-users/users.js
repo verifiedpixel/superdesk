@@ -898,7 +898,11 @@
                     scope.$watchCollection('user', function(user) {
                         _.each(user, function(value, key) {
                             if (value === '') {
-                                delete user[key];
+                                if (key !== 'phone' || key !== 'byline') {
+                                    user[key] = null;
+                                } else {
+                                    delete user[key];
+                                }
                             }
                         });
                         scope.dirty = !angular.equals(user, scope.origUser);
@@ -1044,18 +1048,17 @@
                             });
                     };
 
-                    scope.changeDatelinePreview = function(preferences, city) {
-                        if (angular.isUndefined(preferences.located) || preferences.located.city !== city) {
-                            if (city === '') {
-                                preferences.located = null;
-                            } else {
-                                preferences.located = {'city': city, 'city_code': city, 'alt_name': city, 'tz': 'UTC',
-                                    'dateline': 'city', 'country': '', 'country_code': '', 'state_code': '', 'state': ''};
-                            }
+                    /**
+                     * Invoked by the directive after updating the property in item. This method is responsible for updating
+                     * the properties dependent on dateline.
+                     */
+                    scope.changeDatelinePreview = function(datelinePreference, city) {
+                        if (city === '') {
+                            datelinePreference.located = null;
                         }
 
                         $timeout(function () {
-                            scope.datelinePreview = preferences.located;
+                            scope.datelinePreview = datelinePreference.located;
                         });
                     };
 

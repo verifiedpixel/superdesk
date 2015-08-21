@@ -21,7 +21,8 @@ from superdesk.celery_app import update_key
 from superdesk.utc import utcnow, get_expiry_date
 from settings import OrganizationNameAbbreviation
 from superdesk import get_resource_service
-from superdesk.metadata.item import metadata_schema, ITEM_STATE, CONTENT_STATE
+from superdesk.metadata.item import metadata_schema, ITEM_STATE, CONTENT_STATE, ITEM_TYPE, CONTENT_TYPE, \
+    LINKED_IN_PACKAGES, BYLINE
 from superdesk.workflow import set_default_state, is_workflow_state_transition_valid
 import superdesk
 from apps.archive.archive import SOURCE as ARCHIVE
@@ -48,6 +49,7 @@ def update_version(updates, original):
 
 def on_create_item(docs, repo_type=ARCHIVE):
     """Make sure item has basic fields populated."""
+
     for doc in docs:
         update_dates_for(doc)
         set_original_creator(doc)
@@ -64,9 +66,10 @@ def on_create_item(docs, repo_type=ARCHIVE):
         if 'event_id' not in doc:
             doc['event_id'] = generate_guid(type=GUID_TAG)
 
-        set_default_state(doc, 'draft')
-        doc.setdefault('_id', doc[GUID_FIELD])
+        set_default_state(doc, CONTENT_STATE.DRAFT)
+        doc.setdefault(config.ID_FIELD, doc[GUID_FIELD])
         set_dateline(doc, repo_type)
+        set_byline(doc, repo_type)
 
         if not doc.get(ITEM_OPERATION):
             doc[ITEM_OPERATION] = ITEM_CREATE
@@ -74,9 +77,10 @@ def on_create_item(docs, repo_type=ARCHIVE):
 
 def set_dateline(doc, repo_type):
     """
-    If repo_type is ARCHIVE then sets dateline property for the article represented by doc. Dateline has 3 parts:
-    Located, Date (Format: Month Day) and Source. Dateline can either be simple: Sydney, July 30 AAP - or can be
-    complex: Surat,Gujarat,IN, July 30 AAP -. Date in the dateline should be timezone sensitive to the Located.
+    If repo_type is ARCHIVE and dateline isn't available then this method sets dateline property for the article
+    represented by doc. Dateline has 3 parts: Located, Date (Format: Month Day) and Source.
+    Dateline can either be simple: Sydney, July 30 AAP - or can be complex: Surat,Gujarat,IN, July 30 AAP -.
+    Date in the dateline should be timezone sensitive to the Located.
 
     Located is set on the article based on user preferences if available. If located is not available in
     user preferences then dateline in full will not be set.
@@ -85,7 +89,7 @@ def set_dateline(doc, repo_type):
     :param repo_type: collection name where the doc will be persisted
     """
 
-    if repo_type == ARCHIVE:
+    if repo_type == ARCHIVE and 'dateline' not in doc:
         current_date_time = dateline_ts = utcnow()
         doc['dateline'] = {'date': current_date_time, 'source': OrganizationNameAbbreviation}
 
@@ -106,6 +110,18 @@ def set_dateline(doc, repo_type):
                 doc['dateline']['located'] = located
                 doc['dateline']['text'] = '{}, {} {} -'.format(located['city'], formatted_date,
                                                                OrganizationNameAbbreviation)
+
+
+def set_byline(doc, repo_type):
+    """
+    Sets byline property on the doc if it's from ARCHIVE repo. If user creating the article has byline set in the
+    profile then doc['byline'] = user_profile['byline']. Otherwise it's not set.
+    """
+
+    if repo_type == ARCHIVE:
+        user = get_user()
+        if user and user.get(BYLINE):
+            doc[BYLINE] = user[BYLINE]
 
 
 def on_duplicate_item(doc):
@@ -415,3 +431,13 @@ def item_schema(extra=None):
     if extra:
         schema.update(extra)
     return schema
+
+
+def is_item_in_package(item):
+    """
+    Determins if the passed item is a member of a non-takes package
+    :param item:
+    :return: True if the item belongs to a non-takes package
+    """
+    return item[ITEM_TYPE] != CONTENT_TYPE.COMPOSITE and item.get(LINKED_IN_PACKAGES, None) \
+        and sum(1 for x in item.get(LINKED_IN_PACKAGES, []) if x.get(PACKAGE_TYPE, '') == '')

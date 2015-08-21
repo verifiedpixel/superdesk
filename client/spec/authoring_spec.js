@@ -3,6 +3,7 @@
 
 var workspace = require('./helpers/workspace'),
     monitoring = require('./helpers/monitoring'),
+    content = require('./helpers/content'),
     authoring = require('./helpers/authoring');
 
 describe('authoring', function() {
@@ -14,94 +15,33 @@ describe('authoring', function() {
     });
 
     it('Can Undo content', function() {
+        var TIMEOUT = 500;
+
+        var ctrl = function(key) {
+            var Key = protractor.Key;
+            return browser.actions().sendKeys(Key.chord(Key.CONTROL, key)).perform();
+        };
+
         workspace.open();
         workspace.editItem('item4', 'SPORTS');
-        authoring.writeText('Two');
-        browser.driver.switchTo().activeElement().getText().then(function(text) {
-            expect(text).toEqual('Two');
-        });
 
-        browser.sleep(500);
+        authoring.writeText('Two');
+        expect(authoring.getBodyText()).toBe('Two');
+
+        browser.sleep(TIMEOUT);
 
         authoring.writeText('Words');
-        browser.driver.switchTo().activeElement().getText().then(function(text) {
-            expect(text).toEqual('TwoWords');
-        });
+        expect(authoring.getBodyText()).toBe('TwoWords');
 
-        browser.sleep(500);
+        browser.sleep(TIMEOUT);
 
-        var Key = protractor.Key;
-        browser.actions().sendKeys(Key.chord(Key.CONTROL, 'z')).perform();
+        ctrl('z');
+        expect(authoring.getBodyText()).toBe('Two');
 
-        browser.driver.switchTo().activeElement().getText().then(function(text) {
-            expect(text).toEqual('Two');
-        });
-        // headline editor
-        authoring.writeTextToHeadline('headline');
-        browser.driver.switchTo().activeElement().getText().then(function(text) {
-            expect(text).toEqual('headlineitem4');
-        });
+        browser.sleep(TIMEOUT);
 
-        browser.sleep(500);
-
-        browser.actions().sendKeys(Key.chord(Key.CONTROL, 'z')).perform();
-
-        browser.driver.switchTo().activeElement().getText().then(function(text) {
-            expect(text).toEqual('item4');
-        });
-    });
-
-    it('Can Redo content', function () {
-        workspace.open();
-        workspace.editItem('item4', 'SPORTS');
-        authoring.writeText('Undo');
-        browser.driver.switchTo().activeElement().getText().then(function(text) {
-            expect(text).toEqual('Undo');
-        });
-
-        browser.sleep(500);
-
-        authoring.writeText('Redo');
-        browser.driver.switchTo().activeElement().getText().then(function(text) {
-            expect(text).toEqual('UndoRedo');
-        });
-
-        browser.sleep(500);
-
-        var Key = protractor.Key;
-
-        browser.actions().sendKeys(Key.chord(Key.CONTROL, 'z')).perform();
-        browser.driver.switchTo().activeElement().getText().then(function(text) {
-            expect(text).toEqual('Undo');
-        });
-
-        browser.sleep(500);
-
-        browser.actions().sendKeys(Key.chord(Key.CONTROL, 'y')).perform();
-        browser.driver.switchTo().activeElement().getText().then(function(text) {
-            expect(text).toEqual('Undo');
-        });
-
-        // abstract editor
-        authoring.writeTextToAbstract('Redo');
-        browser.driver.switchTo().activeElement().getText().then(function(text) {
-            expect(text).toEqual('Redo');
-        });
-
-        browser.sleep(500);
-
-        browser.actions().sendKeys(Key.chord(Key.CONTROL, 'z')).perform();
-        browser.driver.switchTo().activeElement().getText().then(function(text) {
-            expect(text).toEqual('');
-        });
-
-        browser.sleep(500);
-
-        browser.actions().sendKeys(Key.chord(Key.CONTROL, 'y')).perform();
-        browser.driver.switchTo().activeElement().getText().then(function(text) {
-            expect(text).toEqual('Redo');
-        });
-
+        ctrl('y');
+        expect(authoring.getBodyText()).toBe('TwoWords');
     });
 
     it('view item history create-fetch operation', function() {
@@ -147,12 +87,18 @@ describe('authoring', function() {
     it('view item history move operation', function() {
         workspace.open();
         workspace.editItem('item5', 'Politic');
+        expect(authoring.sendToButton.isDisplayed()).toBe(false);
+        authoring.writeText(' ');
+        authoring.save();
+        expect(authoring.sendToButton.isDisplayed()).toBe(true);
+        authoring.showHistory();
+        expect(authoring.getHistoryItems().count()).toBe(2);
         authoring.sendTo('Politic Desk', 'two');
         workspace.selectStage('two');
         workspace.editItem('item5', 'Politic');
         authoring.showHistory();
-        expect(authoring.getHistoryItems().count()).toBe(2);
-        expect(authoring.getHistoryItem(1).getText()).toMatch(/Moved to Politic Desk\/two by .*/);
+        expect(authoring.getHistoryItems().count()).toBe(3);
+        expect(authoring.getHistoryItem(2).getText()).toMatch(/Moved to Politic Desk\/two by .*/);
     });
 
     it('view item history duplicate operation', function() {
@@ -172,12 +118,14 @@ describe('authoring', function() {
         authoring.writeText('some text');
         authoring.save();
         authoring.publish();
+        browser.sleep(500);
         workspace.selectStage('Published');
         workspace.filterItems('composite');
-        workspace.actionOnItem('View item', 'item5', 'Politic', 'Published');
+        content.actionOnItem('View item', 0);
         authoring.showHistory();
-        expect(authoring.getHistoryItems().count()).toBe(1);
-        expect(authoring.getHistoryItem(0).getText()).toMatch(/Published by.*/);
+        browser.sleep(500);
+        expect(authoring.getHistoryItems().count()).toBe(2);
+        expect(authoring.getHistoryItem(1).getText()).toMatch(/Published by.*/);
     });
 
     it('allows to create a new empty package', function () {

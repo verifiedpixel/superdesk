@@ -37,11 +37,13 @@ def usd_to_cad(item, **kwargs):
         cad = rate * usd
         return 'CAD %d' % cad
 
-    item['body_html'] = re.sub('\$([0-9]+)', convert, item['body_html'])
+    for field in ['body_html', 'body_text', 'abstract', 'headline', 'slugline']:
+        if item.get(field, None):
+            item[field] = re.sub('\$([0-9]+)', convert, item[field])
+
     return item
 
 name = 'usd_to_cad'
 label = 'Convert USD to CAD'
 shortcut = 'd'
 callback = usd_to_cad
-desks = ['SPORTS DESK', 'POLITICS']

@@ -47,7 +47,8 @@
         spike: false,
         unspike: false,
         package_item: false,
-        multi_edit: false
+        multi_edit: false,
+        send: false
     });
 
     /**
@@ -188,13 +189,20 @@
          * @param {string} _id Item _id.
          * @param {boolean} read_only
          */
-        this.open = function openAuthoring(_id, read_only) {
-            return api.find('archive', _id, {embedded: {lock_user: 1}}).then(function _lock(item) {
-                item._editable = !read_only;
-                return lock.lock(item);
-            }).then(function _autosave(item) {
-                return autosave.open(item);
-            });
+        this.open = function openAuthoring(_id, read_only, itemType) {
+            if (angular.isDefined(itemType) && itemType === 'legal_archive') {
+                return api.find('legal_archive', _id).then(function(item) {
+                    item._editable = false;
+                    return item;
+                });
+            } else {
+                return api.find('archive', _id, {embedded: {lock_user: 1}}).then(function _lock(item) {
+                    item._editable = !read_only;
+                    return lock.lock(item);
+                }).then(function _autosave(item) {
+                    return autosave.open(item);
+                });
+            }
         };
 
         /**
@@ -423,13 +431,14 @@
             // takes packages are readonly.
             // killed item and item that have last publish action are readonly
             if ((angular.isUndefined(current_item) || angular.isUndefined(user_privileges)) ||
-                (angular.isDefined(current_item.package_type) && current_item.package_type === 'takes') ||
                 (current_item.state === 'killed') ||
                 (angular.isDefined(current_item.takes) && current_item.takes.state === 'killed')) {
                 return action;
             }
 
-            var is_read_only_state = _.contains(['spiked', 'scheduled', 'killed'], current_item.state);
+            var is_read_only_state = _.contains(['spiked', 'scheduled', 'killed'], current_item.state) ||
+            (angular.isDefined(current_item.package_type) && current_item.package_type === 'takes');
+
             var lockedByMe = !lock.isLocked(current_item);
 
             // new take should be on the text item that are closed or last take but not killed.
@@ -447,8 +456,8 @@
                 if (current_item.state === 'scheduled') {
                     action.deschedule = true;
                 } else if (current_item.state === 'published' || current_item.state === 'corrected') {
-                    action.kill = user_privileges.kill && lockedByMe;
-                    action.correct = user_privileges.correct && lockedByMe;
+                    action.kill = user_privileges.kill && lockedByMe && !is_read_only_state;
+                    action.correct = user_privileges.correct && lockedByMe && !is_read_only_state;
                 }
 
                 action.re_write = (_.contains(['published', 'corrected'], current_item.state) &&
@@ -475,6 +484,7 @@
                 action.unspike = current_item.state === 'spiked' && user_privileges.unspike;
                 action.spike = current_item.state !== 'spiked' && user_privileges.spike &&
                     (angular.isUndefined(current_item.takes) || current_item.takes.last_take === current_item._id);
+                action.send = current_item._current_version > 0 && user_privileges.move;
             }
 
             //mark item for highlights
@@ -482,7 +492,9 @@
                 !is_read_only_state && current_item.package_type !== 'takes' &&
                  user_privileges.mark_for_highlights);
 
-            action.package_item = !is_read_only_state && item.package_type !== 'takes';
+            // allow all stories to be packaged
+            action.package_item = current_item.state !== 'spiked' && current_item.state !== 'scheduled' &&
+            current_item.package_type !== 'takes' && current_item.state !== 'killed';
             action.multi_edit = _.contains(['text', 'preformatted'], item.type) && !is_read_only_state;
 
             //check for desk membership for edit rights.
@@ -952,13 +964,21 @@
                     });
                 };
 
+                /**
+                 * Called by the sendItem directive before send.
+                 * If the $scope is dirty then save the item and then unlock the item.
+                 * If the $scope is not dirty then unlock the item.
+                 */
                 $scope.beforeSend = function() {
                     $scope.sending = true;
-                    return $scope.save()
-                    .then(function() {
-                        var p = lock.unlock($scope.origItem);
-                        return p;
-                    });
+                    if ($scope.dirty) {
+                        return $scope.save()
+                            .then(function() {
+                               return lock.unlock($scope.origItem);
+                           });
+                    } else {
+                        return lock.unlock($scope.origItem);
+                    }
                 };
 
                 /**
@@ -1621,7 +1641,7 @@
                     if (angular.isDefined(item)) {
                         item._datelinedate = '';
 
-                        if (angular.isDefined(item.dateline) && angular.isDefined(item.dateline.date)) {
+                        if (angular.isDefined(item.dateline.located) && !_.isNull(item.dateline.located)) {
                             item._datelinedate = $filter('formatDatelinesDate')(item.dateline.located, item.dateline.date);
                         }
                     }
@@ -1631,23 +1651,19 @@
                     scope.metadata = metadata.values;
                 });
 
+                /**
+                 * Invoked by the directive after updating the property in item. This method is responsible for updating
+                 * the properties dependent on dateline.
+                 */
                 scope.updateDateline = function(item, city) {
-                    if (angular.isUndefined(item.dateline.located) ||
-                        (angular.isDefined(item.dateline.located) && item.dateline.located.city !== city)) {
-                        if (city === '') {
-                            item.dateline.located = null;
-                            item.dateline.text = '';
-                        } else {
-                            item.dateline.located = {'city': city, 'city_code': city, 'tz': 'UTC',
-                                'dateline': 'city', 'country': '', 'country_code': '', 'state_code': '', 'state': ''};
-                        }
-                    }
-
-                    if (angular.isDefined(item.dateline.located)) {
-                        item._datelinedate = $filter('formatDatelinesDate')(item.dateline.located, item.dateline.date);
-                        item.dateline.text = $filter('previewDateline')(item.dateline.located, item.dateline.source, item.dateline.date);
-                    } else {
+                    if (city === '') {
+                        item.dateline.located = null;
+                        item.dateline.text = '';
                         item._datelinedate = '';
+                    } else {
+                        item._datelinedate = $filter('formatDatelinesDate')(item.dateline.located, scope.origItem.dateline.date);
+                        item.dateline.text = $filter('previewDateline')(item.dateline.located,
+                            scope.origItem.dateline.source, scope.origItem.dateline.date);
                     }
                 };
             }
@@ -1795,15 +1811,15 @@
                     controller: ['data', 'superdesk', function(data, superdesk) {
                         superdesk.intent('read_only', 'content_article', data.item);
                     }],
-                    filters: [{action: 'list', type: 'archive'}],
+                    filters: [{action: 'list', type: 'archive'}, {action: 'list', type: 'legal_archive'}],
                     condition: function(item) {
                         return item.type !== 'composite';
                     }
                 })
                 .activity('read_only.content_article', {
                     category: '/authoring',
-                    href: '/authoring/:_id/view',
-                    when: '/authoring/:_id/view',
+                    href: '/authoring/:_id/view/:_type',
+                    when: '/authoring/:_id/view/:_type',
                     label: gettext('Authoring Read Only'),
                     templateUrl: asset.templateUrl('superdesk-authoring/views/authoring.html'),
                     topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
@@ -1812,7 +1828,7 @@
                     filters: [{action: 'read_only', type: 'content_article'}],
                     resolve: {
                         item: ['$route', 'authoring', function($route, authoring) {
-                            return authoring.open($route.current.params._id, true);
+                            return authoring.open($route.current.params._id, true, $route.current.params._type);
                         }],
                         action: [function() {return 'view';}]
                     },
@@ -1833,9 +1849,12 @@
         function AuthoringContainerController() {
             this.state = {};
 
-            this.edit = function(item) {
+            this.edit = function(item, lock) {
                 this.item = item || null;
                 this.state.opened = !!this.item;
+                if (this.item && lock) {
+                    this.item.lockIt = true;
+                }
             };
         }
 
@@ -1857,11 +1876,15 @@
             },
             link: function(scope, elem, attrs, authoringCtrl) {
                 scope.$watch('listItem', function(item) {
-                    scope.origItem = null;
-                    scope.$applyAsync(function() {
-                        scope.origItem = item;
-                        scope.action = 'view';
-                    });
+                    if (item && item.lockIt){
+                        scope.lock();
+                    } else {
+                        scope.origItem = null;
+                        scope.$applyAsync(function() {
+                            scope.origItem = item;
+                            scope.action = 'view';
+                        });
+                    }
                 });
 
                 scope.lock = function() {
@@ -1875,8 +1898,8 @@
         };
     }
 
-    headerInfoDirective.$inject = ['familyService', 'authoringWidgets', 'authoring', 'asset'];
-    function headerInfoDirective(familyService, authoringWidgets, authoring, asset) {
+    headerInfoDirective.$inject = ['familyService', 'authoringWidgets', 'authoring', 'archiveService', 'asset'];
+    function headerInfoDirective(familyService, authoringWidgets, authoring, archiveService, asset) {
         return {
             templateUrl: asset.templateUrl('superdesk-authoring/views/header-info.html'),
             require: '^sdAuthoringWidgets',
@@ -1888,38 +1911,38 @@
 
                     scope.loaded = true;
 
-                    /*
-                     * Related items
-                     */
-                    familyService.fetchItems(scope.item.family_id || scope.item._id, scope.item)
-                        .then(function (items) {
-                            scope.relatedItems = items;
+                    if (!archiveService.isLegal(scope.item)) {
+                        // Related items
+                        familyService.fetchItems(scope.item.family_id || scope.item._id, scope.item)
+                            .then(function (items) {
+                                scope.relatedItems = items;
+                            });
+
+                        var relatedItemWidget = _.filter(authoringWidgets, function (widget) {
+                            return widget._id === 'related-item';
                         });
 
-                    var relatedItemWidget = _.filter(authoringWidgets, function (widget) {
-                        return widget._id === 'related-item';
-                    });
+                        scope.activateWidget = function () {
+                            WidgetsManagerCtrl.activate(relatedItemWidget[0]);
+                        };
 
-                    scope.activateWidget = function () {
-                        WidgetsManagerCtrl.activate(relatedItemWidget[0]);
-                    };
+                        /*
+                         * Slider for Urgency and News Value
+                         */
+                        scope.sliderUpdate = function(item, field) {
 
-                    /*
-                     * Slider for Urgency and News Value
-                     */
-                    scope.sliderUpdate = function(item, field) {
+                            var o = {};
 
-                        var o = {};
+                            if (angular.isDefined(item)) {
+                                o[field] = item.name;
+                            } else {
+                                o[field] = null;
+                            }
 
-                        if (angular.isDefined(item)) {
-                            o[field] = item.name;
-                        } else {
-                            o[field] = null;
-                        }
-
-                        _.extend(scope.item, o);
-                        authoring.autosave(scope.item);
-                    };
+                            _.extend(scope.item, o);
+                            authoring.autosave(scope.item);
+                        };
+                    }
 
                 });
             }
