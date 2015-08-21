@@ -287,11 +287,7 @@
                 }
             };
         }])
-<<<<<<< HEAD
-        .directive('sdMediaBox', ['$location', 'lock', 'multi', 'asset', function($location, lock, multi, asset) {
-=======
-        .directive('sdMediaBox', ['$location', 'lock', 'multi', 'archiveService', function($location, lock, multi, archiveService) {
->>>>>>> 3a54612f7a04ae222bb9a1e7378a03a5fe78661b
+        .directive('sdMediaBox', ['$location', 'lock', 'multi', 'archiveService', 'asset', function($location, lock, multi, archiveService, asset) {
             return {
                 restrict: 'A',
                 templateUrl: asset.templateUrl('superdesk-archive/views/media-box.html'),
