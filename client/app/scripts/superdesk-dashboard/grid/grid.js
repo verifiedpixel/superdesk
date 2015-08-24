@@ -24,14 +24,14 @@ define([
          * @scope {List} widgets
          * @scope {Object} dashboard
          */
-        .directive('sdGrid', function() {
+        .directive('sdGrid', ['asset', function(asset) {
             return {
                 scope: {
                     status: '=',
                     widgets: '=',
                     save: '&'
                 },
-                templateUrl: require.toUrl('./views/grid.html'),
+                templateUrl: asset.templateUrl('superdesk-dashboard/grid/views/grid.html'),
                 controller: ['$scope', function($scope) {
                     this.addWidget = function(widget, element) {
                         widget.active = true;
@@ -92,15 +92,15 @@ define([
                     });
                 }
             };
-        })
+        }])
         /**
          * sdGridItem is a widget wrapper. Adds resize/remove buttons.
          */
-        .directive('sdGridItem', function() {
+        .directive('sdGridItem', ['asset', function(asset) {
             return {
                 require: '^sdGrid',
                 transclude: true,
-                templateUrl: require.toUrl('./views/grid-item.html'),
+                templateUrl: asset.templateUrl('superdesk-dashboard/grid/views/grid-item.html'),
                 link: function(scope, element, attrs, sdGrid) {
                     sdGrid.addWidget(scope.widget, element);
 
@@ -136,5 +136,5 @@ define([
                     };
                 }
             };
-        });
+        }]);
 });

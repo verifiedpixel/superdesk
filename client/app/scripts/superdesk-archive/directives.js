@@ -287,7 +287,8 @@
                 }
             };
         }])
-        .directive('sdMediaBox', ['$location', 'lock', 'multi', 'archiveService', 'asset', function($location, lock, multi, archiveService, asset) {
+        .directive('sdMediaBox', ['$location', 'lock', 'multi', 'archiveService', 'asset', 
+            function($location, lock, multi, archiveService, asset) {
             return {
                 restrict: 'A',
                 templateUrl: asset.templateUrl('superdesk-archive/views/media-box.html'),

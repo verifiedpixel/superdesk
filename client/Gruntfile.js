@@ -20,7 +20,7 @@ module.exports = function (grunt) {
         ngtemplates: {
             app: {
                 cwd: 'app',
-                src: 'scripts/**/*.html',
+                src: 'scripts/superdesk*/**/*.html',
                 dest: 'app/scripts/templates.js',
                 options: {
                     htmlmin: {
@@ -28,10 +28,10 @@ module.exports = function (grunt) {
                         collapseBooleanAttributes: true
                     },
                     bootstrap:  function(module, script) {
-                        return 'define(["angular"], function (angular) { "use strict";' +
+                        return '"use strict";' +
                             'var templates = angular.module("templates", []);' +
-                            'templates.run(function($templateCache) {' +
-                            script + ' });  return templates; });';
+                            'templates.run([\'$templateCache\', function($templateCache) {' +
+                            script + ' }]);';
                     }
                 }
             }
@@ -89,6 +89,7 @@ module.exports = function (grunt) {
         'copy:docs',
         'template:test',
         'nggettext_compile',
+        'ngtemplates',
         'filerev',
         'usemin'
     ]);
