@@ -149,11 +149,11 @@ function TasksController($scope, $timeout, api, notify, desks, tasks, $filter) {
     });
 }
 
-TaskPreviewDirective.$inject = ['tasks', 'desks', 'notify', '$filter'];
-function TaskPreviewDirective(tasks, desks, notify, $filter) {
+TaskPreviewDirective.$inject = ['tasks', 'desks', 'notify', '$filter', 'asset'];
+function TaskPreviewDirective(tasks, desks, notify, $filter, asset) {
     var promise = desks.initialize();
     return {
-        templateUrl: 'scripts/superdesk-dashboard/workspace-tasks/views/task-preview.html',
+        templateUrl: asset.templateUrl('superdesk-dashboard/workspace-tasks/views/task-preview.html'),
         scope: {
             item: '=',
             close: '&onclose'
@@ -200,10 +200,10 @@ function TaskPreviewDirective(tasks, desks, notify, $filter) {
     };
 }
 
-TaskKanbanBoardDirective.$inject = [];
-function TaskKanbanBoardDirective() {
+TaskKanbanBoardDirective.$inject = ['asset'];
+function TaskKanbanBoardDirective(asset) {
     return {
-        templateUrl: 'scripts/superdesk-dashboard/workspace-tasks/views/kanban-board.html',
+        templateUrl: asset.templateUrl('superdesk-dashboard/workspace-tasks/views/kanban-board.html'),
         scope: {
             items: '=',
             status: '@',
@@ -218,11 +218,11 @@ function TaskKanbanBoardDirective() {
     };
 }
 
-AssigneeViewDirective.$inject = ['desks'];
-function AssigneeViewDirective(desks) {
+AssigneeViewDirective.$inject = ['desks', 'asset'];
+function AssigneeViewDirective(desks, asset) {
     var promise = desks.initialize();
     return {
-        templateUrl: 'scripts/superdesk-dashboard/workspace-tasks/views/assignee-view.html',
+        templateUrl: asset.templateUrl('superdesk-dashboard/workspace-tasks/views/assignee-view.html'),
         scope: {
             task: '=',
             name: '=',
@@ -274,9 +274,11 @@ function StagesCtrlFactory(api, desks) {
     };
 }
 
-function DeskStagesDirective() {
+
+DeskStagesDirective.$inject = ['asset'];
+function DeskStagesDirective(asset) {
     return {
-        templateUrl: 'scripts/superdesk-dashboard/workspace-tasks/views/desk-stages.html'
+        templateUrl: asset.templateUrl('superdesk-dashboard/workspace-tasks/views/desk-stages.html')
     };
 }
 
@@ -291,14 +293,14 @@ angular.module('superdesk.workspace.tasks', [])
 .controller('TasksController', TasksController)
 .service('tasks', TasksService)
 
-.config(['superdeskProvider', function(superdesk) {
+.config(['superdeskProvider', 'assetProvider', function(superdesk, asset) {
 
     superdesk.activity('/workspace/tasks', {
         label: gettext('Workspace'),
         controller: TasksController,
-        templateUrl: 'scripts/superdesk-dashboard/workspace-tasks/views/workspace-tasks.html',
-        topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
-        sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
+        templateUrl: asset.templateUrl('superdesk-dashboard/workspace-tasks/views/workspace-tasks.html'),
+        topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
+        sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html'),
         filters: [{action: 'view', type: 'task'}]
     });
 

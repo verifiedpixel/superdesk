@@ -98,7 +98,7 @@ def setup(context=None, config=None):
     if config:
         app_config.update(config)
 
-    app = get_app(app_config)
+    app = getattr(context, 'app', None) or get_app(app_config)
     logger = logging.getLogger('superdesk')
     logger.setLevel(logging.ERROR)
     logger = logging.getLogger('elasticsearch')

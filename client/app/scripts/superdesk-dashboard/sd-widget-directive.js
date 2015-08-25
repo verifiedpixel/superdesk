@@ -23,9 +23,9 @@ define([
      * Params:
      * @scope {Object} widget
      */
-    return ['$modal', function($modal) {
+    return ['$modal', 'asset', function($modal, asset) {
         return {
-            templateUrl: require.toUrl('./views/widget.html'),
+            templateUrl: asset.templateUrl('superdesk-dashboard/views/widget.html'),
             restrict: 'A',
             replace: true,
             transclude: true,
@@ -33,7 +33,7 @@ define([
             link: function(scope, element, attrs) {
                 scope.openConfiguration = function () {
                     $modal.open({
-                        templateUrl: require.toUrl('./views/configuration.html'),
+                        templateUrl: asset.templateUrl('superdesk-dashboard/views/configuration.html'),
                         controller: ConfigController,
                         scope: scope
                     });

@@ -7,7 +7,7 @@
             {field: 'versioncreated', label: gettext('Updated')},
             {field: 'firstcreated', label: gettext('Created')},
             {field: 'urgency', label: gettext('News Value')},
-            {field: 'anpa_category.name', label: gettext('Category')},
+            {field: 'anpa-category.name', label: gettext('Category')},
             {field: 'slugline', label: gettext('Keyword')},
             {field: 'priority', label: gettext('Priority')}
         ];
@@ -142,7 +142,7 @@
                 }
 
                 if (params.category) {
-                    query.post_filter({terms: {'anpa_category.name': JSON.parse(params.category)}});
+                    query.post_filter({terms: {'anpa-category.name': JSON.parse(params.category)}});
                 }
 
                 if (params.desk) {
@@ -453,10 +453,8 @@
 
             };
         })
-
         /**
-         * A directive that generates the sidebar containing search results
-         * filters (so-called "aggregations" in Elastic's terms).
+         * Item filters sidebar
          */
         .directive('sdSearchFacets', ['$location', 'desks', 'privileges', 'tags', 'asset',
             function($location, desks, privileges, tags, asset) {
@@ -492,79 +490,65 @@
                     scope.$watch('items', function() {
 
                         initAggregations();
-
                         tags.initSelectedFacets().then(function(currentTags) {
 
                             scope.tags = currentTags;
 
-                            if (!scope.items || scope.items._aggregations === undefined) {
-                                return;
-                            }
+                            if (scope.items && scope.items._aggregations !== undefined) {
 
-                            _.forEach(scope.items._aggregations.type.buckets, function(type) {
-                                scope.aggregations.type[type.key] = type.doc_count;
-                            });
+                                _.forEach(scope.items._aggregations.type.buckets, function(type) {
+                                    scope.aggregations.type[type.key] = type.doc_count;
+                                });
 
-                            _.forEach(scope.items._aggregations.category.buckets, function(cat) {
-                                if (cat.key !== '') {
-                                    scope.aggregations.category[cat.key] = cat.doc_count;
-                                }
-                            });
-
-                            _.forEach(scope.items._aggregations.urgency.buckets, function(urgency) {
-                                scope.aggregations.urgency[urgency.key] = urgency.doc_count;
-                            });
-
-                            _.forEach(scope.items._aggregations.source.buckets, function(source) {
-                                scope.aggregations.source[source.key] = source.doc_count;
-                            });
-
-                            _.forEach(scope.items._aggregations.state.buckets, function(state) {
-                                scope.aggregations.state[state.key] = state.doc_count;
-                            });
-
-                            _.forEach(scope.items._aggregations.day.buckets, function(day) {
-                                scope.aggregations.date['Last Day'] = day.doc_count;
-                            });
-
-                            _.forEach(scope.items._aggregations.week.buckets, function(week) {
-                                scope.aggregations.date['Last Week'] = week.doc_count;
-                            });
-
-                            _.forEach(scope.items._aggregations.month.buckets, function(month) {
-                                scope.aggregations.date['Last Month'] = month.doc_count;
-                            });
-
-                            if (!scope.desk) {
-                                _.forEach(scope.items._aggregations.desk.buckets, function(desk) {
-                                    var lookedUpDesk = desks.deskLookup[desk.key];
-
-                                    if (typeof lookedUpDesk === 'undefined') {
-                                        var msg =  [
-                                            'Desk (key: ', desk.key, ') not found in ',
-                                            'deskLookup, probable storage inconsistency.'
-                                        ].join('');
-                                        console.warn(msg);
-                                        return;
+                                _.forEach(scope.items._aggregations.category.buckets, function(cat) {
+                                    if (cat.key !== '') {
+                                        scope.aggregations.category[cat.key] = cat.doc_count;
                                     }
-
-                                    scope.aggregations.desk[lookedUpDesk.name] = {
-                                            count: desk.doc_count,
-                                            id: desk.key
-                                        };
                                 });
-                            }
 
-                            if (scope.desk) {
-                                _.forEach(scope.items._aggregations.stage.buckets, function(stage) {
-                                    _.forEach(desks.deskStages[scope.desk._id], function(deskStage) {
-                                        if (deskStage._id === stage.key) {
-                                            scope.aggregations.stage[deskStage.name] = {count: stage.doc_count, id: stage.key};
-                                        }
+                                _.forEach(scope.items._aggregations.urgency.buckets, function(urgency) {
+                                    scope.aggregations.urgency[urgency.key] = urgency.doc_count;
+                                });
+
+                                _.forEach(scope.items._aggregations.source.buckets, function(source) {
+                                    scope.aggregations.source[source.key] = source.doc_count;
+                                });
+
+                                _.forEach(scope.items._aggregations.state.buckets, function(state) {
+                                    scope.aggregations.state[state.key] = state.doc_count;
+                                });
+
+                                _.forEach(scope.items._aggregations.day.buckets, function(day) {
+                                    scope.aggregations.date['Last Day'] = day.doc_count;
+                                });
+
+                                _.forEach(scope.items._aggregations.week.buckets, function(week) {
+                                    scope.aggregations.date['Last Week'] = week.doc_count;
+                                });
+
+                                _.forEach(scope.items._aggregations.month.buckets, function(month) {
+                                    scope.aggregations.date['Last Month'] = month.doc_count;
+                                });
+
+                                if (!scope.desk) {
+                                    _.forEach(scope.items._aggregations.desk.buckets, function(desk) {
+                                        scope.aggregations.desk[desks.deskLookup[desk.key].name] = {
+                                                count: desk.doc_count,
+                                                id: desk.key
+                                            };
+                                    }) ;
+                                }
+
+                                if (scope.desk) {
+                                    _.forEach(scope.items._aggregations.stage.buckets, function(stage) {
+                                        _.forEach(desks.deskStages[scope.desk._id], function(deskStage) {
+                                            if (deskStage._id === stage.key) {
+                                                scope.aggregations.stage[deskStage.name] = {count: stage.doc_count, id: stage.key};
+                                            }
+                                        });
                                     });
-                                });
+                                }
                             }
-
                         });
                     });
 
@@ -735,9 +719,10 @@
                     scope.$on('key:v', toggleView);
 
                     function setView(view) {
-                        scope.view = view || 'mgrid';
                         update['archive:view'].view = view || 'mgrid';
-                        preferencesService.update(update, 'archive:view');
+                        preferencesService.update(update, 'archive:view').then(function() {
+                            scope.view = view || 'mgrid';
+                        });
                     }
 
                     function toggleView() {
@@ -1255,8 +1240,8 @@
             };
         })
 
-        .directive('sdMultiActionBar', ['asset', 'multi',
-        function(asset, multi) {
+        .directive('sdMultiActionBar', ['multi', 'asset',
+        function(multi, asset) {
             return {
                 controller: 'MultiActionBar',
                 controllerAs: 'action',
@@ -1297,7 +1282,7 @@
                 label: gettext('Search'),
                 controller: SearchController,
                 templateUrl: asset.templateUrl('superdesk-search/views/search.html'),
-                sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html'
+                sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html')
             });
         }]);
 

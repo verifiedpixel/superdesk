@@ -32,8 +32,6 @@ exports.config = {
         chromeOptions: getChromeOptions()
     },
 
-    directConnect: true,
-
     onPrepare: function() {
         require('./spec/helpers/setup')({fixture_profile: 'app_prepopulate_data'});
         var reporters = require('jasmine-reporters');

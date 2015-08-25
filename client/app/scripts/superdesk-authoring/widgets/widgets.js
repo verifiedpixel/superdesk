@@ -73,10 +73,11 @@ function WidgetsManagerCtrl($scope, $routeParams, authoringWidgets, archiveServi
     });
 }
 
-function AuthoringWidgetsDir() {
+AuthoringWidgetsDir.$inject = ['asset'];
+function AuthoringWidgetsDir(asset) {
     return {
         controller: WidgetsManagerCtrl,
-        templateUrl: 'scripts/superdesk-authoring/widgets/views/authoring-widgets.html',
+        templateUrl: asset.templateUrl('superdesk-authoring/widgets/views/authoring-widgets.html'),
         transclude: true
     };
 }

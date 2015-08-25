@@ -319,10 +319,10 @@
         };
     }
 
-    PackageEditDirective.$inject = ['authoring'];
-    function PackageEditDirective(authoring) {
+    PackageEditDirective.$inject = ['authoring', 'asset'];
+    function PackageEditDirective(authoring, asset) {
         return {
-            templateUrl: 'scripts/superdesk-packaging/views/sd-package-edit.html',
+            templateUrl: asset.templateUrl('superdesk-packaging/views/sd-package-edit.html'),
             link: function(scope) {
                 scope.limits = authoring.limits;
                 scope._editable = scope.origItem._editable;
@@ -331,11 +331,12 @@
         };
     }
 
-    function PackageItemsEditDirective() {
+    PackageItemsEditDirective.$inject = ['asset'];
+    function PackageItemsEditDirective(asset) {
         return {
             scope: false,
             require: 'ngModel',
-            templateUrl: 'scripts/superdesk-packaging/views/sd-package-items-edit.html',
+            templateUrl: asset.templateUrl('superdesk-packaging/views/sd-package-items-edit.html'),
             link: function(scope, elem, attrs, ngModel) {
                 ngModel.$render = function() {
                     scope.list = ngModel.$viewValue;
@@ -472,10 +473,10 @@
         };
     }
 
-    PackageItemPreviewDirective.$inject = ['api', 'lock'];
-    function PackageItemPreviewDirective(api, lock) {
+    PackageItemPreviewDirective.$inject = ['api', 'lock', 'asset'];
+    function PackageItemPreviewDirective(api, lock, asset) {
         return {
-            templateUrl: 'scripts/superdesk-packaging/views/sd-package-item-preview.html',
+            templateUrl: asset.templateUrl('superdesk-packaging/views/sd-package-item-preview.html'),
             link: function(scope) {
                 scope.data = null;
                 scope.error = null;
@@ -520,7 +521,8 @@
         };
     }
 
-    function PackageDirective() {
+    PackageDirective.$inject = ['asset'];
+    function PackageDirective(asset) {
         var solveRefs = function(item, groups) {
             var items = {childId: '_items', childData: []};
             var tree = [items];
@@ -535,7 +537,7 @@
         };
 
         return {
-            templateUrl: 'scripts/superdesk-packaging/views/sd-package.html',
+            templateUrl: asset.templateUrl('superdesk-packaging/views/sd-package.html'),
             scope: {
                 item: '=',
                 setitem: '&'
@@ -554,9 +556,10 @@
         };
     }
 
-    function PackageItemDirective() {
+    PackageItemDirective.$inject = ['asset'];
+    function PackageItemDirective(asset) {
         return {
-            templateUrl: 'scripts/superdesk-packaging/views/sd-package-item.html',
+            templateUrl: asset.templateUrl('superdesk-packaging/views/sd-package-item.html'),
             scope: {
                 id: '=',
                 item: '=',
@@ -590,10 +593,10 @@
         };
     }
 
-    PackageRefDirective.$inject = ['api', '$rootScope'];
-    function PackageRefDirective(api, $rootScope) {
+    PackageRefDirective.$inject = ['api', '$rootScope', 'asset'];
+    function PackageRefDirective(api, $rootScope, asset) {
         return {
-            templateUrl: 'scripts/superdesk-packaging/views/sd-package-ref.html',
+            templateUrl: asset.templateUrl('superdesk-packaging/views/sd-package-ref.html'),
             scope: {
                 item: '=',
                 setitem: '&'
@@ -619,16 +622,16 @@
     .directive('sdPackageItemPreview', PackageItemPreviewDirective)
     .directive('sdWidgetPreventPreview', PreventPreviewDirective)
 
-    .config(['superdeskProvider', function(superdesk) {
+    .config(['superdeskProvider', 'assetProvider', function(superdesk, asset) {
         superdesk
             .activity('packaging', {
                 category: '/authoring',
                 href: '/packaging/:_id',
                 when: '/packaging/:_id',
                 label: gettext('Packaging'),
-                templateUrl: 'scripts/superdesk-packaging/views/packaging.html',
-                topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
-                sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
+                templateUrl: asset.templateUrl('superdesk-packaging/views/packaging.html'),
+                topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
+                sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html'),
                 controller: PackagingController,
                 filters: [{action: 'author', type: 'package'}],
                 resolve: {
@@ -672,9 +675,9 @@
                 href: '/packaging/:_id/view/:_type',
                 when: '/packaging/:_id/view/:_type',
                 label: gettext('Packaging Read Only'),
-                templateUrl: 'scripts/superdesk-packaging/views/packaging.html',
-                topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
-                sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
+                templateUrl: asset.templateUrl('superdesk-packaging/views/packaging.html'),
+                topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
+                sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html'),
                 controller: PackagingController,
                 filters: [{action: 'read_only', type: 'content_package'}],
                 resolve: {

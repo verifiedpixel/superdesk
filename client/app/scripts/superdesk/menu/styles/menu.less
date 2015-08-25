@@ -146,8 +146,6 @@
             }
             .dropdown-menu {
                 min-width: 295px;
-                max-height: 350px;
-                overflow: auto;
                 margin: 0;
                 padding: 0;
                 z-index: 4;
@@ -224,25 +222,15 @@
     li {
         text-align: center;
         line-height: @sidebar-width;
-        a, i {
+        a {
             opacity: .5;
             &.big-icon-view {
                 background-size: 24px;
             }
         }
         &.active {
-            a, i {
+            a {
                 opacity: 1;
-            }
-        }
-        .dropleft {
-            .dropdown-menu {
-                top: -10px;
-            }
-            &.open {
-                i {
-                    opacity: 1;
-                }
             }
         }
     }

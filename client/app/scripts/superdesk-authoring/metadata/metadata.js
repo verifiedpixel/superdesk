@@ -88,8 +88,8 @@ function MetadataCtrl($scope, desks, metadata, $filter, privileges, datetimeHelp
     resolvePublishScheduleDate();
 }
 
-MetadataDropdownDirective.$inject = [];
-function MetadataDropdownDirective() {
+MetadataDropdownDirective.$inject = ['asset'];
+function MetadataDropdownDirective(asset) {
     return {
         scope: {
             list: '=',
@@ -98,7 +98,7 @@ function MetadataDropdownDirective() {
             field: '@',
             change: '&'
         },
-        templateUrl: 'scripts/superdesk-authoring/metadata/views/metadata-dropdown.html',
+        templateUrl: asset.templateUrl('superdesk-authoring/metadata/views/metadata-dropdown.html'),
         link: function(scope) {
             scope.select = function(item) {
                 var o = {};
@@ -116,8 +116,8 @@ function MetadataDropdownDirective() {
     };
 }
 
-MetadataWordsListEditingDirective.$inject = [];
-function MetadataWordsListEditingDirective() {
+MetadataWordsListEditingDirective.$inject = ['asset'];
+function MetadataWordsListEditingDirective(asset) {
     return {
         scope: {
             item: '=',
@@ -126,7 +126,7 @@ function MetadataWordsListEditingDirective() {
             list: '=',
             change: '&'
         },
-        templateUrl: 'scripts/superdesk-authoring/metadata/views/metadata-words-list.html',
+        templateUrl: asset.templateUrl('superdesk-authoring/metadata/views/metadata-words-list.html'),
         link: function(scope) {
 
             var ENTER = 13;
@@ -180,8 +180,8 @@ function MetadataWordsListEditingDirective() {
  * @param {String} unique - specify the name of the field, in list item which is unique (qcode, value...)
  *
  */
-MetadataListEditingDirective.$inject = [];
-function MetadataListEditingDirective() {
+MetadataListEditingDirective.$inject = ['asset'];
+function MetadataListEditingDirective(asset) {
     return {
         scope: {
             item: '=',
@@ -193,13 +193,10 @@ function MetadataListEditingDirective() {
             change: '&',
             header: '@'
         },
-        templateUrl: 'scripts/superdesk-authoring/metadata/views/metadata-terms.html',
+        templateUrl: asset.templateUrl('superdesk-authoring/metadata/views/metadata-terms.html'),
         link: function(scope) {
             scope.$watch('list', function(items) {
-                if (
-                    !items || items.length === 0 ||
-                    !items[0].hasOwnProperty('parent')
-                ) {
+                if (!items || !items[0].hasOwnProperty('parent')) {
                     return;
                 }
 
@@ -284,8 +281,8 @@ function MetadataListEditingDirective() {
     };
 }
 
-MetadataLocatorsDirective.$inject = [];
-function MetadataLocatorsDirective() {
+MetadataLocatorsDirective.$inject = ['asset'];
+function MetadataLocatorsDirective(asset) {
     return {
         scope: {
             item: '=',
@@ -298,7 +295,7 @@ function MetadataLocatorsDirective() {
             header: '@'
         },
 
-        templateUrl: 'scripts/superdesk-authoring/metadata/views/metadata-locators.html',
+        templateUrl: asset.templateUrl('superdesk-authoring/metadata/views/metadata-locators.html'),
         link: function(scope, element) {
             scope.locators = scope.list;
             scope.selectedTerm = '';
@@ -441,12 +438,12 @@ function MetadataService(api, $q) {
 }
 
 angular.module('superdesk.authoring.metadata', ['superdesk.authoring.widgets'])
-    .config(['authoringWidgetsProvider', function(authoringWidgetsProvider) {
+    .config(['authoringWidgetsProvider', 'assetProvider', function(authoringWidgetsProvider, asset) {
         authoringWidgetsProvider
             .widget('metadata', {
                 icon: 'info',
                 label: gettext('Info'),
-                template: 'scripts/superdesk-authoring/metadata/views/metadata-widget.html',
+                template: asset.templateUrl('superdesk-authoring/metadata/views/metadata-widget.html'),
                 order: 1,
                 side: 'right',
                 display: {authoring: true, packages: true, legalArchive: true}

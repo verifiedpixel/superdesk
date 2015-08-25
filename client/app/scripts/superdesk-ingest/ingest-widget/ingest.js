@@ -1,7 +1,7 @@
 define([
     'angular',
     'require',
-    'superdesk-archive/archive-widget/baseWidget'
+    '../../superdesk-archive/archive-widget/baseWidget'
 ], function(angular, require, BaseWidget) {
     'use strict';
 

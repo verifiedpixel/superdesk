@@ -12,6 +12,7 @@ Feature: News Items Archive
         """
         [{"guid": "tag:example.com,0000:newsml_BRE9A605"}]
         """
+
         When we get "/archive/tag:example.com,0000:newsml_BRE9A605"
         Then we get existing resource
         """
@@ -24,6 +25,7 @@ Feature: News Items Archive
         """
         [{"guid": "tag:example.com,0000:newsml_BRE9A605", "state": "published"}]
         """
+
         When we get "/archive"
         Then we get list with 0 items
 
@@ -50,6 +52,7 @@ Feature: News Items Archive
         """
         And we get version 3
         And we get etag matching "/archive/xyz"
+
         When we get "/archive/xyz?version=all"
         Then we get list with 3 items
 
@@ -95,7 +98,7 @@ Feature: News Items Archive
 
 
     @auth
-    Scenario: Upload image into archive and validate metadata set by API
+    Scenario: Upload image into archive
         Given empty "archive"
         When we upload a file "bike.jpg" to "archive"
         Then we get new resource
@@ -112,11 +115,11 @@ Feature: News Items Archive
         Then we get list with 1 items
         """
         {"_items": [{"headline": "flower", "byline": "foo", "description": "flower desc",
-                     "pubstatus": "usable", "language": "en", "state": "draft", "sign_off": "abc"}]}
+                     "pubstatus": "usable", "language": "en", "state": "draft"}]}
         """
 
     @auth
-    Scenario: Upload audio file into archive and validate metadata set by API
+    Scenario: Upload audio file into archive
         Given empty "archive"
         When we upload a file "green.ogg" to "archive"
         Then we get new resource
@@ -132,11 +135,11 @@ Feature: News Items Archive
         When we get "/archive"
         Then we get list with 1 items
         """
-        {"_items": [{"headline": "green", "byline": "foo", "description": "green music", "state": "draft", "sign_off": "abc"}]}
+        {"_items": [{"headline": "green", "byline": "foo", "description": "green music", "state": "draft"}]}
         """
 
     @auth
-    Scenario: Upload video file into archive and validate metadata set by API
+    Scenario: Upload video file into archive
         Given empty "archive"
         When we upload a file "this_week_nasa.mp4" to "archive"
         Then we get new resource
@@ -152,7 +155,7 @@ Feature: News Items Archive
         When we get "/archive"
         Then we get list with 1 items
         """
-        {"_items": [{"headline": "week @ nasa", "byline": "foo", "description": "nasa video", "state": "draft", "sign_off": "abc"}]}
+        {"_items": [{"headline": "week @ nasa", "byline": "foo", "description": "nasa video", "state": "draft"}]}
         """
 
     @auth
@@ -193,7 +196,7 @@ Feature: News Items Archive
         Then we get response code 405
 
     @auth
-    Scenario: Create new text item and validate metadata set by API
+    Scenario: Create new text item
         Given empty "archive"
         When we post to "/archive"
         """
@@ -203,9 +206,32 @@ Feature: News Items Archive
         """
         {
         	"_id": "__any_value__", "guid": "__any_value__", "type": "text",
-        	"original_creator": "__any_value__", "word_count": 1, "operation": "create", "sign_off": "abc"
+        	"original_creator": "__any_value__", "word_count": 1, "operation": "create"
         }
         """
+
+	@auth
+	Scenario: Update text items
+	    Given the "archive"
+	    """
+        [{"type":"text", "headline": "test1", "_id": "xyz", "original_creator": "abc"}]
+        """
+        When we switch user
+        When we patch given
+        """
+        {"headline": "test2"}
+        """
+        And we patch latest
+        """
+        {"headline": "test3"}
+        """
+        Then we get updated response
+        """
+        {"headline": "test3", "version_creator": "#user._id#"}
+        """
+       	And we get version 3
+       	When we get "/archive/xyz?version=all"
+        Then we get list with 3 items
 
 	@auth
 	Scenario: Update text item with Metadata
@@ -342,7 +368,7 @@ Feature: News Items Archive
       """
 
     @auth @test
-    Scenario: Sign-off is updated when multiple users modify the article
+    Scenario: Sign-off is properly updated
         When we post to "/archive"
         """
         [{"type": "text", "body_html": "<p>content</p>"}]
@@ -350,6 +376,14 @@ Feature: News Items Archive
         Then we get new resource
         """
         {"type": "text", "sign_off":"abc"}
+        """
+        When we patch latest
+        """
+        {"headline": "test3"}
+        """
+        Then we get updated response
+        """
+        {"headline": "test3", "sign_off": "abc"}
         """
         When we switch user
         And we patch latest
@@ -359,14 +393,6 @@ Feature: News Items Archive
         Then we get updated response
         """
         {"headline": "test4", "sign_off": "abc/foo"}
-        """
-        When we patch latest
-        """
-        {"headline": "test3"}
-        """
-        Then we get updated response
-        """
-        {"headline": "test3", "sign_off": "abc/foo"}
         """
 
     @auth
@@ -395,10 +421,9 @@ Feature: News Items Archive
       """
       And we post to "/archive"
       """
-      [{"guid": "123", "headline": "Article with Dateline populated from preferences"}]
+      [{"headline": "Article with Dateline populated from preferences"}]
       """
-      And we get "/archive/123"
-      Then we get existing resource
+      Then we get latest
       """
       {"dateline": {"located": {"city": "Sydney"}}}
       """
@@ -428,34 +453,8 @@ Feature: News Items Archive
       """
       [{"guid": "321", "type": "text"}]
       """
-      And we get "/archive/321"
-      Then we get existing resource
+      And we get "/archive/123"
+      Then we get latest
       """
       {"guid": "321", "type": "text", "byline": "by Context User"}
       """
-
-    @auth @test
-    Scenario: Sign-off is updated when other user restores version
-        When we post to "/archive"
-        """
-        [{"type": "text", "headline": "test1", "body_html": "<p>content</p>"}]
-        """
-        Then we get new resource
-        """
-        {"type": "text", "sign_off":"abc"}
-        """
-        When we patch latest
-        """
-        {"headline": "test4"}
-        """
-        Then we get updated response
-        """
-        {"headline": "test4", "sign_off": "abc"}
-        """
-        When we switch user
-		And we restore version 1
-        And we get "/archive/#archive._id#"
-        Then we get existing resource
-        """
-        {"headline": "test1", "sign_off": "abc/foo"}
-        """

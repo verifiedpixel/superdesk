@@ -37,7 +37,6 @@ CONTENT_STATE = namedtuple('CONTENT_STATE', ['DRAFT', 'INGESTED', 'ROUTED', 'FET
 PUBLISH_STATES = {CONTENT_STATE.PUBLISHED, CONTENT_STATE.SCHEDULED, CONTENT_STATE.CORRECTED, CONTENT_STATE.KILLED}
 
 BYLINE = 'byline'
-SIGN_OFF = 'sign_off'
 
 metadata_schema = {
     # Identifiers
@@ -303,7 +302,7 @@ metadata_schema = {
     },
     'more_coming': {'type': 'boolean', 'default': False},
     # Field which contains all the sign-offs done on this article, eg. twd/jwt/ets
-    SIGN_OFF: {
+    'sign_off': {
         'type': 'string'
     },
 

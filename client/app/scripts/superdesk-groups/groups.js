@@ -6,12 +6,12 @@
     ]);
 
     app
-        .config(['superdeskProvider', function(superdesk) {
+        .config(['superdeskProvider', 'assetProvider', function(superdesk, asset) {
             superdesk
             .activity('/settings/groups', {
                     label: gettext('Groups'),
                     controller: GroupsSettingsController,
-                    templateUrl: 'scripts/superdesk-groups/views/settings.html',
+                    templateUrl: asset.templateUrl('superdesk-groups/views/settings.html'),
                     category: superdesk.MENU_SETTINGS,
                     priority: -800,
                     beta: true,
@@ -108,15 +108,15 @@
                 controller: GroupsConfigController
             };
         })
-        .directive('sdGroupsConfigModal', function() {
+        .directive('sdGroupsConfigModal', ['asset', function(asset) {
             return {
                 require: '^sdGroupsConfig',
-                templateUrl: 'scripts/superdesk-groups/views/groups-config-modal.html',
+                templateUrl: asset.templateUrl('superdesk-groups/views/groups-config-modal.html'),
                 link: function(scope, elem, attrs, ctrl) {
 
                 }
             };
-        });
+        }]);
 
     GroupsSettingsController.$inject = ['$scope', 'groups'];
     function GroupsSettingsController($scope, groups) {

@@ -304,7 +304,7 @@ define([
                     controller: require('./controllers/list'),
                     templateUrl: require.toUrl('./views/list.html'),
                     topTemplateUrl: require.toUrl('../superdesk-dashboard/views/workspace-topnav.html'),
-                    sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
+                    sideTemplateUrl: require.toUrl('../superdesk-dashboard/views/workspace-sidenav.html'),
                     filters: [
                         {action: 'view', type: 'content'}
                     ],
@@ -342,7 +342,7 @@ define([
                 })
                 .activity('unspike', {
                     label: gettext('Unspike Item'),
-                    icon: 'unspike',
+                    icon: 'revert',
                     monitor: true,
                     controller: ['spike', 'data', '$rootScope', function unspikeActivity(spike, data, $rootScope) {
                         return spike.unspike(data.item).then(function(item) {

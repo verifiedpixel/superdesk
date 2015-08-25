@@ -371,8 +371,8 @@ class IngestEmailError(SuperdeskIngestError):
         return IngestEmailError(6001, exception, provider)
 
     @classmethod
-    def emailError(cls, exception=None, provider=None):
-        return IngestEmailError(6002, exception, provider)
+    def emailError(cls, exception=None, provider=None, *args):
+        return IngestEmailError(6002, exception, provider, *args)
 
 
 class SuperdeskPublishError(SuperdeskError):

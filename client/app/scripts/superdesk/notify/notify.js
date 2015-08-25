@@ -50,10 +50,10 @@ define(['angular', 'require'], function(angular, require) {
 
             return new NotifyService();
         }])
-        .directive('sdNotify', ['notify', function (notify) {
+        .directive('sdNotify', ['notify', 'asset', function (notify, asset) {
             return {
                 scope: true,
-                templateUrl: require.toUrl('./views/notify.html'),
+                templateUrl: asset.templateUrl('superdesk/notify/views/notify.html'),
                 link: function (scope, element, items) {
                     scope.messages = notify.messages;
                 }

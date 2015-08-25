@@ -179,7 +179,7 @@ describe('HIGHLIGHTS', function() {
             workspace.switchToDesk('SPORTS DESK');
             content.setListView();
             highlights.mark('Highlight two', 0);
-            highlights.createHighlightsPackage('Highlight two');
+            highlights.createHighlightsPackage('HIGHLIGHT TWO');
             authoring.edit();
             authoring.showSearch();
             authoring.addToGroup(0, 'ONE');
@@ -198,11 +198,11 @@ describe('HIGHLIGHTS', function() {
             highlights.mark('Highlight one', 1);
             highlights.mark('Highlight two', 1);
 
-            highlights.createHighlightsPackage('Highlight one');
+            highlights.createHighlightsPackage('HIGHLIGHT ONE');
             authoring.showSearch();
             expect(authoring.getSearchItemCount()).toBe(2);
 
-            highlights.switchHighlightFilter('Highlight two');
+            highlights.switchHighlightFilter('Highlight Two');
             expect(authoring.getSearchItemCount()).toBe(1);
         });
 
@@ -213,7 +213,7 @@ describe('HIGHLIGHTS', function() {
             highlights.mark('Highlight two', 0);
             highlights.mark('Highlight two', 1);
 
-            highlights.createHighlightsPackage('Highlight two');
+            highlights.createHighlightsPackage('HIGHLIGHT TWO');
             authoring.edit();
             authoring.showSearch();
             expect(authoring.getSearchItemCount()).toBe(2);

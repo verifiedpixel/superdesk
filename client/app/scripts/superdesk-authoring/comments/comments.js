@@ -122,7 +122,7 @@ angular.module('superdesk.authoring.comments', ['superdesk.authoring.widgets', '
             .widget('comments', {
                 icon: 'comments',
                 label: gettext('Comments'),
-                template: 'scripts/superdesk-authoring/comments/views/comments-widget.html',
+                template: require.toUrl('./views/comments-widget.html'),
                 order: 3,
                 side: 'right',
                 display: {authoring: true, packages: true, legalArchive: false}
