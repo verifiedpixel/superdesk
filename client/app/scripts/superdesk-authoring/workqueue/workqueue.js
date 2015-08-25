@@ -96,18 +96,16 @@ function WorkqueueCtrl($scope, $route, workqueue, multiEdit, superdesk, lock) {
     };
 }
 
-WorkqueueListDirective.$inject = ['asset'];
-function WorkqueueListDirective(asset) {
+function WorkqueueListDirective() {
     return {
-        templateUrl: asset.templateUrl('superdesk-authoring/views/opened-articles.html'),
+        templateUrl: 'scripts/superdesk-authoring/views/opened-articles.html',
         controller: 'Workqueue'
     };
 }
 
-ArticleDashboardDirective.$inject = ['asset'];
-function ArticleDashboardDirective(asset) {
+function ArticleDashboardDirective() {
     return {
-        templateUrl: asset.templateUrl('superdesk-authoring/views/dashboard-articles.html'),
+        templateUrl: 'scripts/superdesk-authoring/views/dashboard-articles.html',
         controller: 'Workqueue'
     };
 }
@@ -122,13 +120,13 @@ angular.module('superdesk.authoring.workqueue', [
     .directive('sdWorkqueue', WorkqueueListDirective)
     .directive('sdDashboardArticles', ArticleDashboardDirective)
 
-    .config(['superdeskProvider', 'assetProvider', function(superdesk, asset) {
+    .config(['superdeskProvider', function(superdesk) {
         superdesk
             .activity('/authoring/', {
                 label: gettext('Authoring'),
                 description: gettext('Create articles'),
-                templateUrl: asset.templateUrl('superdesk-authoring/views/dashboard.html'),
-                topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
+                templateUrl: 'scripts/superdesk-authoring/views/dashboard.html',
+                topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
                 beta: true,
                 controller: ArticleDashboardCtrl,
                 category: superdesk.MENU_MAIN,

@@ -36,7 +36,6 @@ define([
         }
 
         this.addWidget = function(widget) {
-            widget.active = true;
             this.widgets.push(widget);
             this.selectWidget();
             this.save();
@@ -70,7 +69,7 @@ define([
 
         function pickWidgets(widgets) {
             return _.map(widgets, function(widget) {
-                return _.pick(widget, ['_id', 'configuration', 'sizex', 'sizey', 'col', 'row', 'active']);
+                return _.pick(widget, ['_id', 'configuration', 'sizex', 'sizey', 'col', 'row']);
             });
         }
 
@@ -80,7 +79,6 @@ define([
         this.save = function() {
             this.edit = false;
             var diff = angular.extend({}, this.current);
-            this.widgets = _.where(this.widgets, {active: true});
             diff.widgets = pickWidgets(this.widgets);
             api.save('workspaces', this.current, diff);
         };
@@ -137,15 +135,15 @@ define([
         };
     })
 
-    .config(['superdeskProvider', 'assetProvider', function(superdesk, asset) {
+    .config(['superdeskProvider', function(superdesk) {
         superdesk.activity('/workspace', {
             label: gettext('Workspace'),
             description: gettext('Customize your widgets and views'),
             controller: 'DashboardController',
             controllerAs: 'dashboard',
-            templateUrl: asset.templateUrl('superdesk-dashboard/views/workspace.html'),
-            topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
-            sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html'),
+            templateUrl: 'scripts/superdesk-dashboard/views/workspace.html',
+            topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
+            sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
             priority: -1000,
             category: superdesk.MENU_MAIN,
             reloadOnSearch: true

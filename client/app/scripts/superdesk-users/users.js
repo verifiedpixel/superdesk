@@ -457,11 +457,11 @@
             });
     }
 
-    UserRolesDirective.$inject = ['api', 'gettext', 'notify', 'modal', 'asset'];
-    function UserRolesDirective(api, gettext, notify, modal, asset) {
+    UserRolesDirective.$inject = ['api', 'gettext', 'notify', 'modal'];
+    function UserRolesDirective(api, gettext, notify, modal) {
         return {
             scope: true,
-            templateUrl: asset.templateUrl('superdesk-users/views/settings-roles.html'),
+            templateUrl: 'scripts/superdesk-users/views/settings-roles.html',
             link: function(scope) {
                 var _orig = null;
                 scope.editRole = null;
@@ -546,11 +546,11 @@
         };
     }
 
-    RolesPrivilegesDirective.$inject = ['api', 'gettext', 'notify', '$q', 'asset'];
-    function RolesPrivilegesDirective(api, gettext, notify, $q, asset) {
+    RolesPrivilegesDirective.$inject = ['api', 'gettext', 'notify', '$q'];
+    function RolesPrivilegesDirective(api, gettext, notify, $q) {
         return {
             scope: true,
-            templateUrl: asset.templateUrl('superdesk-users/views/settings-privileges.html'),
+            templateUrl: 'scripts/superdesk-users/views/settings-privileges.html',
             link: function(scope) {
 
                 api('roles').query()
@@ -898,11 +898,7 @@
                     scope.$watchCollection('user', function(user) {
                         _.each(user, function(value, key) {
                             if (value === '') {
-                                if (key !== 'phone' || key !== 'byline') {
-                                    user[key] = null;
-                                } else {
-                                    delete user[key];
-                                }
+                                delete user[key];
                             }
                         });
                         scope.dirty = !angular.equals(user, scope.origUser);
@@ -1094,12 +1090,12 @@
                 }
             };
         }])
-        .directive('sdUserPrivileges', ['api', 'gettext', 'notify', 'asset', function(api, gettext, notify, asset) {
+        .directive('sdUserPrivileges', ['api', 'gettext', 'notify', function(api, gettext, notify) {
             return {
                 scope: {
                     user: '='
                 },
-                templateUrl: asset.templateUrl('superdesk-users/views/user-privileges.html'),
+                templateUrl: 'scripts/superdesk-users/views/user-privileges.html',
                 link: function(scope) {
                     api('privileges').query().
                     then(function(result) {

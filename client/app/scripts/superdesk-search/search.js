@@ -7,7 +7,7 @@
             {field: 'versioncreated', label: gettext('Updated')},
             {field: 'firstcreated', label: gettext('Created')},
             {field: 'urgency', label: gettext('News Value')},
-            {field: 'anpa-category.name', label: gettext('Category')},
+            {field: 'anpa_category.name', label: gettext('Category')},
             {field: 'slugline', label: gettext('Keyword')},
             {field: 'priority', label: gettext('Priority')}
         ];
@@ -142,7 +142,7 @@
                 }
 
                 if (params.category) {
-                    query.post_filter({terms: {'anpa-category.name': JSON.parse(params.category)}});
+                    query.post_filter({terms: {'anpa_category.name': JSON.parse(params.category)}});
                 }
 
                 if (params.desk) {
@@ -719,10 +719,9 @@
                     scope.$on('key:v', toggleView);
 
                     function setView(view) {
+                        scope.view = view || 'mgrid';
                         update['archive:view'].view = view || 'mgrid';
-                        preferencesService.update(update, 'archive:view').then(function() {
-                            scope.view = view || 'mgrid';
-                        });
+                        preferencesService.update(update, 'archive:view');
                     }
 
                     function toggleView() {
@@ -1240,8 +1239,8 @@
             };
         })
 
-        .directive('sdMultiActionBar', ['multi', 'asset',
-        function(multi, asset) {
+        .directive('sdMultiActionBar', ['asset', 'multi',
+        function(asset, multi) {
             return {
                 controller: 'MultiActionBar',
                 controllerAs: 'action',
@@ -1282,7 +1281,7 @@
                 label: gettext('Search'),
                 controller: SearchController,
                 templateUrl: asset.templateUrl('superdesk-search/views/search.html'),
-                sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html')
+                sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html'
             });
         }]);
 

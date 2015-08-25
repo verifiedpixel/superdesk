@@ -2,7 +2,7 @@ define([
     'angular',
     'd3',
     'moment',
-    '../superdesk-archive/controllers/baseList',
+    'superdesk-archive/controllers/baseList',
     './ingest-widget/ingest',
     './ingest-stats-widget/stats'
 ], function(angular, d3, moment, BaseListController) {
@@ -20,9 +20,47 @@ define([
         'superdesk.dashboard',
         'superdesk.widgets.ingest',
         'superdesk.widgets.ingeststats',
-        'superdesk.ingest.send',
-        'superdesk.asset'
+        'superdesk.ingest.send'
     ]);
+
+    app.value('providerTypes', {
+        aap: {
+            label: 'AAP',
+            templateUrl: 'scripts/superdesk-ingest/views/settings/aapConfig.html'
+        },
+        reuters: {
+            label: 'Reuters',
+            templateUrl: 'scripts/superdesk-ingest/views/settings/reutersConfig.html'
+        },
+        rss: {
+            label: 'RSS',
+            templateUrl: 'scripts/superdesk-ingest/views/settings/rssConfig.html'
+        },
+        afp: {
+            label: 'AFP',
+            templateUrl: 'scripts/superdesk-ingest/views/settings/afpConfig.html'
+        },
+        ftp: {
+            label: 'FTP',
+            templateUrl: 'scripts/superdesk-ingest/views/settings/ftp-config.html'
+        },
+        teletype: {
+            label: 'Teletype',
+            templateUrl: 'scripts/superdesk-ingest/views/settings/teletypeConfig.html'
+        },
+        email: {
+            label: 'Email',
+            templateUrl: 'scripts/superdesk-ingest/views/settings/emailConfig.html'
+        },
+        dpa: {
+            label: 'DPA',
+            templateUrl: 'scripts/superdesk-ingest/views/settings/aapConfig.html'
+        },
+        search: {
+            label: 'Search provider',
+            templateUrl: 'scripts/superdesk-ingest/views/settings/searchConfig.html'
+        }
+    });
 
     var PROVIDER_DASHBOARD_DEFAULTS = {
         show_log_messages: true,
@@ -323,52 +361,15 @@ define([
         };
     }
 
-    IngestSourcesContent.$inject = ['gettext', 'notify', 'api', '$location', 'modal', 'asset'];
-    function IngestSourcesContent(gettext, notify, api, $location, modal, asset) {
+    IngestSourcesContent.$inject = ['providerTypes', 'gettext', 'notify', 'api', '$location', 'modal'];
+    function IngestSourcesContent(providerTypes, gettext, notify, api, $location, modal) {
         return {
-            templateUrl: asset.templateUrl('superdesk-ingest/views/settings/ingest-sources-content.html'),
+            templateUrl: 'scripts/superdesk-ingest/views/settings/ingest-sources-content.html',
             link: function($scope) {
                 $scope.provider = null;
                 $scope.origProvider = null;
 
-                $scope.types = {
-                    aap: {
-                        label: 'AAP',
-                        templateUrl: asset.templateUrl('superdesk-ingest/views/settings/aapConfig.html')
-                    },
-                    reuters: {
-                        label: 'Reuters',
-                        templateUrl: asset.templateUrl('superdesk-ingest/views/settings/reutersConfig.html')
-                    },
-                    rss: {
-                        label: 'RSS',
-                        templateUrl: asset.templateUrl('superdesk-ingest/views/settings/rssConfig.html')
-                    },
-                    afp: {
-                        label: 'AFP',
-                        templateUrl: asset.templateUrl('superdesk-ingest/views/settings/afpConfig.html')
-                    },
-                    ftp: {
-                        label: 'FTP',
-                        templateUrl: asset.templateUrl('superdesk-ingest/views/settings/ftp-config.html')
-                    },
-                    teletype: {
-                        label: 'Teletype',
-                        templateUrl: asset.templateUrl('superdesk-ingest/views/settings/teletypeConfig.html')
-                    },
-                    email: {
-                        label: 'Email',
-                        templateUrl: asset.templateUrl('superdesk-ingest/views/settings/emailConfig.html')
-                    },
-                    dpa: {
-                        label: 'DPA',
-                        templateUrl: asset.templateUrl('superdesk-ingest/views/settings/aapConfig.html')
-                    },
-                    search: {
-                        label: 'Search provider',
-                        templateUrl: asset.templateUrl('superdesk-ingest/views/settings/searchConfig.html')
-                    }
-                };
+                $scope.types = providerTypes;
                 $scope.minutes = [0, 1, 2, 3, 4, 5, 8, 10, 15, 30, 45];
                 $scope.seconds = [0, 5, 10, 15, 30, 45];
                 $scope.hours = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
@@ -616,10 +617,10 @@ define([
         };
     }
 
-    IngestRulesContent.$inject = ['api', 'gettext', 'notify', 'modal', 'asset'];
-    function IngestRulesContent(api, gettext, notify, modal, asset) {
+    IngestRulesContent.$inject = ['api', 'gettext', 'notify', 'modal'];
+    function IngestRulesContent(api, gettext, notify, modal) {
         return {
-            templateUrl: asset.templateUrl('superdesk-ingest/views/settings/ingest-rules-content.html'),
+            templateUrl: 'scripts/superdesk-ingest/views/settings/ingest-rules-content.html',
             link: function(scope) {
 
                 var _orig = null;
@@ -690,10 +691,10 @@ define([
         };
     }
 
-    IngestRoutingContent.$inject = ['api', 'gettext', 'notify', 'modal', 'asset'];
-    function IngestRoutingContent(api, gettext, notify, modal, asset) {
+    IngestRoutingContent.$inject = ['api', 'gettext', 'notify', 'modal'];
+    function IngestRoutingContent(api, gettext, notify, modal) {
         return {
-            templateUrl: asset.templateUrl('superdesk-ingest/views/settings/ingest-routing-content.html'),
+            templateUrl: 'scripts/superdesk-ingest/views/settings/ingest-routing-content.html',
             link: function(scope) {
                 var _orig = null;
                 scope.editScheme = null;
@@ -829,14 +830,14 @@ define([
         SUN: 'Sunday'
     };
 
-    IngestRoutingGeneral.$inject = ['desks', 'macros', 'asset'];
-    function IngestRoutingGeneral(desks, macros, asset) {
+    IngestRoutingGeneral.$inject = ['desks', 'macros'];
+    function IngestRoutingGeneral(desks, macros) {
         return {
             scope: {
                 rule: '=',
                 removeAction: '='
             },
-            templateUrl: asset.templateUrl('superdesk-ingest/views/settings/ingest-routing-general.html'),
+            templateUrl: 'scripts/superdesk-ingest/views/settings/ingest-routing-general.html',
             link: function(scope) {
                 scope.typeLookup = typeLookup;
                 scope.dayLookup = dayLookup;
@@ -863,11 +864,11 @@ define([
         };
     }
 
-    IngestRoutingFilter.$inject = ['api', 'subjectService', 'asset'];
-    function IngestRoutingFilter(api, subjectService, asset) {
+    IngestRoutingFilter.$inject = ['api', 'subjectService'];
+    function IngestRoutingFilter(api, subjectService) {
         return {
             scope: {rule: '='},
-            templateUrl: asset.templateUrl('superdesk-ingest/views/settings/ingest-routing-filter.html'),
+            templateUrl: 'scripts/superdesk-ingest/views/settings/ingest-routing-filter.html',
             link: function(scope) {
                 scope.typeList = [
                     'text',
@@ -982,11 +983,11 @@ define([
         };
     }
 
-    IngestRoutingAction.$inject = ['desks', 'macros', 'asset'];
-    function IngestRoutingAction(desks, macros, asset) {
+    IngestRoutingAction.$inject = ['desks', 'macros'];
+    function IngestRoutingAction(desks, macros) {
         return {
             scope: {rule: '='},
-            templateUrl: asset.templateUrl('superdesk-ingest/views/settings/ingest-routing-action.html'),
+            templateUrl: 'scripts/superdesk-ingest/views/settings/ingest-routing-action.html',
             link: function(scope) {
                 scope.newFetch = {};
                 scope.newPublish = {};
@@ -1035,11 +1036,11 @@ define([
         };
     }
 
-    IngestRoutingSchedule.$inject = ['asset'];
-    function IngestRoutingSchedule(asset) {
+    IngestRoutingSchedule.$inject = [];
+    function IngestRoutingSchedule() {
         return {
             scope: {rule: '='},
-            templateUrl: asset.templateUrl('superdesk-ingest/views/settings/ingest-routing-schedule.html'),
+            templateUrl: 'scripts/superdesk-ingest/views/settings/ingest-routing-schedule.html',
             link: function(scope) {
                 scope.dayList = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
                 scope.dayLookup = dayLookup;
@@ -1123,10 +1124,10 @@ define([
         $scope.fetchItems();
     }
 
-    IngestUserDashboard.$inject = ['api', 'userList', 'privileges', 'asset'];
-    function IngestUserDashboard (api, userList, privileges, asset) {
+    IngestUserDashboard.$inject = ['api', 'userList', 'privileges'];
+    function IngestUserDashboard (api, userList, privileges) {
         return {
-            templateUrl: asset.templateUrl('superdesk-ingest/views/dashboard/ingest-dashboard-widget.html'),
+            templateUrl: 'scripts/superdesk-ingest/views/dashboard/ingest-dashboard-widget.html',
             scope: {
                 item: '=',
                 setUserPreferences: '&'
@@ -1255,10 +1256,10 @@ define([
         };
     }
 
-    IngestUserDashboardList.$inject = ['asset'];
-    function IngestUserDashboardList (asset) {
+    IngestUserDashboardList.$inject = [];
+    function IngestUserDashboardList () {
         return {
-            templateUrl: asset.templateUrl('superdesk-ingest/views/dashboard/ingest-dashboard-widget-list.html'),
+            templateUrl: 'scripts/superdesk-ingest/views/dashboard/ingest-dashboard-widget-list.html',
             scope: {
                 items: '=',
                 setUserPreferences: '&'
@@ -1266,10 +1267,10 @@ define([
         };
     }
 
-    IngestUserDashboardDropDown.$inject = ['privileges', 'asset'];
-    function IngestUserDashboardDropDown (privileges, asset) {
+    IngestUserDashboardDropDown.$inject = ['privileges'];
+    function IngestUserDashboardDropDown (privileges) {
         return {
-            templateUrl: asset.templateUrl('superdesk-ingest/views/dashboard/ingest-sources-list.html'),
+            templateUrl: 'scripts/superdesk-ingest/views/dashboard/ingest-sources-list.html',
             scope: {
                 items: '=',
                 setUserPreferences: '&'
@@ -1310,28 +1311,28 @@ define([
         .filter('insert', InsertFilter)
         .filter('scheduleFilter', ScheduleFilter);
 
-    app.config(['superdeskProvider', 'assetProvider', function(superdesk, asset) {
+    app.config(['superdeskProvider', function(superdesk) {
         superdesk
             .activity('/workspace/ingest', {
                 label: gettext('Workspace'),
                 priority: 100,
                 controller: IngestListController,
-                templateUrl: asset.templateUrl('superdesk-archive/views/list.html'),
+                templateUrl: 'scripts/superdesk-archive/views/list.html',
                 category: '/workspace',
-                topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
-                sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html'),
+                topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
+                sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
                 privileges: {ingest: 1}
             })
             .activity('/settings/ingest', {
                 label: gettext('Ingest'),
-                templateUrl: asset.templateUrl('superdesk-ingest/views/settings/settings.html'),
+                templateUrl: 'scripts/superdesk-ingest/views/settings/settings.html',
                 controller: IngestSettingsController,
                 category: superdesk.MENU_SETTINGS,
                 privileges: {ingest_providers: 1}
             })
             .activity('/ingest_dashboard', {
                 label: gettext('Ingest Dashboard'),
-                templateUrl: asset.templateUrl('superdesk-ingest/views/dashboard/dashboard.html'),
+                templateUrl: 'scripts/superdesk-ingest/views/dashboard/dashboard.html',
                 controller: IngestDashboardController,
                 category: superdesk.MENU_MAIN,
                 privileges: {ingest_providers: 1}
@@ -1358,7 +1359,11 @@ define([
                     {action: 'list', type: 'ingest'}
                 ],
                 privileges: {fetch: 1},
-                key: 'f'
+                key: 'f',
+                additionalCondition: ['desks', function (desks) {
+                    // fetching to 'personal' desk is not allowed
+                    return desks.getCurrentDeskId() != null;
+                }]
             })
             .activity('externalsource', {
                 label: gettext('Get from external source'),

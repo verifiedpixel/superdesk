@@ -301,15 +301,15 @@ angular.module('superdesk.itemList', ['superdesk.search'])
 
     return itemPinService;
 }])
-.directive('sdItemListWidget', ['ItemList', 'notify', 'itemPinService', 'gettext', '$timeout', 'asset',
-function(ItemList, notify, itemPinService, gettext, $timeout, asset) {
+.directive('sdItemListWidget', ['ItemList', 'notify', 'itemPinService', 'gettext', '$timeout',
+function(ItemList, notify, itemPinService, gettext, $timeout) {
     return {
         scope: {
             options: '=',
             itemListOptions: '=',
             actions: '='
         },
-        templateUrl: asset.templateUrl('superdesk/itemList/views/item-list-widget.html'),
+        templateUrl: 'scripts/superdesk/itemList/views/item-list-widget.html',
         link: function(scope, element, attrs) {
             scope.items = null;
             scope.processedItems = null;
@@ -409,15 +409,15 @@ function(ItemList, notify, itemPinService, gettext, $timeout, asset) {
         }
     };
 }])
-.directive('sdRelatedItemListWidget', ['ItemList', 'notify', 'itemPinService', 'gettext', 'asset',
-function(ItemList, notify, itemPinService, gettext, asset) {
+.directive('sdRelatedItemListWidget', ['ItemList', 'notify', 'itemPinService', 'gettext',
+function(ItemList, notify, itemPinService, gettext) {
     return {
         scope: {
             options: '=',
             itemListOptions: '=',
             actions: '='
         },
-        templateUrl: asset.templateUrl('superdesk/itemList/views/relatedItem-list-widget.html'),
+        templateUrl: 'scripts/superdesk/itemList/views/relatedItem-list-widget.html',
         link: function(scope, element, attrs) {
             scope.items = null;
             scope.processedItems = null;

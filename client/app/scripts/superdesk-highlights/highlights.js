@@ -91,10 +91,10 @@
         return service;
     }
 
-    MarkHighlightsDropdownDirective.$inject = ['desks', 'highlightsService', 'asset'];
-    function MarkHighlightsDropdownDirective(desks, highlightsService, asset) {
+    MarkHighlightsDropdownDirective.$inject = ['desks', 'highlightsService'];
+    function MarkHighlightsDropdownDirective(desks, highlightsService) {
         return {
-            templateUrl: asset.templateUrl('superdesk-highlights/views/mark_highlights_dropdown_directive.html'),
+            templateUrl: 'scripts/superdesk-highlights/views/mark_highlights_dropdown_directive.html',
             link: function(scope) {
 
                 scope.markItem = function(highlight) {
@@ -117,10 +117,10 @@
         };
     }
 
-    MultiMarkHighlightsDropdownDirective.$inject = ['desks', 'highlightsService', 'multi', 'asset'];
-    function MultiMarkHighlightsDropdownDirective(desks, highlightsService, multi, asset) {
+    MultiMarkHighlightsDropdownDirective.$inject = ['desks', 'highlightsService', 'multi'];
+    function MultiMarkHighlightsDropdownDirective(desks, highlightsService, multi) {
         return {
-            templateUrl: asset.templateUrl('superdesk-highlights/views/mark_highlights_dropdown_directive.html'),
+            templateUrl: 'scripts/superdesk-highlights/views/mark_highlights_dropdown_directive.html',
             link: function(scope) {
 
                 scope.markItem = function(highlight) {
@@ -151,14 +151,14 @@
         };
     }
 
-    HighlightsTitleDirective.$inject = ['highlightsService', '$timeout', 'asset'];
-    function HighlightsTitleDirective(highlightsService, $timeout, asset) {
+    HighlightsTitleDirective.$inject = ['highlightsService', '$timeout'];
+    function HighlightsTitleDirective(highlightsService, $timeout) {
         return {
             scope: {
                 item: '=item',
                 orientation: '=?'
             },
-            templateUrl: asset.templateUrl('superdesk-highlights/views/highlights_title_directive.html'),
+            templateUrl: 'scripts/superdesk-highlights/views/highlights_title_directive.html',
             // todo(petr): refactor to use popover-template once angular-bootstrap 0.13 is out
             link: function(scope, elem) {
                 var unmarkBox = elem.find('.unmark').hide(),
@@ -230,11 +230,11 @@
         };
     }
 
-    SearchHighlightsDirective.$inject = ['highlightsService', 'asset'];
-    function SearchHighlightsDirective(highlightsService, asset) {
+    SearchHighlightsDirective.$inject = ['highlightsService'];
+    function SearchHighlightsDirective(highlightsService) {
         return {
             scope: {highlight_id: '=highlight'},
-            templateUrl: asset.templateUrl('superdesk-highlights/views/search_highlights_dropdown_directive.html'),
+            templateUrl: 'scripts/superdesk-highlights/views/search_highlights_dropdown_directive.html',
             link: function(scope) {
                 scope.selectHighlight = function(highlight) {
                     scope.highlight_id = null;
@@ -254,11 +254,11 @@
         };
     }
 
-    PackageHighlightsDropdownDirective.$inject = ['desks', 'highlightsService', '$location', '$route', 'asset'];
-    function PackageHighlightsDropdownDirective(desks, highlightsService, $location, $route, asset) {
+    PackageHighlightsDropdownDirective.$inject = ['desks', 'highlightsService', '$location', '$route'];
+    function PackageHighlightsDropdownDirective(desks, highlightsService, $location, $route) {
         return {
             scope: true,
-            templateUrl: asset.templateUrl('superdesk-highlights/views/package_highlights_dropdown_directive.html'),
+            templateUrl: 'scripts/superdesk-highlights/views/package_highlights_dropdown_directive.html',
             link: function(scope) {
                 scope.$watch(function() {
                     return desks.active;
@@ -292,12 +292,12 @@
         };
     }
 
-    CreateHighlightsButtonDirective.$inject = ['superdesk', 'desks', 'highlightsService', '$location', 'asset'];
-    function CreateHighlightsButtonDirective(superdesk, desks, highlightsService, $location, asset) {
+    CreateHighlightsButtonDirective.$inject = ['superdesk', 'desks', 'highlightsService', '$location'];
+    function CreateHighlightsButtonDirective(superdesk, desks, highlightsService, $location) {
         return {
             require: ['^sdAuthoringContainer'],
             scope: {highlight_id: '=highlight'},
-            templateUrl: asset.templateUrl('superdesk-highlights/views/create_highlights_button_directive.html'),
+            templateUrl: 'scripts/superdesk-highlights/views/create_highlights_button_directive.html',
             link: function(scope, elem, attrs, ctrls) {
                 var authoring = ctrls[0];
 
@@ -485,24 +485,24 @@
             controller: HighlightsConfigController
         };
     })
-    .directive('sdHighlightsConfigModal', ['asset', function(asset) {
+    .directive('sdHighlightsConfigModal', function() {
         return {
             require: '^sdHighlightsConfig',
-            templateUrl: asset.templateUrl('superdesk-highlights/views/highlights_config_modal.html'),
+            templateUrl: 'scripts/superdesk-highlights/views/highlights_config_modal.html',
             link: function(scope, elem, attrs, ctrl) {
 
             }
         };
-    }])
+    })
     .directive('sdHighlightLabel', HighlightLabelDirective)
-    .config(['superdeskProvider', 'assetProvider', function(superdesk, asset) {
+    .config(['superdeskProvider', function(superdesk) {
         superdesk
         .activity('mark.item', {
             label: gettext('Mark item'),
             priority: 30,
             icon: 'list-plus',
             dropdown: true,
-            templateUrl: asset.templateUrl('superdesk-highlights/views/mark_highlights_dropdown.html'),
+            templateUrl: 'scripts/superdesk-highlights/views/mark_highlights_dropdown.html',
             filters: [
                 {action: 'list', type: 'archive'}
             ],
@@ -513,7 +513,7 @@
         .activity('/settings/highlights', {
             label: gettext('Highlights'),
             controller: HighlightsSettingsController,
-            templateUrl: asset.templateUrl('superdesk-highlights/views/settings.html'),
+            templateUrl: 'scripts/superdesk-highlights/views/settings.html',
             category: superdesk.MENU_SETTINGS,
             priority: -800,
             privileges: {highlights: 1}
@@ -521,9 +521,9 @@
         activity('/workspace/highlights', {
             label: gettext('Highlights View'),
             priority: 100,
-            templateUrl: asset.templateUrl('superdesk-monitoring/views/highlights-view.html'),
-            topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
-            sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html')
+            templateUrl: 'scripts/superdesk-monitoring/views/highlights-view.html',
+            topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
+            sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html'
         });
     }])
     .config(['apiProvider', function(apiProvider) {

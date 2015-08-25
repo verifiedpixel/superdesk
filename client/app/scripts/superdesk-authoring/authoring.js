@@ -11,7 +11,7 @@
         urgency: null,
         priority: null,
         subject: [],
-        'anpa-category': {},
+        'anpa_category': [],
         genre: [],
         groups: [],
         usageterms: null,
@@ -28,7 +28,7 @@
         marked_for_not_publication: false,
         pubstatus: null,
         more_coming: false,
-        restrictions: ''
+        targeted_for: []
     });
 
     var DEFAULT_ACTIONS = Object.freeze({
@@ -47,8 +47,7 @@
         spike: false,
         unspike: false,
         package_item: false,
-        multi_edit: false,
-        send: false
+        multi_edit: false
     });
 
     /**
@@ -329,11 +328,16 @@
 
             stripHtml(diff);
             autosave.stop(item);
-            return api.save('archive', item, diff).then(function(_item) {
-                item._autosave = null;
-                item._locked = lock.isLocked(item);
-                return item;
-            });
+
+            if (_.size(diff) > 0) {
+                return api.save('archive', item, diff).then(function(_item) {
+                    item._autosave = null;
+                    item._locked = lock.isLocked(item);
+                    return item;
+                });
+            } else {
+                return $q.when(origItem);
+            }
         };
 
         /**
@@ -484,7 +488,6 @@
                 action.unspike = current_item.state === 'spiked' && user_privileges.unspike;
                 action.spike = current_item.state !== 'spiked' && user_privileges.spike &&
                     (angular.isUndefined(current_item.takes) || current_item.takes.last_take === current_item._id);
-                action.send = current_item._current_version > 0 && user_privileges.move;
             }
 
             //mark item for highlights
@@ -964,21 +967,9 @@
                     });
                 };
 
-                /**
-                 * Called by the sendItem directive before send.
-                 * If the $scope is dirty then save the item and then unlock the item.
-                 * If the $scope is not dirty then unlock the item.
-                 */
                 $scope.beforeSend = function() {
                     $scope.sending = true;
-                    if ($scope.dirty) {
-                        return $scope.save()
-                            .then(function() {
-                               return lock.unlock($scope.origItem);
-                           });
-                    } else {
-                        return lock.unlock($scope.origItem);
-                    }
+                    return lock.unlock($scope.origItem);
                 };
 
                 /**
@@ -1105,14 +1096,12 @@
         };
     }
 
-    AuthoringTopbarDirective.$inject = ['asset'];
-    function AuthoringTopbarDirective(asset) {
-        return {templateUrl: asset.templateUrl('superdesk-authoring/views/authoring-topbar.html')};
+    function AuthoringTopbarDirective() {
+        return {templateUrl: 'scripts/superdesk-authoring/views/authoring-topbar.html'};
     }
 
-    AuthoringSidebarDirective.$inject = ['asset'];
-    function AuthoringSidebarDirective(asset) {
-        return {templateUrl: asset.templateUrl('superdesk-authoring/views/authoring-sidebar.html')};
+    function AuthoringSidebarDirective() {
+        return {templateUrl: 'scripts/superdesk-authoring/views/authoring-sidebar.html'};
     }
 
     function DashboardCard() {
@@ -1235,11 +1224,11 @@
         return service;
     }
 
-    ThemeSelectDirective.$inject = ['authThemes', 'asset'];
-    function ThemeSelectDirective(authThemes, asset) {
+    ThemeSelectDirective.$inject = ['authThemes'];
+    function ThemeSelectDirective(authThemes) {
 
         return {
-            templateUrl: asset.templateUrl('superdesk-authoring/views/theme-select.html'),
+            templateUrl: 'scripts/superdesk-authoring/views/theme-select.html',
             scope: {key: '@'},
             link: function themeSelectLink(scope, elem) {
 
@@ -1265,9 +1254,8 @@
             }
         };
     }
-    SendItem.$inject = ['$q', 'api', 'desks', 'notify', '$location', 'macros', '$rootScope',
-        'authoring', 'send', 'spellcheck', 'confirm', 'asset'];
-    function SendItem($q, api, desks, notify, $location, macros, $rootScope, authoring, send, spellcheck, confirm, asset) {
+    SendItem.$inject = ['$q', 'api', 'desks', 'notify', '$location', 'macros', '$rootScope', 'authoring', 'send', 'spellcheck', 'confirm'];
+    function SendItem($q, api, desks, notify, $location, macros, $rootScope, authoring, send, spellcheck, confirm) {
         return {
             scope: {
                 item: '=',
@@ -1275,7 +1263,7 @@
                 _beforeSend: '=beforeSend',
                 mode: '@'
             },
-            templateUrl: asset.templateUrl('superdesk-authoring/views/send-item.html'),
+            templateUrl: 'scripts/superdesk-authoring/views/send-item.html',
             link: function sendItemLink(scope, elem, attrs) {
                 scope.mode = scope.mode || 'authoring';
                 scope.desks = null;
@@ -1566,12 +1554,12 @@
         };
     }
 
-    ContentCreateDirective.$inject = ['api', 'desks', 'templates', 'asset', 'ContentCtrl'];
-    function ContentCreateDirective(api, desks, templates, asset, ContentCtrl) {
+    ContentCreateDirective.$inject = ['api', 'desks', 'templates', 'ContentCtrl'];
+    function ContentCreateDirective(api, desks, templates, ContentCtrl) {
         var NUM_ITEMS = 5;
 
         return {
-            templateUrl: asset.templateUrl('superdesk-authoring/views/sd-content-create.html'),
+            templateUrl: 'scripts/superdesk-authoring/views/sd-content-create.html',
             link: function(scope) {
                 scope.contentTemplates = null;
                 scope.content = new ContentCtrl(scope);
@@ -1588,12 +1576,12 @@
         };
     }
 
-    TemplateSelectDirective.$inject = ['api', 'desks', 'templates', 'asset'];
-    function TemplateSelectDirective(api, desks, templates, asset) {
+    TemplateSelectDirective.$inject = ['api', 'desks', 'templates'];
+    function TemplateSelectDirective(api, desks, templates) {
         var PAGE_SIZE = 10;
 
         return {
-            templateUrl: asset.templateUrl('superdesk-authoring/views/sd-template-select.html'),
+            templateUrl: 'scripts/superdesk-authoring/views/sd-template-select.html',
             scope: {
                 selectAction: '=',
                 open: '='
@@ -1630,10 +1618,10 @@
         };
     }
 
-    ArticleEditDirective.$inject = ['autosave', 'authoring', 'metadata', 'session', '$filter', '$timeout', 'asset'];
-    function ArticleEditDirective(autosave, authoring, metadata, session, $filter, $timeout, asset) {
+    ArticleEditDirective.$inject = ['autosave', 'authoring', 'metadata', 'session', '$filter', '$timeout'];
+    function ArticleEditDirective(autosave, authoring, metadata, session, $filter, $timeout) {
         return {
-            templateUrl: asset.templateUrl('superdesk-authoring/views/article-edit.html'),
+            templateUrl: 'scripts/superdesk-authoring/views/article-edit.html',
             link: function(scope) {
                 scope.limits = authoring.limits;
 
@@ -1707,16 +1695,16 @@
         .directive('sdAuthoringEmbedded', AuthoringEmbeddedDirective)
         .directive('sdHeaderInfo', headerInfoDirective)
 
-        .config(['superdeskProvider', 'assetProvider', function(superdesk, asset) {
+        .config(['superdeskProvider', function(superdesk) {
             superdesk
                 .activity('authoring', {
                     category: '/authoring',
                     href: '/authoring/:_id',
                     when: '/authoring/:_id',
                     label: gettext('Authoring'),
-                    templateUrl: asset.templateUrl('superdesk-authoring/views/authoring.html'),
-                    topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
-                    sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html'),
+                    templateUrl: 'scripts/superdesk-authoring/views/authoring.html',
+                    topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
+                    sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
                     controller: AuthoringController,
                     filters: [{action: 'author', type: 'article'}],
                     resolve: {
@@ -1759,9 +1747,9 @@
                     href: '/authoring/:_id/kill',
                     when: '/authoring/:_id/kill',
                     label: gettext('Authoring Kill'),
-                    templateUrl: asset.templateUrl('superdesk-authoring/views/authoring.html'),
-                    topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
-                    sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html'),
+                    templateUrl: 'scripts/superdesk-authoring/views/authoring.html',
+                    topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
+                    sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
                     controller: AuthoringController,
                     filters: [{action: 'kill', type: 'content_article'}],
                     resolve: {
@@ -1791,9 +1779,9 @@
                     href: '/authoring/:_id/correct',
                     when: '/authoring/:_id/correct',
                     label: gettext('Authoring Correct'),
-                    templateUrl: asset.templateUrl('superdesk-authoring/views/authoring.html'),
-                    topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
-                    sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html'),
+                    templateUrl: 'scripts/superdesk-authoring/views/authoring.html',
+                    topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
+                    sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
                     controller: AuthoringController,
                     filters: [{action: 'correct', type: 'content_article'}],
                     resolve: {
@@ -1821,9 +1809,9 @@
                     href: '/authoring/:_id/view/:_type',
                     when: '/authoring/:_id/view/:_type',
                     label: gettext('Authoring Read Only'),
-                    templateUrl: asset.templateUrl('superdesk-authoring/views/authoring.html'),
-                    topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
-                    sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html'),
+                    templateUrl: 'scripts/superdesk-authoring/views/authoring.html',
+                    topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
+                    sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
                     controller: AuthoringController,
                     filters: [{action: 'read_only', type: 'content_article'}],
                     resolve: {
@@ -1844,8 +1832,7 @@
             });
         }]);
 
-    AuthoringContainerDirective.$inject = ['asset'];
-    function AuthoringContainerDirective(asset) {
+    function AuthoringContainerDirective() {
         function AuthoringContainerController() {
             this.state = {};
 
@@ -1861,15 +1848,15 @@
         return {
             controller: AuthoringContainerController,
             controllerAs: 'authoring',
-            templateUrl: asset.templateUrl('superdesk-authoring/views/authoring-container.html'),
+            templateUrl: 'scripts/superdesk-authoring/views/authoring-container.html',
             transclude: true
         };
     }
 
-    AuthoringEmbeddedDirective.$inject = ['authoring', 'asset'];
-    function AuthoringEmbeddedDirective(authoring, asset) {
+    AuthoringEmbeddedDirective.$inject = ['authoring'];
+    function AuthoringEmbeddedDirective(authoring) {
         return {
-            templateUrl: asset.templateUrl('superdesk-authoring/views/authoring.html'),
+            templateUrl: 'scripts/superdesk-authoring/views/authoring.html',
             require: '^sdAuthoringContainer',
             scope: {
                 listItem: '=item'
@@ -1898,10 +1885,10 @@
         };
     }
 
-    headerInfoDirective.$inject = ['familyService', 'authoringWidgets', 'authoring', 'archiveService', 'asset'];
-    function headerInfoDirective(familyService, authoringWidgets, authoring, archiveService, asset) {
+    headerInfoDirective.$inject = ['familyService', 'authoringWidgets', 'authoring', 'archiveService'];
+    function headerInfoDirective(familyService, authoringWidgets, authoring, archiveService) {
         return {
-            templateUrl: asset.templateUrl('superdesk-authoring/views/header-info.html'),
+            templateUrl: 'scripts/superdesk-authoring/views/header-info.html',
             require: '^sdAuthoringWidgets',
             link: function (scope, elem, attrs, WidgetsManagerCtrl) {
                 scope.$watch('item', function (item) {

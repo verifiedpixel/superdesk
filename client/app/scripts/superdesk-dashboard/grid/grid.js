@@ -24,17 +24,16 @@ define([
          * @scope {List} widgets
          * @scope {Object} dashboard
          */
-        .directive('sdGrid', ['asset', function(asset) {
+        .directive('sdGrid', function() {
             return {
                 scope: {
                     status: '=',
                     widgets: '=',
                     save: '&'
                 },
-                templateUrl: asset.templateUrl('superdesk-dashboard/grid/views/grid.html'),
+                templateUrl: require.toUrl('./views/grid.html'),
                 controller: ['$scope', function($scope) {
                     this.addWidget = function(widget, element) {
-                        widget.active = true;
                         widget.el = $scope.gridster.add_widget(
                             element,
                             widget.sizex,
@@ -46,8 +45,7 @@ define([
 
                     this.removeWidget = function(widget, element) {
                         $scope.gridster.remove_widget(element);
-                        widget.active = false;
-                        $scope.syncWidgets();
+                        $scope.widgets.splice(_.indexOf($scope.widgets, widget), 1);
                     };
 
                     this.resizeWidget = function(element, sizex, sizey) {
@@ -92,15 +90,15 @@ define([
                     });
                 }
             };
-        }])
+        })
         /**
          * sdGridItem is a widget wrapper. Adds resize/remove buttons.
          */
-        .directive('sdGridItem', ['asset', function(asset) {
+        .directive('sdGridItem', function() {
             return {
                 require: '^sdGrid',
                 transclude: true,
-                templateUrl: asset.templateUrl('superdesk-dashboard/grid/views/grid-item.html'),
+                templateUrl: require.toUrl('./views/grid-item.html'),
                 link: function(scope, element, attrs, sdGrid) {
                     sdGrid.addWidget(scope.widget, element);
 
@@ -136,5 +134,5 @@ define([
                     };
                 }
             };
-        }]);
+        });
 });

@@ -88,8 +88,8 @@ function MetadataCtrl($scope, desks, metadata, $filter, privileges, datetimeHelp
     resolvePublishScheduleDate();
 }
 
-MetadataDropdownDirective.$inject = ['asset'];
-function MetadataDropdownDirective(asset) {
+MetadataDropdownDirective.$inject = [];
+function MetadataDropdownDirective() {
     return {
         scope: {
             list: '=',
@@ -98,7 +98,7 @@ function MetadataDropdownDirective(asset) {
             field: '@',
             change: '&'
         },
-        templateUrl: asset.templateUrl('superdesk-authoring/metadata/views/metadata-dropdown.html'),
+        templateUrl: 'scripts/superdesk-authoring/metadata/views/metadata-dropdown.html',
         link: function(scope) {
             scope.select = function(item) {
                 var o = {};
@@ -116,8 +116,8 @@ function MetadataDropdownDirective(asset) {
     };
 }
 
-MetadataWordsListEditingDirective.$inject = ['asset'];
-function MetadataWordsListEditingDirective(asset) {
+MetadataWordsListEditingDirective.$inject = [];
+function MetadataWordsListEditingDirective() {
     return {
         scope: {
             item: '=',
@@ -126,7 +126,7 @@ function MetadataWordsListEditingDirective(asset) {
             list: '=',
             change: '&'
         },
-        templateUrl: asset.templateUrl('superdesk-authoring/metadata/views/metadata-words-list.html'),
+        templateUrl: 'scripts/superdesk-authoring/metadata/views/metadata-words-list.html',
         link: function(scope) {
 
             var ENTER = 13;
@@ -180,8 +180,8 @@ function MetadataWordsListEditingDirective(asset) {
  * @param {String} unique - specify the name of the field, in list item which is unique (qcode, value...)
  *
  */
-MetadataListEditingDirective.$inject = ['asset'];
-function MetadataListEditingDirective(asset) {
+MetadataListEditingDirective.$inject = [];
+function MetadataListEditingDirective() {
     return {
         scope: {
             item: '=',
@@ -193,7 +193,7 @@ function MetadataListEditingDirective(asset) {
             change: '&',
             header: '@'
         },
-        templateUrl: asset.templateUrl('superdesk-authoring/metadata/views/metadata-terms.html'),
+        templateUrl: 'scripts/superdesk-authoring/metadata/views/metadata-terms.html',
         link: function(scope) {
             scope.$watch('list', function(items) {
                 if (!items || !items[0].hasOwnProperty('parent')) {
@@ -281,8 +281,8 @@ function MetadataListEditingDirective(asset) {
     };
 }
 
-MetadataLocatorsDirective.$inject = ['asset'];
-function MetadataLocatorsDirective(asset) {
+MetadataLocatorsDirective.$inject = [];
+function MetadataLocatorsDirective() {
     return {
         scope: {
             item: '=',
@@ -295,7 +295,7 @@ function MetadataLocatorsDirective(asset) {
             header: '@'
         },
 
-        templateUrl: asset.templateUrl('superdesk-authoring/metadata/views/metadata-locators.html'),
+        templateUrl: 'scripts/superdesk-authoring/metadata/views/metadata-locators.html',
         link: function(scope, element) {
             scope.locators = scope.list;
             scope.selectedTerm = '';
@@ -438,12 +438,12 @@ function MetadataService(api, $q) {
 }
 
 angular.module('superdesk.authoring.metadata', ['superdesk.authoring.widgets'])
-    .config(['authoringWidgetsProvider', 'assetProvider', function(authoringWidgetsProvider, asset) {
+    .config(['authoringWidgetsProvider', function(authoringWidgetsProvider) {
         authoringWidgetsProvider
             .widget('metadata', {
                 icon: 'info',
                 label: gettext('Info'),
-                template: asset.templateUrl('superdesk-authoring/metadata/views/metadata-widget.html'),
+                template: 'scripts/superdesk-authoring/metadata/views/metadata-widget.html',
                 order: 1,
                 side: 'right',
                 display: {authoring: true, packages: true, legalArchive: true}

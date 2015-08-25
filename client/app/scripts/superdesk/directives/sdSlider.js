@@ -17,10 +17,10 @@ define(['angular'], function (angular) {
          * @scope {Function} update - callback when slider value is changed
          *
          */
-        directive('sdSlider', ['asset', function (asset) {
+        directive('sdSlider', function () {
             return {
                 transclude: true,
-                templateUrl: asset.templateUrl('superdesk/views/sdSlider.html'),
+                templateUrl: 'scripts/superdesk/views/sdSlider.html',
                 scope: {
                     value: '=',
                     list: '=',
@@ -84,5 +84,5 @@ define(['angular'], function (angular) {
                     });
                 }
             };
-        }]);
+        });
 });

@@ -103,10 +103,10 @@
         };
     }
 
-    MultieditDropdownDirective.$inject = ['workqueue', 'multiEdit', '$route', 'asset'];
-    function MultieditDropdownDirective(workqueue, multiEdit, $route, asset) {
+    MultieditDropdownDirective.$inject = ['workqueue', 'multiEdit', '$route'];
+    function MultieditDropdownDirective(workqueue, multiEdit, $route) {
         return {
-            templateUrl: asset.templateUrl('superdesk-authoring/multiedit/views/sd-multiedit-dropdown.html'),
+            templateUrl: 'scripts/superdesk-authoring/multiedit/views/sd-multiedit-dropdown.html',
             link: function(scope) {
 
                 scope.current = $route.current.params._id;
@@ -140,10 +140,10 @@
         };
     }
 
-    MultieditDropdownInnerDirective.$inject = ['workqueue', 'multiEdit', 'asset'];
-    function MultieditDropdownInnerDirective(workqueue, multiEdit, asset) {
+    MultieditDropdownInnerDirective.$inject = ['workqueue', 'multiEdit'];
+    function MultieditDropdownInnerDirective(workqueue, multiEdit) {
         return {
-            templateUrl: asset.templateUrl('superdesk-authoring/multiedit/views/sd-multiedit-inner-dropdown.html'),
+            templateUrl: 'scripts/superdesk-authoring/multiedit/views/sd-multiedit-inner-dropdown.html',
             link: function(scope, elem, attrs) {
 
                 var workqueueItems = [],
@@ -178,10 +178,10 @@
         };
     }
 
-    MultieditArticleDirective.$inject = ['authoring', 'multiEdit', '$timeout', 'asset'];
-    function MultieditArticleDirective(authoring, multiEdit, $timeout, asset) {
+    MultieditArticleDirective.$inject = ['authoring', 'multiEdit', '$timeout'];
+    function MultieditArticleDirective(authoring, multiEdit, $timeout) {
         return {
-            templateUrl: asset.templateUrl('superdesk-authoring/multiedit/views/sd-multiedit-article.html'),
+            templateUrl: 'scripts/superdesk-authoring/multiedit/views/sd-multiedit-article.html',
             scope: {article: '=', focus: '='},
             link: function(scope, elem) {
 
@@ -284,15 +284,15 @@
         .directive('sdMultieditArticle', MultieditArticleDirective)
         .directive('sdMultieditFloatMenu', MultieditFloatMenuDirective)
 
-        .config(['superdeskProvider', 'assetProvider', function(superdesk, asset) {
+        .config(['superdeskProvider', function(superdesk) {
             superdesk
                 .activity('multiedit', {
                     category: '/authoring',
                     href: '/multiedit',
                     when: '/multiedit',
                     label: gettext('Authoring'),
-                    templateUrl: asset.templateUrl('superdesk-authoring/multiedit/views/multiedit.html'),
-                    topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
+                    templateUrl: 'scripts/superdesk-authoring/multiedit/views/multiedit.html',
+                    topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
                     controller: MultieditController,
                     filters: [{action: 'author', type: 'multiedit'}]
                 });

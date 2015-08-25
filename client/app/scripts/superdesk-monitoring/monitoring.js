@@ -12,27 +12,27 @@
         .config(configureMonitoring)
         .config(configureSpikeMonitoring);
 
-    configureMonitoring.$inject = ['superdeskProvider', 'assetProvider'];
-    function configureMonitoring(superdesk, asset) {
+    configureMonitoring.$inject = ['superdeskProvider'];
+    function configureMonitoring(superdesk) {
         superdesk
             .activity('/workspace/monitoring', {
                 label: gettext('Monitoring'),
                 priority: 100,
-                templateUrl: asset.templateUrl('superdesk-monitoring/views/monitoring.html'),
-                topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
-                sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html')
+                templateUrl: 'scripts/superdesk-monitoring/views/monitoring.html',
+                topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
+                sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html'
             });
     }
 
-    configureSpikeMonitoring.$inject = ['superdeskProvider', 'assetProvider'];
-    function configureSpikeMonitoring(superdesk, asset) {
+    configureSpikeMonitoring.$inject = ['superdeskProvider'];
+    function configureSpikeMonitoring(superdesk) {
         superdesk
             .activity('/workspace/spike-monitoring', {
                 label: gettext('Spike Monitoring'),
                 priority: 100,
-                templateUrl: asset.templateUrl('superdesk-monitoring/views/spike-monitoring.html'),
-                topTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-topnav.html'),
-                sideTemplateUrl: asset.templateUrl('superdesk-dashboard/views/workspace-sidenav.html')
+                templateUrl: 'scripts/superdesk-monitoring/views/spike-monitoring.html',
+                topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
+                sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html'
             });
     }
 
@@ -146,10 +146,9 @@
      *
      * it's a directive so that it can be put together with authoring into some container directive
      */
-    MonitoringViewDirective.$inject = ['asset'];
-    function MonitoringViewDirective(asset) {
+    function MonitoringViewDirective() {
         return {
-            templateUrl: asset.templateUrl('superdesk-monitoring/views/monitoring-view.html'),
+            templateUrl: 'scripts/superdesk-monitoring/views/monitoring-view.html',
             controller: 'Monitoring',
             controllerAs: 'monitoring',
             scope: {
@@ -159,15 +158,14 @@
         };
     }
 
-    MonitoringGroupHeader.$inject = ['asset'];
-    function MonitoringGroupHeader(asset) {
+    function MonitoringGroupHeader() {
         return {
-            templateUrl: asset.templateUrl('superdesk-monitoring/views/monitoring-group-header.html')
+            templateUrl: 'scripts/superdesk-monitoring/views/monitoring-group-header.html'
         };
     }
 
-    MonitoringGroupDirective.$inject = ['cards', 'api', 'superdesk', 'desks', '$timeout', 'asset'];
-    function MonitoringGroupDirective(cards, api, superdesk, desks, $timeout, asset) {
+    MonitoringGroupDirective.$inject = ['cards', 'api', 'superdesk', 'desks', '$timeout'];
+    function MonitoringGroupDirective(cards, api, superdesk, desks, $timeout) {
         var ITEM_HEIGHT = 57,
             ITEMS_COUNT = 5,
             BUFFER = 8,
@@ -180,7 +178,7 @@
             };
 
         return {
-            templateUrl: asset.templateUrl('superdesk-monitoring/views/monitoring-group.html'),
+            templateUrl: 'scripts/superdesk-monitoring/views/monitoring-group.html',
             require: ['^sdMonitoringView', '^sdAuthoringContainer'],
             scope: {
                 group: '=',
@@ -400,14 +398,14 @@
         }
     }
 
-    ItemActionsMenu.$inject = ['superdesk', 'activityService', 'workflowService', 'archiveService', 'asset'];
-    function ItemActionsMenu(superdesk, activityService, workflowService, archiveService, asset) {
+    ItemActionsMenu.$inject = ['superdesk', 'activityService', 'workflowService', 'archiveService'];
+    function ItemActionsMenu(superdesk, activityService, workflowService, archiveService) {
         return {
             scope: {
                 item: '=',
                 active: '='
             },
-            templateUrl: asset.templateUrl('superdesk-monitoring/views/item-actions-menu.html'),
+            templateUrl: 'scripts/superdesk-monitoring/views/item-actions-menu.html',
             link: function(scope) {
                 /**
                  * Populate scope actions when dropdown is opened.

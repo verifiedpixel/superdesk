@@ -290,10 +290,10 @@
         };
     }
 
-    AggregateSettingsDirective.$inject = ['desks', 'preferencesService', 'WizardHandler', 'asset'];
-    function AggregateSettingsDirective(desks, preferencesService, WizardHandler, asset) {
+    AggregateSettingsDirective.$inject = ['desks', 'preferencesService', 'WizardHandler'];
+    function AggregateSettingsDirective(desks, preferencesService, WizardHandler) {
         return {
-            templateUrl: asset.templateUrl('superdesk-desks/views/aggregate-settings-configuration.html'),
+            templateUrl: 'scripts/superdesk-desks/views/aggregate-settings-configuration.html',
             scope: {
                 modalActive: '=',
                 desks: '=',
