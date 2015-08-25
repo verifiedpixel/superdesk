@@ -11,6 +11,7 @@
 
         usersService.usernamePattern = /^[A-Za-z0-9_.'-]+$/;
         usersService.phonePattern = /^(?:(?:0?[1-9][0-9]{8})|(?:(?:\+|00)[1-9][0-9]{9,11}))$/;
+        usersService.signOffPattern = /^[a-zA-Z0-9]+$/;
 
         /**
          * Save user with given data
@@ -890,6 +891,8 @@
                     scope.features = features;
                     scope.usernamePattern = usersService.usernamePattern;
                     scope.phonePattern = usersService.phonePattern;
+                    scope.signOffPattern = usersService.signOffPattern;
+
                     scope.dirty = false;
                     scope.errorMessage = null;
 
@@ -898,7 +901,11 @@
                     scope.$watchCollection('user', function(user) {
                         _.each(user, function(value, key) {
                             if (value === '') {
-                                delete user[key];
+                                if (key !== 'phone' || key !== 'byline') {
+                                    user[key] = null;
+                                } else {
+                                    delete user[key];
+                                }
                             }
                         });
                         scope.dirty = !angular.equals(user, scope.origUser);
