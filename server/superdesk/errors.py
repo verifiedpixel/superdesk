@@ -157,7 +157,7 @@ class InvalidStateTransitionError(SuperdeskApiError):
 
 
 class SuperdeskIngestError(SuperdeskError):
-    def __init__(self, code, exception, provider=None):
+    def __init__(self, code, exception, provider=None, *args):
         super().__init__(code)
         self.system_exception = exception
         provider = provider or {}
@@ -176,6 +176,8 @@ class SuperdeskIngestError(SuperdeskError):
                 logger.error("{}: {} on channel {}".format(self, exception, self.provider_name))
             else:
                 logger.error("{}: {}".format(self, exception))
+            for arg in args:
+                logger.error(arg)
 
 
 class ProviderError(SuperdeskIngestError):
