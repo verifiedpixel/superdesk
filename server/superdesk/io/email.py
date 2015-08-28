@@ -52,12 +52,15 @@ class EmailReaderService(IngestService):
                             except IngestEmailError:
                                 continue
                 imap.close()
+            if rv != 'OK':
+                raise IngestEmailError.emailError(IngestEmailError, provider, rv)
             imap.logout()
         except Exception as ex:
             raise IngestEmailError.emailError(
                 ex, provider, str(ex.args), traceback.format_exc()
             )
-        return new_items
+        else:
+            return new_items
 
     def prepare_href(self, href):
         return url_for_media(href)
