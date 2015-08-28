@@ -53,7 +53,7 @@ class EmailReaderService(IngestService):
                                 continue
                 imap.close()
             if rv != 'OK':
-                raise IngestEmailError.emailError(IngestEmailError, provider, rv)
+                raise IngestEmailError.emailError(Exception(), provider, rv)
             imap.logout()
         except Exception as ex:
             raise IngestEmailError.emailError(
