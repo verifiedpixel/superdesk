@@ -54,7 +54,7 @@ class EmailReaderService(IngestService):
                 imap.close()
             imap.logout()
             if rv != 'OK':
-                raise Exception(rv)
+                raise Exception(data)
         except Exception as ex:
             raise IngestEmailError.emailError(
                 ex, provider, str(ex.args), traceback.format_exc()
