@@ -26,6 +26,7 @@ from superdesk.errors import IngestEmailError
 from bs4 import BeautifulSoup, Comment, Doctype
 import re
 from eve.utils import ParsedRequest
+import traceback
 
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,10 @@ email_regex = re.compile('^.*<(.*)>$')
 
 
 def get_user_by_email(field_from):
-    email_address = email_regex.findall(field_from)[0]
+    email_address_lookup = email_regex.findall(field_from)
+    if len(email_address_lookup) < 1:
+        raise UserNotRegisteredException()
+    email_address = email_address_lookup[0]
     lookup = superdesk.get_resource_service('users').find_one(
         req=ParsedRequest(), email=email_address)
     if not lookup:
@@ -223,7 +227,7 @@ class rfc822Parser(Parser):
             new_items.append(item)
             return new_items
         except Exception as ex:
-            raise IngestEmailError.emailParseError(ex, provider)
+            raise IngestEmailError.emailParseError(ex, provider, traceback.format_exc())
 
     def parse_header(self, field):
         try:
