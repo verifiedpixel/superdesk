@@ -2,11 +2,11 @@
 (function() {
     'use strict';
 
-    angular.module('superdesk.workspace', [])
+    angular.module('superdesk.workspace', ['superdesk.workspace.content'])
         .service('workspaces', WorkspaceService)
         .directive('sdDeskDropdown', WorkspaceDropdownDirective)
-        .directive('sdEditWorkspace', EditWorkspaceDirective)
-        ;
+        .directive('sdWorkspaceSidenav', WorkspaceSidenavDirective)
+        .directive('sdEditWorkspace', EditWorkspaceDirective);
 
     WorkspaceService.$inject = ['api', 'desks', 'session', 'preferencesService', '$q'];
     function WorkspaceService(api, desks, session, preferences, $q) {
@@ -131,7 +131,7 @@
          * @return {Promise}
          */
         function getDeskWorkspace(deskId) {
-            return api.query(RESOURCE, {where: {desk: deskId}}).then(function(result) {
+            return api.query('desks', {where: {desk: deskId}}).then(function(result) {
                 if (result._items.length === 1) {
                     return result._items[0];
                 } else {
@@ -218,15 +218,14 @@
                     .then(angular.bind(desks, desks.fetchCurrentUserDesks))
                     .then(function(userDesks) {
                         scope.desks = userDesks._items;
-                        if (!activeId) {
-                            scope.selected = _.find(scope.desks, {_id: desks.activeDeskId});
-                        }
                     })
                     .then(workspaces.queryUserWorkspaces)
                     .then(function(_workspaces) {
                         scope.wsList = _workspaces;
                         if (activeId) {
-                            scope.selected = _.find(scope.workspaces, {_id: activeId});
+                            scope.selected = _.find(scope.wsList, {_id: activeId});
+                        } else {
+                            scope.selected = _.find(scope.desks, {_id: desks.getCurrentDeskId()});
                         }
                     });
                 }
@@ -234,6 +233,33 @@
                 scope.$watch(function() {
                     return workspaces.active;
                 }, initialize, true);
+            }
+        };
+    }
+
+    WorkspaceSidenavDirective.$inject = [];
+    function WorkspaceSidenavDirective() {
+        return {
+            templateUrl: 'scripts/superdesk-workspace/views/workspace-sidenav-items.html',
+            link: function(scope) {
+
+                /*
+                 * Function for showing and hiding monitoring list
+                 * while authoring view is opened.
+                 *
+                 * @param {boolean} state Gets the state of button
+                 * @param {object} e Gets $event from the element
+                 */
+                scope.hideMonitoring = function (state, e) {
+                    var flags = scope.$parent.flags;
+
+                    if (flags.authoring && state) {
+                        e.preventDefault();
+                        flags.hideMonitoring = !flags.hideMonitoring;
+                    } else {
+                        flags.hideMonitoring = false;
+                    }
+                };
             }
         };
     }

@@ -17,7 +17,7 @@ from eve.utils import config, ParsedRequest
 from eve.validation import ValidationError
 from superdesk.errors import SuperdeskApiError
 from superdesk import get_resource_service
-from superdesk.metadata.item import ITEM_TYPE, CONTENT_TYPE
+from superdesk.metadata.item import ITEM_TYPE, CONTENT_TYPE, EMBARGO
 from superdesk.metadata.packages import LINKED_IN_PACKAGES, PACKAGE_TYPE, TAKES_PACKAGE, PACKAGE, LAST_TAKE, \
     ASSOCIATIONS, ITEM_REF, GROUPS, ID_REF, MAIN_GROUP, SEQUENCE, ROOT_GROUP, ROLE, ROOT_ROLE, MAIN_ROLE, GROUP_ID
 from apps.archive.common import insert_into_versions
@@ -82,8 +82,10 @@ class PackageService():
             self.extract_default_association_data(original, assoc)
 
     def on_updated(self, updates, original):
-        to_add = {assoc.get(ITEM_REF): assoc for assoc in self._get_associations(updates) if assoc.get(ITEM_REF)}
-        to_remove = (assoc for assoc in self._get_associations(original) if assoc.get(ITEM_REF) not in to_add)
+        to_add = {assoc.get(ITEM_REF): assoc for assoc in self._get_associations(updates)
+                  if assoc.get(ITEM_REF) and updates.get(GROUPS)}
+        to_remove = (assoc for assoc in self._get_associations(original)
+                     if assoc.get(ITEM_REF) not in to_add)
         for assoc in to_remove:
             self.update_link(original, assoc, delete=True)
         for assoc in to_add.keys():
@@ -272,6 +274,19 @@ class PackageService():
                 g[ITEM_REF] = new_ref_id
                 g['guid'] = new_ref_id
 
+    def update_field_in_package(self, package, ref_id, field, field_value):
+        """
+        Locates the reference with the ref_id and replaces field value
+        :param package: Package
+        :param ref_id: reference id
+        :param field: field to be replaced
+        :param field_value: value to be used
+        """
+        non_root_groups = (group for group in package.get(GROUPS, []) if group.get(GROUP_ID) != ROOT_GROUP)
+        for g in (ref for group in non_root_groups for ref in group.get(ASSOCIATIONS, [])):
+            if g.get(ITEM_REF, '') == ref_id:
+                g[field] = field_value
+
     def remove_refs_in_package(self, package, ref_id_to_remove, processed_packages=None):
         """
         Removes residRef referenced by ref_id_to_remove from the package associations and returns the package id.
@@ -353,3 +368,22 @@ class PackageService():
         """
         return [ref.get(ITEM_REF) for group in package.get(GROUPS, [])
                 for ref in group.get(ASSOCIATIONS, []) if ITEM_REF in ref]
+
+    def check_if_any_item_in_package_has_embargo(self, package):
+        """
+        Recursively checks if any item in the package has embargo.
+        :raises: SuperdeskApiError.badRequestError() if any item in the package has embargo.
+        """
+
+        item_refs_in_package = self.get_residrefs(package)
+
+        for item_ref in item_refs_in_package:
+            doc = get_resource_service(ARCHIVE).find_one(req=None, _id=item_ref)
+
+            if doc.get(EMBARGO):
+                raise SuperdeskApiError.badRequestError("Package can't have item which has emabrgo. "
+                                                        "Slugline/Unique Name of the item having embargo: %s/%s" %
+                                                        (doc.get('slugline'), doc.get('unique_name')))
+
+            if doc[ITEM_TYPE] == CONTENT_TYPE.COMPOSITE:
+                self.check_if_any_item_in_package_has_embargo(doc)

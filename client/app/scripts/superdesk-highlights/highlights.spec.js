@@ -3,9 +3,9 @@
 describe('highlights', function() {
 
     beforeEach(module('superdesk.highlights'));
-    beforeEach(module('templates'));
     beforeEach(module('superdesk.mocks'));
     beforeEach(module('superdesk.archive'));
+    beforeEach(module('templates'));
 
     describe('sdPackageHighlightsDropdown directive', function() {
         var scope, desk;
@@ -30,7 +30,27 @@ describe('highlights', function() {
             $rootScope.$digest();
             expect(highlightsService.get).toHaveBeenCalledWith(active.desk);
         }));
-
     });
 
+    describe('create highlights button directive', function() {
+        it('can create highlights package',
+        inject(function($compile, $rootScope, $q, api, authoringWorkspace, authoring) {
+            var scope = $rootScope.$new();
+            var elem = $compile('<div sd-create-highlights-button highlight="\'foo\'"></div>')(scope);
+            scope.$digest();
+            var iscope = elem.isolateScope();
+
+            var highlight = {_id: 'foo_highlight', name: 'Foo'};
+            var pkg = {_id: 'foo_package'};
+            spyOn(api, 'find').and.returnValue($q.when(highlight));
+            spyOn(api, 'save').and.returnValue($q.when(pkg));
+            spyOn(authoring, 'open').and.returnValue($q.when(pkg));
+
+            iscope.createHighlight();
+            $rootScope.$digest();
+            expect(api.find).toHaveBeenCalledWith('highlights', 'foo');
+            expect(api.save).toHaveBeenCalledWith('archive',
+                jasmine.objectContaining({headline: 'Foo', highlight: 'foo_highlight'}));
+        }));
+    });
 });

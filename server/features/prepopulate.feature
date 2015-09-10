@@ -34,7 +34,8 @@ Feature: Prepopulate
         Then we get list with 2 items
         """
         {"_items": [{"members": [{"user": "#user_admin#"}, {"user": "#user_admin1#"}, {"user": "#user_admin2#"}, {"user": "#user_admin3#"}], "name": "Sports Desk"},
-                    {"members": [{"user": "#user_admin#"}, {"user": "#user_admin4#"}, {"user": "#user_admin1#"}], "name": "Politic Desk"}]}
+                    {"members": [{"user": "#user_admin#"}, {"user": "#user_admin4#"}, {"user": "#user_admin1#"}], "name": "Politic Desk"}
+                   ]}
         """
 
         When we get "/roles"

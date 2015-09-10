@@ -546,15 +546,6 @@
                     controller: PublishQueueController,
                     category: superdesk.MENU_MAIN,
                     privileges: {publish_queue: 1}
-                })
-                .activity('/settings/data_consistency', {
-                    label: gettext('Data Consistency'),
-                    templateUrl: 'scripts/superdesk-publish/views/data-consistency.html',
-                    controller: DataConsistencyController,
-                    category: superdesk.MENU_SETTINGS,
-                    privileges: {subscribers: 1},
-                    priority: 2000,
-                    beta: true
                 });
         }])
         .config(['apiProvider', function(apiProvider) {
@@ -576,10 +567,10 @@
                     rel: 'consistency'
                 }
             });
-            apiProvider.api('formatted_item', {
+            apiProvider.api('legal_publish_queue', {
                 type: 'http',
                 backend: {
-                    rel: 'formatted_item'
+                    rel: 'legal_publish_queue'
                 }
             });
             apiProvider.api('io_errors', {

@@ -6,7 +6,6 @@ describe('content', function() {
     beforeEach(module('templates'));
     beforeEach(module('superdesk.mocks'));
     beforeEach(module('superdesk.archive'));
-    beforeEach(module('superdesk.workspace.content'));
 
     it('can spike items', inject(function(spike, api, $q) {
         spyOn(api, 'update').and.returnValue($q.when());
@@ -78,12 +77,12 @@ describe('content', function() {
         }));
 
         it('can fetch version history', inject(function(archiveService, api, $q) {
-            spyOn(api.archive, 'getByUrl').and.returnValue($q.when());
+            spyOn(api, 'find').and.returnValue($q.when());
             spyOn(api.legal_archive_versions, 'getByUrl').and.returnValue($q.when());
 
-            item._links = {self: {href: '/archive/123'}};
+            item._links = {_id: '123'};
             archiveService.getVersionHistory(item, {}, 'versions');
-            expect(api.archive.getByUrl).toHaveBeenCalledWith('/archive/123?version=all&embedded={"user":1}');
+            expect(api.find).toHaveBeenCalledWith('archive', '123', {version: 'all', embedded: {user: 1}});
 
             item._type = 'legal_archive';
             item._links = {collection: {href: '/legal_archive'}};
@@ -132,59 +131,23 @@ describe('content', function() {
         }));
     });
 
-    describe('creating items', function() {
-        beforeEach(module(function($provide) {
-            $provide.service('api', function($q) {
-                return function() {
-                    return {
-                        save: function() {
-                            return $q.when();
-                        }
-                    };
-                };
+    describe('item preview container', function() {
+        it('can handle preview:item intent', inject(function($rootScope, $compile, superdesk) {
+            var scope = $rootScope.$new();
+            var elem = $compile('<div sd-item-preview-container></div>')(scope);
+            scope.$digest();
+
+            var iscope = elem.isolateScope();
+            expect(iscope.item).toBe(null);
+
+            scope.$apply(function() {
+                superdesk.intent('preview', 'item', item);
             });
+
+            expect(iscope.item).toBe(item);
+
+            iscope.close();
+            expect(iscope.item).toBe(null);
         }));
-
-        it('can create plain text items', inject(function(superdesk, $rootScope, ContentCtrl) {
-            spyOn(superdesk, 'intent').and.returnValue(null);
-
-            var content = new ContentCtrl();
-            content.createItem();
-            $rootScope.$digest();
-            expect(superdesk.intent).toHaveBeenCalledWith('author', 'article', {type: 'text', version: 0});
-        }));
-
-        it('can create packages', inject(function(superdesk, ContentCtrl) {
-            spyOn(superdesk, 'intent').and.returnValue(null);
-
-            var content = new ContentCtrl();
-            content.createPackageItem();
-            expect(superdesk.intent).toHaveBeenCalledWith('create', 'package');
-        }));
-
-        it('can create packages from items', inject(function(superdesk, ContentCtrl) {
-            spyOn(superdesk, 'intent').and.returnValue(null);
-
-            var content = new ContentCtrl();
-            content.createPackageItem({data: 123});
-            expect(superdesk.intent).toHaveBeenCalledWith('create', 'package', {items: [{data: 123}]});
-        }));
-
-        it('can create items from template', inject(function(superdesk, $rootScope, ContentCtrl) {
-            spyOn(superdesk, 'intent').and.returnValue(null);
-
-            var content = new ContentCtrl();
-            content.createFromTemplateItem({
-                slugline: 'test_slugline',
-                body_html: 'test_body_html',
-                irrelevantData: 'yes'
-            });
-            $rootScope.$digest();
-            expect(superdesk.intent).toHaveBeenCalledWith('author', 'article', {
-                slugline: 'test_slugline',
-                body_html: 'test_body_html'
-            });
-        }));
-
     });
 });

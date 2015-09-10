@@ -88,6 +88,16 @@
             return packages.createEmptyPackage(pkg_defaults, group);
         };
 
+        /**
+         * Get single highlight by its id
+         *
+         * @param {string} _id
+         * @return {Promise}
+         */
+        service.find = function(_id) {
+            return api.find('highlights', _id);
+        };
+
         return service;
     }
 
@@ -283,7 +293,6 @@
         return {
             scope: {highlight_id: '=highlight'},
             template: '<span translate>{{ highlightItem.name }}</span>',
-            replate: true,
             link: function(scope) {
                 highlightsService.get(desks.getCurrentDeskId()).then(function(result) {
                     scope.highlightItem =  _.find(result._items, {_id: scope.highlight_id});
@@ -292,26 +301,19 @@
         };
     }
 
-    CreateHighlightsButtonDirective.$inject = ['superdesk', 'desks', 'highlightsService', '$location'];
-    function CreateHighlightsButtonDirective(superdesk, desks, highlightsService, $location) {
+    CreateHighlightsButtonDirective.$inject = ['highlightsService', 'authoringWorkspace'];
+    function CreateHighlightsButtonDirective(highlightsService, authoringWorkspace) {
         return {
-            require: ['^sdAuthoringContainer'],
             scope: {highlight_id: '=highlight'},
             templateUrl: 'scripts/superdesk-highlights/views/create_highlights_button_directive.html',
-            link: function(scope, elem, attrs, ctrls) {
-                var authoring = ctrls[0];
-
-                scope.createHighlight = function(highlight) {
-                    var promise = highlightsService.get(desks.getCurrentDeskId()).then(function(result) {
-                        scope.highlights = _.find(result._items, {_id: scope.highlight_id});
-                        scope.hasHighlights = _.size(scope.highlights) > 0;
-                    });
-
-                    promise = promise.then(function() {
-                        highlightsService.createEmptyHighlight(scope.highlights).then(function(new_package) {
-                            authoring.edit(new_package);
-                        });
-                    });
+            link: function(scope) {
+                /**
+                 * Create new highlight package for current highlight and start editing it
+                 */
+                scope.createHighlight = function() {
+                    highlightsService.find(scope.highlight_id)
+                        .then(highlightsService.createEmptyHighlight)
+                        .then(authoringWorkspace.edit);
                 };
             }
         };
@@ -498,7 +500,7 @@
     .config(['superdeskProvider', function(superdesk) {
         superdesk
         .activity('mark.item', {
-            label: gettext('Mark item'),
+            label: gettext('Mark for highlight'),
             priority: 30,
             icon: 'list-plus',
             dropdown: true,
@@ -524,7 +526,7 @@
             priority: 100,
             templateUrl: 'scripts/superdesk-monitoring/views/highlights-view.html',
             topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
-            sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html'
+            sideTemplateUrl: 'scripts/superdesk-workspace/views/workspace-sidenav.html'
         });
     }])
     .config(['apiProvider', function(apiProvider) {

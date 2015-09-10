@@ -28,6 +28,11 @@
             .opacity(100);
         }
 }
+// Triggers dropdown on a hover
+.dropdown.dropdown-hover:hover {
+    .dropdown-menu { display: block; }
+}
+
 .dropdown-toggle:active,
 .open .dropdown-toggle {
 	outline: 0;
@@ -235,6 +240,27 @@
 }
 
 .dropleft {
+    display: inline-block;
+    vertical-align: middle;
+    .dropdown-menu {
+        top: -23px;
+        right: calc(~'100% + 15px');
+        &:before {
+            width: 15px;
+            height: 22px;
+            display: block;
+            z-index: 100;
+            position: absolute;
+            right: -15px;
+            top: 10px;
+            background: url(../../images/dropdown-arrow-side.png) no-repeat;
+            .rotate(180deg);
+            content: " ";
+        }
+    }
+}
+
+.dropright {
     display: inline-block;
     vertical-align: middle;
     .dropdown-menu {
@@ -468,7 +494,7 @@
 			float: none;
 			.dropdown-toggle {
 				margin: 0 10px;
-				min-width: 225px;
+				min-width: 170px;
 				padding: 6px 10px;
 				line-height: 19px;
 				border-radius: 3px;

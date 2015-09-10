@@ -943,7 +943,7 @@ define([
                 };
 
                 scope.selectCategory = function(item) {
-                    scope.rule.filter.category.push({qcode: item.value, name: item.name});
+                    scope.rule.filter.category.push({qcode: item.qcode, name: item.name});
                     scope.categoryTerm = '';
                 };
 
@@ -952,8 +952,7 @@ define([
                     scope.filteredCategories = _.filter(scope.categories, function(category) {
                         return (
                             regex.test(category.name) &&
-                            _.findIndex(scope.rule.filter.category, {qcode: category.value}) === -1 &&
-                            category.is_active === true
+                            _.findIndex(scope.rule.filter.category, {qcode: category.qcode}) === -1
                         );
                     });
                 };
@@ -974,8 +973,7 @@ define([
                     scope.filteredGenres = _.filter(scope.genres, function(genre) {
                         return (
                             regex.test(genre.name) &&
-                            scope.rule.filter.genre.indexOf(genre.value) === -1 &&
-                            genre.is_active === true
+                            scope.rule.filter.genre.indexOf(genre.value) === -1
                         );
                     });
                 };
@@ -1320,7 +1318,7 @@ define([
                 templateUrl: 'scripts/superdesk-archive/views/list.html',
                 category: '/workspace',
                 topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
-                sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
+                sideTemplateUrl: 'scripts/superdesk-workspace/views/workspace-sidenav.html',
                 privileges: {ingest: 1}
             })
             .activity('/settings/ingest', {
@@ -1459,11 +1457,14 @@ define([
                     function(archiveItem) {
                         item.task_id = archiveItem.task_id;
                         item.archived = archiveItem._created;
+                        return archiveItem;
                     }, function(response) {
                         item.error = response;
                     })
                 ['finally'](function() {
-                    item.actioning.archive = false;
+                    if (item.actioning) {
+                        item.actioning.archive = false;
+                    }
                 });
         }
 

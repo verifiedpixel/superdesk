@@ -11,7 +11,13 @@ describe('Content', function() {
     var body = element(by.tagName('body'));
 
     function selectedHeadline() {
-        return element(by.binding('selected.preview.headline')).getText();
+        var headline = element(by.className('preview-headline'));
+
+        browser.wait(function() {
+            return headline.isDisplayed();
+        }, 100); // animated sidebar
+
+        return headline.getText();
     }
 
     beforeEach(function() {
@@ -20,25 +26,31 @@ describe('Content', function() {
         expect(element.all(by.repeater('items._items')).count()).toBe(3);
     });
 
+    // wait a bit after sending keys to body
+    function pressKey(key) {
+        body.sendKeys(key);
+        browser.sleep(50);
+    }
+
     it('can navigate with keyboard', function() {
-        body.sendKeys(protractor.Key.UP);
+        pressKey(protractor.Key.UP);
         expect(selectedHeadline()).toBe('package1');
 
-        body.sendKeys(protractor.Key.DOWN);
+        pressKey(protractor.Key.DOWN);
         expect(selectedHeadline()).toBe('item1');
 
-        body.sendKeys(protractor.Key.RIGHT);
+        pressKey(protractor.Key.RIGHT);
         expect(selectedHeadline()).toBe('item2');
 
-        body.sendKeys(protractor.Key.LEFT);
+        pressKey(protractor.Key.LEFT);
         expect(selectedHeadline()).toBe('item1');
 
-        body.sendKeys(protractor.Key.UP);
+        pressKey(protractor.Key.UP);
         expect(selectedHeadline()).toBe('package1');
     });
 
     it('can open search with s', function() {
-        body.sendKeys('s');
+        pressKey('s');
         expect(element(by.id('search-input')).isDisplayed()).toBe(true);
     });
 
@@ -101,11 +113,25 @@ describe('Content', function() {
         element(by.className('sd-create-btn')).click();
         element(by.id('create_package')).click();
 
-        authoring.writeTextToHeadline('Empty Package');
+        element.all(by.model('item.headline')).first().sendKeys('Empty Package');
         authoring.save();
         authoring.close();
 
         expect(content.count()).toBe(3);
+    });
+
+    it('can close unsaved empty package in a desk', function() {
+        workspace.switchToDesk('SPORTS DESK');
+        content.setListView();
+
+        element(by.className('sd-create-btn')).click();
+        element(by.id('create_package')).click();
+
+        element.all(by.model('item.headline')).first().sendKeys('Empty Package');
+        authoring.close();
+
+        element.all(by.className('btn-warning')).first().click();
+        expect(content.count()).toBe(2);
     });
 
 });

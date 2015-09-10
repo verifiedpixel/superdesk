@@ -7,21 +7,23 @@
 # For the full copyright and license information, please see the
 # AUTHORS and LICENSE files distributed with this source code, or
 # at https://www.sourcefabric.org/superdesk/license
+from datetime import timedelta
+from superdesk.utc import utcnow
 
-from superdesk.tests import TestCase
+from test_factory import SuperdeskTestCase
 from apps.publish.formatters.ninjs_formatter import NINJSFormatter
 from apps.publish import init_app
 import json
 
 
-class ninjsFormatterTest(TestCase):
+class ninjsFormatterTest(SuperdeskTestCase):
     def setUp(self):
         super().setUp()
         self.formatter = NINJSFormatter()
-        with self.app.app_context():
-            init_app(self.app)
+        init_app(self.app)
 
     def testTextFomatter(self):
+        embargo_ts = (utcnow() + timedelta(days=2))
         article = {
             'guid': 'tag:aap.com.au:20150613:12345',
             '_current_version': 1,
@@ -46,17 +48,16 @@ class ninjsFormatterTest(TestCase):
             'creditline': 'sample creditline',
             'keywords': ['traffic'],
             'abstract': 'sample abstract',
-            'place': 'Australia'
+            'place': 'Australia',
+            'embargo': embargo_ts
         }
-        with self.app.app_context():
-            seq, doc = self.formatter.format(article, {'name': 'Test Subscriber'})[0]
-            expected = json.loads(
-                '{"version": "1", "place": "Australia", "pubstatus": "usable", \
-                "body_html": "The story body", "type": "text", \
-                "subject": [{"qcode": "02011001", "name": "international court or tribunal"}, \
-                {"qcode": "02011002", "name": "extradition"}], \
-                "headline": "This is a test headline", "byline": "joe", "_id": "urn:localhost.abc", "urgency": 2}')
-            self.assertEqual(json.loads(doc), expected)
+        seq, doc = self.formatter.format(article, {'name': 'Test Subscriber'})[0]
+        expected = {"version": "1", "place": "Australia", "pubstatus": "usable", "body_html": "The story body",
+                    "type": "text", "subject": [{"qcode": "02011001", "name": "international court or tribunal"},
+                                                {"qcode": "02011002", "name": "extradition"}],
+                    "headline": "This is a test headline", "byline": "joe", "_id": "urn:localhost.abc", "urgency": 2,
+                    "embargoed": embargo_ts.isoformat()}
+        self.assertEqual(json.loads(doc), expected)
 
     def testPictureFomatter(self):
         article = {
@@ -86,18 +87,17 @@ class ninjsFormatterTest(TestCase):
             'description': 'The most amazing picture you will ever see',
             'guid': '20150723001158606583'
         }
-        with self.app.app_context():
-            seq, doc = self.formatter.format(article, {'name': 'Test Subscriber'})[0]
-            expected = json.loads('{"byline": "MICKEY MOUSE", \
-                    "renditions": {"viewImage": \
-                    {"href": "http://localhost:5000/api/upload/55b032041d41c8d278d21b6f/raw?_schema=http", \
-                    "mimetype": "image/jpeg", "width": 640, "height": 401}, \
-                    "original_source": {"href": \
-                    "https://one-api.aap.com.au/api/v3/Assets/20150723001158606583/Original/download", \
-                    "mimetype": "image/jpeg"}}, "headline": "AMAZING PICTURE", "pubstatus": "usable", \
-                    "version": "1", "versioncreated": "2015-07-23T00:15:00.000Z", "_id": "20150723001158606583", \
-                    "description_text": "The most amazing picture you will ever see", "type": "picture"}')
-            self.assertEqual(json.loads(doc), expected)
+        seq, doc = self.formatter.format(article, {'name': 'Test Subscriber'})[0]
+        expected = json.loads('{"byline": "MICKEY MOUSE", \
+                "renditions": {"viewImage": \
+                {"href": "http://localhost:5000/api/upload/55b032041d41c8d278d21b6f/raw?_schema=http", \
+                "mimetype": "image/jpeg", "width": 640, "height": 401}, \
+                "original_source": {"href": \
+                "https://one-api.aap.com.au/api/v3/Assets/20150723001158606583/Original/download", \
+                "mimetype": "image/jpeg"}}, "headline": "AMAZING PICTURE", "pubstatus": "usable", \
+                "version": "1", "versioncreated": "2015-07-23T00:15:00.000Z", "_id": "20150723001158606583", \
+                "description_text": "The most amazing picture you will ever see", "type": "picture"}')
+        self.assertEqual(json.loads(doc), expected)
 
     def testCompositeFomatter(self):
         article = {
@@ -213,16 +213,15 @@ class ninjsFormatterTest(TestCase):
             'version': 2,
         }
 
-        with self.app.app_context():
-            seq, doc = self.formatter.format(article, {'name': 'Test Subscriber'})[0]
-            expected = json.loads('{"headline": "WA:Navy steps in with WA asylum-seeker boat", \
-            "_created": "2015-07-24T05:05:00.000Z", "version": "2", \
-            "_id": "urn:newsml:localhost:2015-07-24T15:05:00.116047:435c93c2-492c-4668-ab47-ae6e2b9b1c2c", \
-            "_updated": "2015-07-24T05:05:25.000Z", \
-            "associations": {"main": \
-            [{"_id": "tag:localhost:2015:515b895a-b336-48b2-a506-5ffaf561b916", "type": "text"}], \
-            "sidebars": \
-            [{"_id": "urn:newsml:localhost:2015-07-24T15:04:29.589984:af3bef9a-5002-492b-a15a-8b460e69b164", \
-            "type": "picture"}]}, "description_text": "", "versioncreated": "2015-07-24T05:05:14.000Z", "type": \
-            "composite", "pubstatus": "usable", "language": "en"}')
-            self.assertEqual(json.loads(doc), expected)
+        seq, doc = self.formatter.format(article, {'name': 'Test Subscriber'})[0]
+        expected = json.loads('{"headline": "WA:Navy steps in with WA asylum-seeker boat", \
+        "_created": "2015-07-24T05:05:00.000Z", "version": "2", \
+        "_id": "urn:newsml:localhost:2015-07-24T15:05:00.116047:435c93c2-492c-4668-ab47-ae6e2b9b1c2c", \
+        "_updated": "2015-07-24T05:05:25.000Z", \
+        "associations": {"main": \
+        [{"_id": "tag:localhost:2015:515b895a-b336-48b2-a506-5ffaf561b916", "type": "text"}], \
+        "sidebars": \
+        [{"_id": "urn:newsml:localhost:2015-07-24T15:04:29.589984:af3bef9a-5002-492b-a15a-8b460e69b164", \
+        "type": "picture"}]}, "description_text": "", "versioncreated": "2015-07-24T05:05:14.000Z", "type": \
+        "composite", "pubstatus": "usable", "language": "en"}')
+        self.assertEqual(json.loads(doc), expected)

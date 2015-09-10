@@ -1,21 +1,30 @@
 (function() {
     'use strict';
 
-    angular.module('superdesk.menu', ['superdesk.menu.notifications', 'superdesk.asset'])
+    function SuperdeskFlagsService() {
+        this.flags = {
+            menu: false,
+            notifications: false
+        };
+    }
+
+    angular.module('superdesk.menu', ['superdesk.menu.notifications', 'superdesk.asset', 'superdesk.api'])
+
+        .service('superdeskFlags', SuperdeskFlagsService)
 
         // set flags for other directives
         .directive('sdSuperdeskView', ['asset', function(asset) {
+
+            SuperdeskViewController.$inject = ['superdeskFlags'];
+
+            function SuperdeskViewController(superdeskFlags) {
+                this.flags = superdeskFlags.flags;
+            }
+
             return {
                 templateUrl: asset.templateUrl('superdesk/menu/views/superdesk-view.html'),
-                controller: function() {
-                    this.flags = {
-                        menu: false,
-                        notifications: false
-                    };
-                },
-                link: function(scope, elem, attrs, ctrl) {
-                    scope.flags = ctrl.flags;
-                }
+                controller: SuperdeskViewController,
+                controllerAs: 'superdesk'
             };
         }])
 

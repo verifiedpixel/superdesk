@@ -1,12 +1,3 @@
-<button class="proofread-toggle btn btn-light" ng-click="proofread = !proofread">
-    <span class="button-lable" translate>Mode: </span>
-    <span ng-show="proofread" translate>Proofread</span>
-    <span ng-show="!proofread" translate>Normal</span>
-</button>
-
-<span sd-theme-select ng-if="proofread" data-key="proofreadTheme"></span>
-<span sd-theme-select ng-if="!proofread" data-key="theme"></span>
-
 <ul class="metadata-list" ng-controller="MetadataWidgetCtrl" ng-if="loaded">
     <li class="date-info full-width clearfix">
         <label translate>Created</label>
@@ -24,7 +15,7 @@
             <i class="filetype-icon-{{item.type}}" ng-hide="hover || item.selected" tooltip="Article Type" tooltip-placement="middle"></i>
 
             <div class="slider-icon pull-left">
-                <div class="dropdown dropleft" dropdown>
+                <div class="dropdown dropright" dropdown>
                     <i class="urgency-icon-{{item.urgency}} dropdown-toggle" dropdown-toggle></i>
                     <div class="dropdown-menu">
                         <label>{{ "URGENCY" | translate }}</label>
@@ -46,7 +37,7 @@
                 </div>
             </div>
             <div class="slider-icon pull-left">
-                <div class="dropdown dropleft" dropdown>
+                <div class="dropdown dropright" dropdown>
                     <i class="output-item-label label-{{item.urgency}} dropdown-toggle" dropdown-toggle>{{ item.urgency }}</i>
                     <div class="dropdown-menu">
                         <label>{{ "NEWS VALUE" | translate }}</label>
@@ -84,10 +75,10 @@
     </li>
 
     <li class="keyword">
-        <label translate>KEYWORD</label>
+        <label translate>SLUGLINE</label>
         <div class="data">
             <input type="text"
-                   id="keyword"
+                   id="slugline"
                    ng-model="item.slugline"
                    ng-change="autosave(item)"
                    ng-disabled="!_editable"
@@ -112,9 +103,14 @@
         <div sd-meta-dropdown data-item="item" data-field="place" data-list="metadata.locators" ng-disabled="!_editable" data-change="autosave(item)"></div>
     </li>
 
-    <li class="terms-box" ng-if="metadata.categories">
+    <li class="terms-box" ng-if="metadata.categories" id="category-setting">
         <label translate>CATEGORY</label>
-        <div class="data" sd-meta-terms data-item="item" data-field="anpa_category" data-unique="qcode" data-list="metadata.categories" ng-disabled="!_editable" data-header="true" data-change="autosave(item)"></div>
+        <div
+            sd-meta-terms class="data"
+            ng-disabled="!_editable"
+            data-item="item" data-field="anpa_category" data-unique="qcode"
+            data-list="availableCategories" data-header="true"
+            data-change="autosave(item)"></div>
     </li>
 
     <li class="full-width terms-box" ng-if="metadata.subjectcodes">
@@ -129,3 +125,5 @@
         </div>
     </li>
 </ul>
+
+<button ng-class="{active: toggleHeader}" ng-click="toggleHeader = !toggleHeader"><i class="icon-chevron-up-thin"></i></button>

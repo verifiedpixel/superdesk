@@ -17,6 +17,13 @@ function Monitoring() {
     };
 
     /**
+     * Open personal monitoring view
+     */
+    this.openPersonal = function() {
+        element(by.className('big-icon-personal')).click();
+    };
+
+    /**
      * On monitoring view create a new item
      *
      * @param {string} action - the create item action can be: create_text_article,
@@ -33,7 +40,7 @@ function Monitoring() {
     };
 
     this.getGroups = function() {
-        return element.all(by.repeater('group in aggregate.getGroups()'));
+        return element.all(by.repeater('group in aggregate.groups'));
     };
 
     this.getItem = function(group, item) {
@@ -46,6 +53,26 @@ function Monitoring() {
 
     this.getSpikedItems = function() {
         return element.all(by.repeater('item in items'));
+    };
+
+    /**
+     * Get the personal element at 'index' row
+     *
+     * @param {number} index
+     * @return {object}
+     */
+    this.getPersonalItem = function(index) {
+        return element.all(by.repeater('item in items')).get(index);
+    };
+
+    /**
+     * Get the personal element text at 'index' row
+     *
+     * @param {number} index
+     * @return {string}
+     */
+    this.getPersonalItemText = function(index) {
+        return this.getPersonalItem(index).element(by.id('title')).getText();
     };
 
     this.getSpikedItem = function(item) {
@@ -112,7 +139,7 @@ function Monitoring() {
         var itemElem = this.getSpikedItem(item);
         browser.actions().mouseMove(itemElem).perform();
         itemElem.element(by.className('icon-dots-vertical')).click();
-        var menu = element(by.css('.dropdown-menu.active'));
+        var menu = element(by.css('.dropdown-menu.open'));
         return menu.element(by.partialLinkText('Unspike')).click();
     };
 
@@ -120,11 +147,11 @@ function Monitoring() {
         var itemElem = this.getItem(group, item);
         browser.actions().mouseMove(itemElem).perform();
         itemElem.element(by.className('icon-dots-vertical')).click();
-        return element(by.css('.dropdown-menu.active'));
+        return element(by.css('.dropdown-menu.open'));
     };
 
     this.showMonitoringSettings = function() {
-        element(by.css('.icon-dots-vertical')).click();
+        element.all(by.className('icon-dots-vertical')).first().click();
         browser.wait(function() {
             return element(by.css('.icon-settings')).isDisplayed();
         });
@@ -132,7 +159,7 @@ function Monitoring() {
         browser.wait(function() {
             return element.all(by.css('.aggregate-widget-config')).isDisplayed();
         });
-        element(by.css('[ng-click="goTo(step)"]')).click();
+        element.all(by.css('[ng-click="goTo(step)"]')).first().click();
     };
 
     this.nextStages = function() {
@@ -237,4 +264,25 @@ function Monitoring() {
         maxItemsInput.clear();
         maxItemsInput.sendKeys(value);
     };
+
+    this.hasClass = function (element, cls) {
+        return element.getAttribute('class').then(function (classes) {
+            return classes.split(' ').indexOf(cls) !== -1;
+        });
+    };
+
+    this.showHideList = function() {
+        element(by.className('big-icon-view')).click();
+    };
+
+    this.openCreateMenu = function() {
+        element(by.className('sd-create-btn')).click();
+        browser.sleep(100);
+    };
+
+    this.startUpload = function() {
+        element(by.id('start-upload-btn')).click();
+    };
+
+    this.uploadModal = element(by.className('upload-media'));
 }

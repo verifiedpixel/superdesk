@@ -14,17 +14,11 @@ describe('search service', function() {
                 {term: {package_type: 'takes'}},
                 {term: {last_published_version: false}}]}});
         expect(criteria.sort).toEqual([{versioncreated: 'desc'}]);
-        expect(criteria.size).toBe(25);
     }));
 
     it('can create query string query', inject(function($rootScope, search) {
         var criteria = search.query({q: 'test'}).getCriteria();
         expect(criteria.query.filtered.query.query_string.query).toBe('test');
-    }));
-
-    it('can set size', inject(function(search) {
-        var criteria = search.query().size(10).getCriteria();
-        expect(criteria.size).toBe(10);
     }));
 
     it('can sort items', inject(function(search, $location, $rootScope) {
@@ -163,7 +157,6 @@ describe('sdSearchFacets directive', function () {
                     category: {buckets: []},
                     urgency: {buckets: []},
                     source: {buckets: []},
-                    state: {buckets: []},
                     day: {buckets: []},
                     week: {buckets: []},
                     month: {buckets: []},

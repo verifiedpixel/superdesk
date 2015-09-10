@@ -28,7 +28,9 @@
         marked_for_not_publication: false,
         pubstatus: null,
         more_coming: false,
-        targeted_for: []
+        targeted_for: [],
+        embargo: null,
+        renditions: null
     });
 
     var DEFAULT_ACTIONS = Object.freeze({
@@ -107,7 +109,7 @@
          * Open an item
          */
         this.open = function openAutosave(item) {
-            if (item._locked || item.read_only) {
+            if (item._locked || !item._editable) {
                 // no way to get autosave
                 return $q.when(item);
             }
@@ -127,10 +129,6 @@
             this.stop(item);
             timeouts[item._id] = $timeout(function() {
                 var diff = extendItem({_id: item._id}, item);
-
-                if (diff.publish_schedule === null) {
-                    delete diff.publish_schedule;
-                }
 
                 return api.save(RESOURCE, {}, diff).then(function(_autosave) {
                     extendItem(item, _autosave);
@@ -188,6 +186,7 @@
          *
          * @param {string} _id Item _id.
          * @param {boolean} read_only
+         * @param {string} itemType
          */
         this.open = function openAuthoring(_id, read_only, itemType) {
             if (angular.isDefined(itemType) && itemType === 'legal_archive') {
@@ -196,7 +195,8 @@
                     return item;
                 });
             } else {
-                return api.find('archive', _id, {embedded: {lock_user: 1}}).then(function _lock(item) {
+                return api.find('archive', _id, {embedded: {lock_user: 1}})
+                .then(function _lock(item) {
                     item._editable = !read_only;
                     return lock.lock(item);
                 }).then(function _autosave(item) {
@@ -269,6 +269,11 @@
 
             if (!diff.publish_schedule) {
                 delete diff.publish_schedule;
+            }
+
+            //check if rendition is dirty for real
+            if (_.isEqual(orig.renditions, diff.renditions)) {
+                delete diff.renditions;
             }
 
             stripHtml(diff);
@@ -446,8 +451,9 @@
 
             var lockedByMe = !lock.isLocked(current_item);
 
-            // new take should be on the text item that are closed or last take but not killed.
+            // new take should be on the text item that are closed or last take but not killed and doesn't have embargo.
             action.new_take = !is_read_only_state && (current_item.type === 'text' || current_item.type === 'preformatted') &&
+                !current_item.embargo &&
                 (angular.isUndefined(current_item.takes) || current_item.takes.last_take === current_item._id) &&
                 (angular.isUndefined(current_item.more_coming) || !current_item.more_coming);
 
@@ -466,7 +472,7 @@
                 }
 
                 action.re_write = (_.contains(['published', 'corrected'], current_item.state) &&
-                    _.contains(['text', 'preformatted'], current_item.type) &&
+                    _.contains(['text', 'preformatted'], current_item.type) && !current_item.embargo &&
                     (angular.isUndefined(current_item.more_coming) || !current_item.more_coming));
 
             } else {
@@ -497,9 +503,10 @@
                 !is_read_only_state && current_item.package_type !== 'takes' &&
                  user_privileges.mark_for_highlights);
 
-            // allow all stories to be packaged
+            // allow all stories to be packaged if it doesn't have Embargo
             action.package_item = current_item.state !== 'spiked' && current_item.state !== 'scheduled' &&
-            current_item.package_type !== 'takes' && current_item.state !== 'killed';
+                !current_item.embargo && current_item.package_type !== 'takes' && current_item.state !== 'killed';
+
             action.multi_edit = _.contains(['text', 'preformatted'], item.type) && !is_read_only_state;
 
             //check for desk membership for edit rights.
@@ -687,6 +694,79 @@
         };
     }
 
+    ChangeImageController.$inject = ['$scope', 'gettext', 'notify', 'modal', '$q'];
+    function ChangeImageController($scope, gettext, notify, modal, $q) {
+        $scope.data = $scope.locals.data;
+        $scope.preview = {};
+        $scope.origPreview = {};
+        $scope.data.cropData = {};
+        $scope.data.isDirty = false;
+
+        $scope.$watch('preview', function(newValue, oldValue) {
+            if (newValue === oldValue) {
+                $scope.origPreview = $scope.preview;
+                return;
+            }
+
+            // During the initialisation of jcrop the preview object keeps changing and
+            // new keys are being added to it. We want to ignore those changes and only
+            // respond to those  that are actually caused by the changed crop coordinates.
+            if (Object.keys(newValue).length === Object.keys(oldValue).length) {
+                $scope.data.isDirty = true;
+                return;
+            }
+        }, true);
+
+        /*
+        * Gets the crop coordinates, which was set in preview object during the onChange
+        * event of jcrop
+        */
+        function getCropCoordinates(cropName) {
+            var coordinates = {};
+            var cropPoints  = $scope.preview[cropName];
+            coordinates.CropLeft = Math.round(Math.min(cropPoints.cords.x, cropPoints.cords.x2));
+            coordinates.CropRight = Math.round(Math.max(cropPoints.cords.x, cropPoints.cords.x2));
+            coordinates.CropTop = Math.round(Math.min(cropPoints.cords.y, cropPoints.cords.y2));
+            coordinates.CropBottom = Math.round(Math.max(cropPoints.cords.y, cropPoints.cords.y2));
+
+            return coordinates;
+        }
+
+        /*
+        * Serves for holding the crop coordinates
+        */
+        function recordCrops(cropName) {
+            var obj = {};
+            obj[cropName] = getCropCoordinates(cropName);
+            _.extend($scope.data.cropData, obj);
+        }
+
+        /*
+        * Records the coordinates for each crop sizes available and
+        * notify the user and then resolve the activity.
+        */
+        $scope.done = function() {
+            _.forEach($scope.data.cropsizes, function(cropsize) {
+                recordCrops(cropsize.name);
+            });
+            notify.success(gettext('Crop changes have been recorded'));
+            $scope.resolve($scope.data);
+        };
+
+        $scope.close = function() {
+            if ($scope.data.isDirty) {
+                modal.confirm(gettext('You have unsaved changes, do you want to continue?'))
+                .then(function() { // Ok = continue w/o saving
+                    $scope.data.isDirty = false;
+                    $scope.preview = $scope.origPreview;
+                    $scope.resolve($scope.data);
+                });
+            } else {
+                $scope.reject();
+            }
+        };
+    }
+
     AuthoringController.$inject = ['$scope', 'item', 'action', 'superdesk'];
     function AuthoringController($scope, item, action, superdesk) {
         $scope.origItem = item;
@@ -699,6 +779,7 @@
 
     AuthoringDirective.$inject = [
         'superdesk',
+        'authoringWorkspace',
         'notify',
         'gettext',
         'desks',
@@ -707,7 +788,7 @@
         'session',
         'lock',
         'privileges',
-        'ContentCtrl',
+        'content',
         '$location',
         'referrer',
         'macros',
@@ -716,10 +797,10 @@
         '$window',
         'modal'
     ];
-    function AuthoringDirective(superdesk, notify, gettext, desks, authoring, api, session, lock, privileges,
-                                ContentCtrl, $location, referrer, macros, $timeout, $q, $window, modal) {
+    function AuthoringDirective(superdesk, authoringWorkspace, notify, gettext, desks, authoring, api, session, lock,
+                                privileges, content, $location, referrer, macros, $timeout, $q, $window, modal) {
         return {
-            link: function($scope) {
+            link: function($scope, elem, attrs) {
                 var _closing;
 
                 $scope.privileges = privileges.privileges;
@@ -754,7 +835,12 @@
                             });
 
                             var compiled = _.template(body);
-                            var args = _.pick($scope.origItem, placeholders);
+                            var args = {};
+
+                            _.each(placeholders, function(placeholder) {
+                                args[placeholder] = (placeholder !== 'dateline') ? $scope.origItem[placeholder] :
+                                    $scope.origItem[placeholder].text.toUpperCase();
+                            });
                             $scope.origItem.body_html = compiled(args);
                         }
                         _.each(template, function(value, key) {
@@ -765,8 +851,6 @@
                             }
                         });
                     });
-                } else if ($scope.action === 'kill') {
-                    $scope.origItem.pubstatus = 'Corrected';
                 }
 
                 $scope.$watch('item.marked_for_not_publication', function(newValue, oldValue) {
@@ -797,6 +881,13 @@
                 $scope.openStage = function openStage() {
                     desks.setWorkspace($scope.item.task.desk, $scope.item.task.stage);
                     superdesk.intent('view', 'content');
+                };
+
+                /**
+                 * Start editing current item
+                 */
+                $scope.edit = function edit() {
+                    authoringWorkspace.edit($scope.origItem);
                 };
 
                 /**
@@ -840,43 +931,75 @@
 
                 function _exportHighlight(_id) {
                     api.generate_highlights.save({}, {'package': _id})
-                    .then(function(item) {
-                        superdesk.intent('author', 'article', item);
-                    }, function(response) {
+                    .then(authoringWorkspace.edit, function(response) {
                         notify.error(gettext('Error creating highlight.'));
                     });
                 }
 
-                function validatePublishSchedule(item) {
-                    if (_.contains(['published', 'killed', 'corrected'], item.state)) {
-                        return true;
+                /**
+                 * Invoked by validatePublishScheduleAndEmbargo() to validate the date and time values.
+                 *
+                 * @return {string} if the values are invalid then returns appropriate error message.
+                 *         Otherwise empty string.
+                 */
+                function validateTimestamp(datePartOfTS, timePartOfTS, timestamp, fieldName) {
+                    var errorMessage = '';
+
+                    if (datePartOfTS && !timePartOfTS) {
+                        errorMessage = gettext(fieldName + ' time is invalid!');
+                    } else if (timePartOfTS && !datePartOfTS) {
+                        errorMessage = gettext(fieldName + ' date is invalid!');
                     }
 
-                    if (item.publish_schedule_date && !item.publish_schedule_time) {
-                        notify.error(gettext('Publish Schedule time is invalid!'));
-                        return false;
-                    }
-
-                    if (item.publish_schedule_time && !item.publish_schedule_date) {
-                        notify.error(gettext('Publish Schedule date is invalid!'));
-                        return false;
-                    }
-
-                    if (item.publish_schedule) {
-                        var schedule = new Date(item.publish_schedule);
+                    if (errorMessage === '' && timestamp) {
+                        var schedule = new Date(timestamp);
 
                         if (!_.isDate(schedule)) {
-                            notify.error(gettext('Publish Schedule is not a valid date!'));
+                            errorMessage = gettext(fieldName + ' is not a valid date!');
+                        } else if (schedule < _.now()) {
+                            errorMessage = gettext(fieldName + ' cannot be earlier than now!');
+                        } else if (!schedule.getTime()) {
+                            errorMessage = gettext(fieldName + ' time is invalid!');
+                        }
+                    }
+
+                    return errorMessage;
+                }
+
+                /**
+                 * Validates the Embargo Date and Time and Publish Schedule Date and Time if they are set on the item.
+                 *
+                 * @return {boolean} true if valid, false otherwise.
+                 */
+                function validatePublishScheduleAndEmbargo(item) {
+                    if (item.embargo && item.publish_schedule) {
+                        notify.error(gettext('An Item can\'t have both Embargo and Publish Schedule.'));
+                        return false;
+                    }
+
+                    var errorMessage;
+                    if (item.embargo_date || item.embargo_time) {
+                        if (_.contains(['scheduled', 'killed', 'corrected'], item.state)) {
+                            notify.error(gettext('Embargo isn\'t applicable after publishing'));
                             return false;
                         }
 
-                        if (schedule < _.now()) {
-                            notify.error(gettext('Publish Schedule cannot be earlier than now!'));
+                        errorMessage = validateTimestamp(item.embargo_date, item.embargo_time, item.embargo, 'Embargo');
+                        if (errorMessage !== '') {
+                            notify.error(errorMessage);
                             return false;
                         }
+                    }
 
-                        if (!schedule.getTime()) {
-                            notify.error(gettext('Publish Schedule time is invalid!'));
+                    if (item.publish_schedule_date || item.publish_schedule_time) {
+                        if (_.contains(['published', 'killed', 'corrected'], item.state)) {
+                            return true;
+                        }
+
+                        errorMessage = validateTimestamp(item.publish_schedule_date, item.publish_schedule_time,
+                            item.publish_schedule, 'Publish Schedule');
+                        if (errorMessage !== '') {
+                            notify.error(errorMessage);
                             return false;
                         }
                     }
@@ -913,7 +1036,7 @@
                                 notify.success(gettext('Item published.'));
                                 $scope.item = response;
                                 $scope.dirty = false;
-                                $location.url($scope.referrerUrl);
+                                authoringWorkspace.close();
                             }
                         } else {
                             notify.error(gettext('Unknown Error: Item not published.'));
@@ -921,8 +1044,12 @@
                     });
                 }
 
+                /**
+                 * Depending on the item state one of the publish, correct, kill actions will be executed on the item
+                 * in $scope.
+                 */
                 $scope.publish = function() {
-                    if (validatePublishSchedule($scope.item)) {
+                    if (validatePublishScheduleAndEmbargo($scope.item)) {
                         if ($scope.dirty) { // save dialog & then publish if confirm
                             var message = $scope.action === 'kill' ? $scope.action : 'publish';
                             authoring.publishConfirmation($scope.origItem, $scope.item, $scope.dirty, message)
@@ -948,17 +1075,9 @@
                  * Close an item - unlock
                  */
                 $scope.close = function() {
-                    var referrerUrl;
                     _closing = true;
-
                     authoring.close($scope.item, $scope.origItem, $scope.save_enabled()).then(function () {
-                        if (sessionStorage.getItem('previewUrl')) {
-                            referrerUrl = sessionStorage.getItem('previewUrl');
-                            sessionStorage.removeItem('previewUrl');
-                        } else {
-                            referrerUrl = $scope.referrerUrl;
-                        }
-                        $location.url(referrerUrl);
+                        authoringWorkspace.close($scope.item);
                     });
                 };
 
@@ -1031,7 +1150,11 @@
                 };
 
                 $scope.openAction = function(action) {
-                    $location.path('/authoring/' + $scope.item._id + '/' + action);
+                    if (action === 'correct') {
+                        authoringWorkspace.correct($scope.item);
+                    } else if (action === 'kill') {
+                        authoringWorkspace.kill($scope.item);
+                    }
                 };
 
                 $scope.isLockedByMe = function() {
@@ -1054,7 +1177,7 @@
                 }
 
                 // init
-                $scope.content = new ContentCtrl($scope);
+                $scope.content = content;
                 $scope.closePreview();
                 $scope.$on('savework', function(e, msg) {
                     var changeMsg = msg;
@@ -1218,7 +1341,13 @@
                 cssClass: 'natural-theme large-text',
                 label: 'Natural Theme large',
                 key: 'natural-large'
+            },
+            {
+                cssClass: 'dark-theme-mono',
+                label: 'Dark Theme monospace',
+                key: 'dark-mono'
             }
+
         ];
 
         service.save = function(key, theme) {
@@ -1261,15 +1390,18 @@
                 };
 
                 function applyTheme() {
-                    elem.closest('.theme-container')
+                    elem.closest('.page-content-container')
+                        .children('.theme-container')
                         .attr('class', DEFAULT_CLASS)
                         .addClass(scope.theme && scope.theme.cssClass);
                 }
             }
         };
     }
-    SendItem.$inject = ['$q', 'api', 'desks', 'notify', '$location', 'macros', '$rootScope', 'authoring', 'send', 'spellcheck', 'confirm'];
-    function SendItem($q, api, desks, notify, $location, macros, $rootScope, authoring, send, spellcheck, confirm) {
+    SendItem.$inject = ['$q', 'api', 'desks', 'notify', 'authoringWorkspace',
+        '$location', 'macros', '$rootScope', 'authoring', 'send', 'spellcheck', 'confirm'];
+    function SendItem($q, api, desks, notify, authoringWorkspace,
+        $location, macros, $rootScope, authoring, send, spellcheck, confirm) {
         return {
             scope: {
                 item: '=',
@@ -1388,11 +1520,17 @@
                 /**
                  * Send the current item (take) to different desk or stage and create a new take.
                  * If publish_schedule is set then the user cannot schedule the take.
+                 * Fails if user has set Embargo on the item.
                  */
                 scope.sendAndContinue = function () {
                     // cannot schedule takes.
                     if (scope.item && scope.item.publish_schedule) {
                         notify.error(gettext('Takes cannot be scheduled.'));
+                        return;
+                    }
+
+                    if (scope.item && scope.item.embargo) {
+                        notify.error(gettext('Takes cannot have Embargo.'));
                         return;
                     }
 
@@ -1453,20 +1591,22 @@
                             if (result && result._etag) {
                                 scope.task._etag = result._etag;
                             }
-                            return api.save('tasks', scope.task, {
-                                task: _.extend(scope.task.task, {desk: deskId, stage: stageId})
-                            });
+                            return api.save('move', {}, {task: {desk: deskId, stage: stageId}}, scope.item);
                         })
                         .then(function(value) {
                             notify.success(gettext('Item sent.'));
                             if (sendAndContinue) {
                                 return deferred.resolve();
                             } else {
-                                $location.url(scope.$parent.referrerUrl);
+                                authoringWorkspace.close();
                             }
                         }, function(err) {
-                            if (err.data._issues['validator exception']) {
-                                notify.error(err.data._issues['validator exception']);
+                            if (angular.isDefined(err.data._message)) {
+                                notify.error(err.data._message);
+                            } else {
+                                if (angular.isDefined(err.data._issues['validator exception'])) {
+                                    notify.error(err.data._issues['validator exception']);
+                                }
                             }
 
                             if (sendAndContinue) {
@@ -1568,76 +1708,16 @@
         };
     }
 
-    ContentCreateDirective.$inject = ['api', 'desks', 'templates', 'ContentCtrl'];
-    function ContentCreateDirective(api, desks, templates, ContentCtrl) {
-        var NUM_ITEMS = 5;
-
-        return {
-            templateUrl: 'scripts/superdesk-authoring/views/sd-content-create.html',
-            link: function(scope) {
-                scope.contentTemplates = null;
-                scope.content = new ContentCtrl(scope);
-
-                scope.$watch(function() {
-                    return desks.activeDeskId;
-                }, function() {
-                    templates.getRecentTemplates(desks.activeDeskId, NUM_ITEMS)
-                    .then(function(result) {
-                        scope.contentTemplates = result;
-                    });
-                });
-            }
-        };
-    }
-
-    TemplateSelectDirective.$inject = ['api', 'desks', 'templates'];
-    function TemplateSelectDirective(api, desks, templates) {
-        var PAGE_SIZE = 10;
-
-        return {
-            templateUrl: 'scripts/superdesk-authoring/views/sd-template-select.html',
-            scope: {
-                selectAction: '=',
-                open: '='
-            },
-            link: function(scope) {
-                scope.maxPage = 1;
-                scope.options = {
-                    keyword: null,
-                    page: 1
-                };
-                scope.templates = null;
-
-                scope.close = function() {
-                    scope.open = false;
-                };
-
-                scope.select = function(template) {
-                    scope.selectAction(template);
-                };
-
-                var fetchTemplates = function() {
-                    templates.fetchTemplates(scope.options.page, PAGE_SIZE, 'create', desks.activeDeskId, scope.options.keyword)
-                    .then(function(result) {
-                        scope.maxPage = Math.ceil(result._meta.total / PAGE_SIZE);
-                        scope.templates = result;
-                    });
-                };
-
-                scope.$watchCollection('options', fetchTemplates);
-                scope.$watch(function() {
-                    return desks.activeDeskId;
-                }, fetchTemplates);
-            }
-        };
-    }
-
-    ArticleEditDirective.$inject = ['autosave', 'authoring', 'metadata', 'session', '$filter', '$timeout'];
-    function ArticleEditDirective(autosave, authoring, metadata, session, $filter, $timeout) {
+    ArticleEditDirective.$inject = ['autosave', 'authoring', 'metadata', 'session', '$filter', '$timeout',
+    'superdesk', 'notify', 'gettext'];
+    function ArticleEditDirective(autosave, authoring, metadata, session, $filter, $timeout, superdesk, notify, gettext) {
         return {
             templateUrl: 'scripts/superdesk-authoring/views/article-edit.html',
             link: function(scope) {
+                var DEFAULT_ASPECT_RATIO = 4 / 3;
                 scope.limits = authoring.limits;
+                scope.toggleDetails = true;
+                scope.errorMessage = null;
 
                 scope.$watch('item', function(item) {
                     if (angular.isDefined(item)) {
@@ -1668,11 +1748,48 @@
                             scope.origItem.dateline.source, scope.origItem.dateline.date);
                     }
                 };
+
+                /**
+                 * Function to evaluate aspect ratio attribute in advance to provide in
+                 * proper decimal format required by jCrop.
+                 */
+                scope.evalAspectRatio = function(ar) {
+                    var parts = ar.split('-').map(_.partial(parseInt, _, 10));
+                    var result = parts[0] / parts[1];
+
+                    if (isNaN(result) || !isFinite(result)) {
+                        scope.errorMessage = 'Error: Given Aspect ratio was not valid, using default: ' + DEFAULT_ASPECT_RATIO;
+                        return DEFAULT_ASPECT_RATIO;
+                    } else {
+                        scope.errorMessage = null;
+                        return result;
+                    }
+                };
+
+                scope.applyCrop = function() {
+                    var ar = {};
+                    scope.item.cropsizes = scope.metadata.crop_sizes;
+                    _.forEach(scope.item.cropsizes, function(cropsizes) {
+                        ar = {aspectRatio: scope.evalAspectRatio(cropsizes.name)};
+                        _.extend(_.filter(scope.item.cropsizes, {name: cropsizes.name})[0], ar);
+                    });
+
+                    superdesk.intent('edit', 'crop',  scope.item).then(function(data) {
+                        if (!scope.$parent.dirty) {
+                            scope.$parent.dirty = data.isDirty;
+                        }
+                        var orig = _.create(data.renditions);
+                        var diff = data.cropData;
+                        scope.item.renditions = _.merge(orig, diff);
+                    });
+                };
+
             }
         };
     }
 
     angular.module('superdesk.authoring', [
+            'superdesk.menu',
             'superdesk.editor',
             'superdesk.activity',
             'superdesk.authoring.widgets',
@@ -1693,14 +1810,13 @@
         .service('confirm', ConfirmDirtyService)
         .service('lock', LockService)
         .service('authThemes', AuthoringThemesService)
+        .service('authoringWorkspace', AuthoringWorkspaceService)
 
         .directive('sdDashboardCard', DashboardCard)
         .directive('sdSendItem', SendItem)
         .directive('sdCharacterCount', CharacterCount)
         .directive('sdWordCount', WordCount)
         .directive('sdThemeSelect', ThemeSelectDirective)
-        .directive('sdContentCreate', ContentCreateDirective)
-        .directive('sdTemplateSelect', TemplateSelectDirective)
         .directive('sdArticleEdit', ArticleEditDirective)
         .directive('sdAuthoring', AuthoringDirective)
         .directive('sdAuthoringTopbar', AuthoringTopbarDirective)
@@ -1718,7 +1834,7 @@
                     label: gettext('Authoring'),
                     templateUrl: 'scripts/superdesk-authoring/views/authoring.html',
                     topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
-                    sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
+                    sideTemplateUrl: 'scripts/superdesk-workspace/views/workspace-sidenav.html',
                     controller: AuthoringController,
                     filters: [{action: 'author', type: 'article'}],
                     resolve: {
@@ -1729,16 +1845,18 @@
                     },
                     authoring: true
                 })
-                .activity('edit.text', {
+                .activity('edit.item', {
                     label: gettext('Edit item'),
-                    href: '/authoring/:_id',
                     priority: 10,
                     icon: 'pencil',
-                    controller: ['data', 'superdesk', function(data, superdesk) {
-                        superdesk.intent('author', 'article', data.item);
+                    controller: ['data', 'authoringWorkspace', function(data, authoringWorkspace) {
+                        authoringWorkspace.edit(data.item ? data.item : data);
                     }],
-                    filters: [{action: 'list', type: 'archive'}],
-                    additionalCondition:['authoring', 'item', function(authoring, item) {
+                    filters: [
+                        {action: 'list', type: 'archive'},
+                        {action: 'edit', type: 'item'}
+                    ],
+                    additionalCondition: ['authoring', 'item', function(authoring, item) {
                         return authoring.itemActions(item).edit;
                     }]
                 })
@@ -1747,8 +1865,8 @@
                     priority: 100,
                     icon: 'remove',
                     group: 'corrections',
-                    controller: ['data', 'superdesk', function(data, superdesk) {
-                        superdesk.intent('kill', 'content_article', data.item);
+                    controller: ['data', 'authoringWorkspace', function(data, authoringWorkspace) {
+                        authoringWorkspace.kill(data.item);
                     }],
                     filters: [{action: 'list', type: 'archive'}],
                     additionalCondition:['authoring', 'item', function(authoring, item) {
@@ -1756,31 +1874,13 @@
                     }],
                     privileges: {kill: 1}
                 })
-                .activity('kill.content_article', {
-                    category: '/authoring',
-                    href: '/authoring/:_id/kill',
-                    when: '/authoring/:_id/kill',
-                    label: gettext('Authoring Kill'),
-                    templateUrl: 'scripts/superdesk-authoring/views/authoring.html',
-                    topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
-                    sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
-                    controller: AuthoringController,
-                    filters: [{action: 'kill', type: 'content_article'}],
-                    resolve: {
-                        item: ['$route', 'authoring', function($route, authoring) {
-                            return authoring.open($route.current.params._id, false);
-                        }],
-                        action: [function() {return 'kill';}]
-                    },
-                    authoring: true
-                })
                 .activity('correct.text', {
                     label: gettext('Correct item'),
                     priority: 100,
                     icon: 'pencil',
                     group: 'corrections',
-                    controller: ['data', 'superdesk', function(data, superdesk) {
-                        superdesk.intent('correct', 'content_article', data.item);
+                    controller: ['data', 'authoringWorkspace', function(data, authoringWorkspace) {
+                        authoringWorkspace.correct(data.item);
                     }],
                     filters: [{action: 'list', type: 'archive'}],
                     additionalCondition:['authoring', 'item', function(authoring, item) {
@@ -1788,53 +1888,26 @@
                     }],
                     privileges: {correct: 1}
                 })
-                .activity('correct.content_article', {
-                    category: '/authoring',
-                    href: '/authoring/:_id/correct',
-                    when: '/authoring/:_id/correct',
-                    label: gettext('Authoring Correct'),
-                    templateUrl: 'scripts/superdesk-authoring/views/authoring.html',
-                    topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
-                    sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
-                    controller: AuthoringController,
-                    filters: [{action: 'correct', type: 'content_article'}],
-                    resolve: {
-                        item: ['$route', 'authoring', function($route, authoring) {
-                            return authoring.open($route.current.params._id, false);
-                        }],
-                        action: [function() {return 'correct';}]
-                    },
-                    authoring: true
-                })
-                .activity('view.text', {
+                .activity('view.item', {
                     label: gettext('View item'),
                     priority: 2000,
                     icon: 'fullscreen',
-                    controller: ['data', 'superdesk', function(data, superdesk) {
-                        superdesk.intent('read_only', 'content_article', data.item);
+                    controller: ['data', 'authoringWorkspace', function(data, authoringWorkspace) {
+                        authoringWorkspace.view(data.item);
                     }],
-                    filters: [{action: 'list', type: 'archive'}, {action: 'list', type: 'legal_archive'}],
-                    condition: function(item) {
-                        return item.type !== 'composite';
-                    }
+                    filters: [
+                        {action: 'list', type: 'archive'},
+                        {action: 'list', type: 'legal_archive'},
+                        {action: 'view', type: 'item'}
+                    ]
                 })
-                .activity('read_only.content_article', {
-                    category: '/authoring',
-                    href: '/authoring/:_id/view/:_type',
-                    when: '/authoring/:_id/view/:_type',
-                    label: gettext('Authoring Read Only'),
-                    templateUrl: 'scripts/superdesk-authoring/views/authoring.html',
-                    topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
-                    sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
-                    controller: AuthoringController,
-                    filters: [{action: 'read_only', type: 'content_article'}],
-                    resolve: {
-                        item: ['$route', 'authoring', function($route, authoring) {
-                            return authoring.open($route.current.params._id, true, $route.current.params._type);
-                        }],
-                        action: [function() {return 'view';}]
-                    },
-                    authoring: true
+                .activity('edit.crop', {
+                    label: gettext('EDIT CROP'),
+                    modal: true,
+                    cssClass: 'upload-avatar modal-static modal-responsive',
+                    controller: ChangeImageController,
+                    templateUrl: 'scripts/superdesk-authoring/views/change-image.html',
+                    filters: [{action: 'edit', type: 'crop'}]
                 });
         }])
         .config(['apiProvider', function(apiProvider) {
@@ -1846,16 +1919,24 @@
             });
         }]);
 
-    function AuthoringContainerDirective() {
+    AuthoringContainerDirective.$inject = ['authoring', 'authoringWorkspace'];
+    function AuthoringContainerDirective(authoring, authoringWorkspace) {
+
         function AuthoringContainerController() {
+            var self = this;
+
             this.state = {};
 
-            this.edit = function(item, lock) {
-                this.item = item || null;
-                this.state.opened = !!this.item;
-                if (this.item && lock) {
-                    this.item.lockIt = true;
-                }
+            /**
+             * Start editing item using given action mode
+             *
+             * @param {string} item
+             * @param {string} action
+             */
+            this.edit = function(item, action) {
+                self.item = item;
+                self.action = action;
+                self.state.opened = !!item;
             };
         }
 
@@ -1863,38 +1944,30 @@
             controller: AuthoringContainerController,
             controllerAs: 'authoring',
             templateUrl: 'scripts/superdesk-authoring/views/authoring-container.html',
-            transclude: true
-        };
-    }
-
-    AuthoringEmbeddedDirective.$inject = ['authoring'];
-    function AuthoringEmbeddedDirective(authoring) {
-        return {
-            templateUrl: 'scripts/superdesk-authoring/views/authoring.html',
-            require: '^sdAuthoringContainer',
-            scope: {
-                listItem: '=item'
-            },
-            link: function(scope, elem, attrs, authoringCtrl) {
-                scope.$watch('listItem', function(item) {
-                    if (item && item.lockIt){
-                        scope.lock();
-                    } else {
-                        scope.origItem = null;
+            scope: {},
+            require: 'sdAuthoringContainer',
+            link: function(scope, elem, attrs, ctrl) {
+                scope.$watch(authoringWorkspace.getState, function(state) {
+                    if (state) {
+                        ctrl.edit(null, null);
+                        // do this in next digest cycle so that it can
+                        // destroy authoring/packaging-embedded in current cycle
                         scope.$applyAsync(function() {
-                            scope.origItem = item;
-                            scope.action = 'view';
+                            ctrl.edit(state.item, state.action);
                         });
                     }
                 });
+            }
+        };
+    }
 
-                scope.lock = function() {
-                    scope.origItem = null;
-                    authoring.open(scope.listItem._id).then(function(item) {
-                        scope.origItem = item;
-                        scope.action = 'edit';
-                    });
-                };
+    AuthoringEmbeddedDirective.$inject = [];
+    function AuthoringEmbeddedDirective() {
+        return {
+            templateUrl: 'scripts/superdesk-authoring/views/authoring.html',
+            scope: {
+                origItem: '=item',
+                action: '='
             }
         };
     }
@@ -1950,4 +2023,123 @@
         };
     }
 
+    AuthoringWorkspaceService.$inject = ['$location', 'superdeskFlags', 'authoring'];
+    function AuthoringWorkspaceService($location, superdeskFlags, authoring) {
+        this.item = null;
+        this.action = null;
+        this.state = null;
+
+        var self = this;
+
+        /**
+         * Open item for editing
+         *
+         * @param {Object} item
+         * @param {string} action
+         */
+        this.edit = function(item, action) {
+            if (item) {
+                authoringOpen(item._id, action || 'edit');
+            } else {
+                self.close();
+            }
+        };
+
+        /**
+         * Open an item in readonly mode without locking it
+         *
+         * @param {Object} item
+         */
+        this.view = function(item) {
+            self.edit(item, 'view');
+        };
+
+        /**
+         * Stop editing
+         */
+        this.close = function() {
+            self.item = null;
+            self.action = null;
+            saveState();
+        };
+
+        /**
+         * Kill an item
+         *
+         * @param {Object} item
+         */
+        this.kill = function(item) {
+            self.edit(item, 'kill');
+        };
+
+        /**
+         * Correct an item
+         *
+         * @param {Object} item
+         */
+        this.correct = function(item) {
+            self.edit(item, 'correct');
+        };
+
+        /**
+         * Get edited item
+         *
+         * return {Object}
+         */
+        this.getItem = function() {
+            return self.item;
+        };
+
+        /**
+         * Get current action
+         *
+         * @return {string}
+         */
+        this.getAction = function() {
+            return self.action;
+        };
+
+        /**
+         * Get current state
+         *
+         * @return {Object}
+         */
+        this.getState = function() {
+            return self.state;
+        };
+
+        /**
+         * Save current item/action state into $location so that it can be
+         * used on page reload
+         */
+        function saveState() {
+            $location.search('item', self.item ? self.item._id : null);
+            $location.search('action', self.action);
+            superdeskFlags.flags.authoring = !!self.item;
+            self.state = {item: self.item, action: self.action};
+        }
+
+        /**
+         * On load try to fetch item set in url
+         */
+        function init() {
+            if ($location.search().item && $location.search().action in self) {
+                authoringOpen($location.search().item, $location.search().action);
+            }
+        }
+
+        /**
+         * Fetch item by id and start editing it
+         */
+        function authoringOpen(itemId, action) {
+            return authoring.open(itemId, action === 'view')
+                .then(function(item) {
+                    self.item = item;
+                    self.action = action;
+                })
+                .then(saveState);
+        }
+
+        init();
+    }
 })();

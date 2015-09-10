@@ -1,5 +1,5 @@
 <div id="subnav" class="subnav" ng-class="{'auth-sendto': views.send}">
-    <div class="authoring-topbar clearfix pull-left">
+    <div class="authoring-topbar clearfix pull-left" ng-class="{'has-highlights': item.highlights}">
         <button class="stage" ng-show="stage" ng-click="openStage()"><b>{{deskName}}</b> / {{ stage.name }}</button>
         <div ng-if="item.more_coming === true" class="state-label state-in_progress" translate>More coming</div>
         <span class="lock-info" ng-show="item._locked && item.lock_user"><i class="icon-lock-red"></i></span>
@@ -13,7 +13,7 @@
 
         <button id="Edit" class="btn btn-medium pull-left" ng-if="item._type !== 'legal_archive'"
             ng-show="action === 'view' && !item._locked && itemActions.edit"
-            ng-click="lock()"
+            ng-click="edit()"
             translate>Edit</button>
 
         <button class="btn btn-medium pull-left"
@@ -24,14 +24,14 @@
         <button class="btn btn-medium btn-info pull-left" ng-if="item._type !== 'legal_archive'"
             ng-show="action === 'view' && !item._locked && itemActions.correct"
             ng-click="openAction('correct')"
-            translate>Correct</button>
+            translate>Edit and Correct</button>
 
         <button class="btn btn-medium btn-info pull-left" ng-if="item._type !== 'legal_archive'"
             ng-show="action === 'view' && !item._locked && itemActions.kill"
             ng-click="openAction('kill')"
-            translate>Kill</button>
+            translate>Edit and Kill</button>
 
-        <button class="btn btn-medium pull-left" ng-click="close()" translate>Close</button>
+        <button class="btn btn-medium pull-left" ng-click="close()" translate>CLOSE</button>
 
         <button class="btn btn-medium btn-info pull-left" type="submit"
             ng-click="save(item)"
@@ -50,7 +50,7 @@
             ng-click="publish()"
             ng-if = "action !== 'view' && (itemActions.publish || itemActions.kill || itemActions.correct)"
             ng-show="_editable"
-            translate>{{action === "edit" ? "Publish": action}}</button>
+            translate>{{action === "edit" ? "PUBLISH": action}}</button>
 
         <div ng-if="item._type !== 'legal_archive'" class="navbtn dropdown strict pull-left" title="{{ :: 'Create' | translate }}" dropdown>
             <button class="dropdown-toggle sd-create-btn" dropdown-toggle></button>
@@ -64,7 +64,7 @@
             <div class="dropdown-menu pull-right" sd-multiedit-dropdown></div>
         </div>
 
-        <div ng-if="item._type !== 'legal_archive'" class="navbtn dropdown pull-left" dropdown>
+        <div id="authoring-extra-dropdown" ng-if="item._type !== 'legal_archive'" class="navbtn dropdown pull-left" dropdown>
             <button class="dropdown-toggle" dropdown-toggle>
                 <i class="icon-dots-vertical"></i>
             </button>
@@ -118,11 +118,10 @@
             </div>
         </div>
 
-        <button id="send-to-btn" ng-show="_editable && isActionAllowed(item, 'move') && itemActions.send"
+        <button id="send-to-btn" ng-show="_editable && $root.isActionAllowed(item, 'move') && itemActions.send"
             class="navbtn navbtn-hover" title="{{ :: 'Send to desk' | translate }}"
             ng-click="views.send = !views.send">
             <i class="svg-icon-sendto"></i>
         </button>
-
     </div>
 </div>

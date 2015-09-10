@@ -20,12 +20,13 @@ from apps.legal_archive import LEGAL_ARCHIVE_NAME, LEGAL_ARCHIVE_VERSIONS_NAME, 
 from apps.packages.package_service import PackageService
 import superdesk
 from apps.packages import TakesPackageService
-from apps.users.services import get_display_name
+from superdesk.users.services import get_display_name
 from superdesk.notification import push_notification
 from superdesk.resource import Resource
 from superdesk.services import BaseService
-from superdesk.metadata.item import not_analyzed, ITEM_STATE, CONTENT_STATE, ITEM_TYPE, CONTENT_TYPE
-from apps.archive.common import aggregations, handle_existing_data, item_schema
+from superdesk.metadata.item import not_analyzed, ITEM_STATE, CONTENT_STATE, ITEM_TYPE, CONTENT_TYPE, EMBARGO
+from apps.archive.common import handle_existing_data, item_schema
+from superdesk.metadata.utils import aggregations
 from apps.archive.archive import SOURCE as ARCHIVE
 from superdesk.utc import utcnow, get_expiry_date
 from superdesk import get_resource_service
@@ -282,7 +283,8 @@ class PublishedItemService(BaseService):
             desk = get_resource_service('desks').find_one(req=None, _id=desk_id)
 
         expiry_minutes = desk.get('published_item_expiry', config.PUBLISHED_ITEMS_EXPIRY_MINUTES)
-        doc['expiry'] = get_expiry_date(expiry_minutes)
+        doc['expiry'] = get_expiry_date(expiry_minutes, offset=doc[EMBARGO]) if doc.get(EMBARGO) else \
+            get_expiry_date(expiry_minutes)
 
     def remove_expired(self, doc):
         """

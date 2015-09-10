@@ -11,7 +11,7 @@ describe('authoring', function() {
         workspace.open();
         workspace.editItem('item4', 'SPORTS');
         element(by.css('button.stage')).click();
-        expect(browser.getCurrentUrl()).toMatch(/workspace\/content$/);
+        expect(browser.getCurrentUrl()).toMatch(/workspace\/content/);
     });
 
     it('Can Undo content', function() {
@@ -46,6 +46,7 @@ describe('authoring', function() {
 
     it('view item history create-fetch operation', function() {
         workspace.open();
+        workspace.switchToDesk('SPORTS DESK');
         workspace.editItem('item6', 'Politic');
 
         authoring.showHistory();
@@ -66,6 +67,7 @@ describe('authoring', function() {
         expect(authoring.getHistoryItem(1).getText()).toMatch(/Updated by.*/);
         authoring.close();
 
+        workspace.switchToDesk('SPORTS DESK');
         workspace.editItem('item5', 'Politic');
         authoring.showHistory();
         expect(authoring.getHistoryItems().count()).toBe(1);
@@ -74,8 +76,9 @@ describe('authoring', function() {
 
     it('view item history spike-unspike operations', function() {
         workspace.open();
+        workspace.switchToDesk('SPORTS DESK');
         workspace.actionOnItem('Spike', 'item5', 'Politic');
-        workspace.actionOnItem('Unspike Item', 0, 'Politic', 'Spiked');
+        workspace.actionOnItem('Unspike Item', 'item5', 'Politic', 'Spiked');
         workspace.editItem('item5', 'Politic');
 
         authoring.showHistory();
@@ -86,6 +89,7 @@ describe('authoring', function() {
 
     it('view item history move operation', function() {
         workspace.open();
+        workspace.switchToDesk('SPORTS DESK');
         workspace.editItem('item5', 'Politic');
         expect(authoring.sendToButton.isDisplayed()).toBe(false);
         authoring.writeText(' ');
@@ -103,36 +107,40 @@ describe('authoring', function() {
 
     it('view item history duplicate operation', function() {
         workspace.open();
-        workspace.duplicateItem('item5', 'Politic Desk', 'two');
-        workspace.selectStage('two');
-        workspace.editItem('item5', 'Politic');
+        workspace.switchToDesk('SPORTS DESK');
+        workspace.duplicateItem('item5', 'Politic Desk');
+        workspace.switchToDesk('SPORTS DESK');
+        workspace.switchToDesk('POLITIC DESK');
+        workspace.selectStage('New');
+        workspace.editItem('item5', 'Politic Desk');
         authoring.showHistory();
-        expect(authoring.getHistoryItems().count()).toBe(3);
+        expect(authoring.getHistoryItems().count()).toBe(2);
         expect(authoring.getHistoryItem(1).getText()).toMatch(/Copied to \d+ \(Politic Desk\/New\) by .*/);
-        expect(authoring.getHistoryItem(2).getText()).toMatch(/Moved to Politic Desk\/two by .*/);
     });
 
     it('view item history publish operation', function() {
         workspace.open();
+        workspace.switchToDesk('SPORTS DESK');
         workspace.editItem('item5', 'Politic');
         authoring.writeText('some text');
         authoring.save();
         authoring.publish();
-        browser.sleep(500);
         workspace.selectStage('Published');
         workspace.filterItems('composite');
         content.actionOnItem('View item', 0);
         authoring.showHistory();
-        browser.sleep(500);
         expect(authoring.getHistoryItems().count()).toBe(2);
-        expect(authoring.getHistoryItem(1).getText()).toMatch(/Published by.*/);
+        var publishItem = authoring.getHistoryItem(1);
+        expect(publishItem.getText()).toMatch(/Published by.*/);
+        var queuedSwitch = authoring.getQueuedItemsSwitch(publishItem);
+        expect(queuedSwitch.isDisplayed()).toBe(true);
+        queuedSwitch.click();
+        expect(authoring.getQueuedItems().count()).toBe(1);
     });
 
     it('allows to create a new empty package', function () {
         monitoring.openMonitoring();
-        browser.sleep(500);
         monitoring.createItemAction('create_package');
-        expect(authoring.findItemTypeIcons('composite').count()).toBeGreaterThan(0);
+        expect(element(by.className('packaging-screen')).isDisplayed()).toBe(true);
     });
-
 });

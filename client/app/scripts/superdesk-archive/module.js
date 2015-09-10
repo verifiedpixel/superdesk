@@ -84,15 +84,13 @@ define([
                     if ($location.search()._id === item._id) {
                         $location.search('_id', null);
                     }
+                    return item;
                 }, function(response) {
                     item.error = response;
                     if (angular.isDefined(response.data._issues) &&
                         angular.isDefined(response.data._issues['validator exception'])) {
                         notify.error(gettext(response.data._issues['validator exception']));
                     }
-                })
-                ['finally'](function() {
-                    item.actioning.spike = false;
                 });
         };
 
@@ -116,11 +114,9 @@ define([
                     if ($location.search()._id === item._id) {
                         $location.search('_id', null);
                     }
+                    return item;
                 }, function(response) {
                     item.error = response;
-                })
-                ['finally'](function() {
-                    item.actioning.unspike = false;
                 });
         };
 
@@ -233,7 +229,7 @@ define([
                         }
                     });
             } else {
-                return api.archive.getByUrl(item._links.self.href + '?version=all&embedded={"user":1}')
+                return api.find('archive', item._id, {version: 'all', embedded: {user: 1}})
                     .then(function(result) {
                         _.each(result._items, function(version) {
                             if (version.task) {
@@ -304,7 +300,7 @@ define([
                     controller: require('./controllers/list'),
                     templateUrl: require.toUrl('./views/list.html'),
                     topTemplateUrl: require.toUrl('../superdesk-dashboard/views/workspace-topnav.html'),
-                    sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
+                    sideTemplateUrl: 'scripts/superdesk-workspace/views/workspace-sidenav.html',
                     filters: [
                         {action: 'view', type: 'content'}
                     ],
@@ -359,8 +355,11 @@ define([
                 .activity('duplicate', {
                     label: gettext('Duplicate'),
                     icon: 'copy',
-                    controller: ['$location', 'data', function($location, data) {
-                        $location.search('fetch', data.item._id);
+                    controller: ['api', 'notify', '$rootScope', 'data', function(api, notify, $rootScope, data) {
+                        api.save('duplicate', {}, {desk: data.item.task.desk}, data.item)
+                            .then(function() {
+                                notify.success(gettext('Item Duplicated'));
+                            });
                     }],
                     filters: [{action: 'list', type: 'archive'}],
                     privileges: {duplicate: 1},
@@ -422,7 +421,7 @@ define([
                         }]
                 })
                 .activity('rewrite', {
-                    label: gettext('Re-write'),
+                    label: gettext('Update'),
                     icon: 'multi-star-color',
                     filters: [{action: 'list', type: 'archive'}],
                     group: 'corrections',
@@ -440,13 +439,13 @@ define([
                                     return api.save('archive_rewrite', {}, {}, data.item);
                                 })
                                 .then(function(new_item) {
-                                    notify.success(gettext('Rewrite Created.'));
+                                    notify.success(gettext('Update Created.'));
                                     superdesk.intent('author', 'article', new_item._id);
                                 }, function(response) {
                                     if (angular.isDefined(response.data._message)) {
-                                        notify.error(gettext('Failed to generate rewrite: ' + response.data._message));
+                                        notify.error(gettext('Failed to generate update: ' + response.data._message));
                                     } else {
-                                        notify.error(gettext('There is an error. Failed to generate rewrite.'));
+                                        notify.error(gettext('There is an error. Failed to generate update.'));
                                     }
                                 });
                         }]

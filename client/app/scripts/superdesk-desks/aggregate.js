@@ -11,17 +11,15 @@
  (function() {
     'use strict';
 
-    AggregateCtrl.$inject = ['$scope', 'api', 'session', 'desks', 'preferencesService', 'storage', 'gettext'];
-    function AggregateCtrl($scope, api, session, desks, preferencesService, storage, gettext) {
+    AggregateCtrl.$inject = ['$scope', 'api', 'session', 'desks', 'workspaces', 'preferencesService', 'storage', 'gettext'];
+    function AggregateCtrl($scope, api, session, desks, workspaces, preferencesService, storage, gettext) {
         var PREFERENCES_KEY = 'agg:view';
         var defaultMaxItems = 10;
         var self = this;
         this.loading = true;
         this.selected = null;
         this.groups = [];
-        this.spikeGroups = null;
-        this.allStages = null;
-        this.allDesks = null;
+        this.spikeGroups = [];
         this.modalActive = false;
         this.searchLookup = {};
         this.deskLookup = {};
@@ -29,6 +27,7 @@
         this.fileTypes = ['all', 'text', 'picture', 'composite', 'video', 'audio'];
         this.selectedFileType = [];
         this.monitoringSearch = false;
+        this.user = session.identity;
 
         desks.initialize()
         .then(angular.bind(this, function() {
@@ -45,7 +44,7 @@
                 }));
         }))
         .then(angular.bind(this, function() {
-            return api.query('saved_searches', {}, session.identity)
+            return api.query('all_saved_searches', {})
                .then(angular.bind(this, function(searchesList) {
                    this.searches = searchesList._items;
                    _.each(this.searches, function(item) {
@@ -54,20 +53,115 @@
                }));
         }))
         .then(angular.bind(this, function() {
-            return preferencesService.get(PREFERENCES_KEY)
-                .then(angular.bind(this, function(preference) {
-                    this.groups = preference != null && preference.groups ? preference.groups : [];
-                    this.loading = false;
+            return this.readSettings()
+                .then(angular.bind(this, function(groups) {
+                    initGroups(groups);
                     setupCards();
+                    this.loading = false;
                 }));
         }));
 
         /**
+         * Read the setting for current selected workspace(desk or custom workspace)
+         * If the current selected workspace is a desk the settings are read from desk
+         * If the current selected workspace is a custom workspace the settings are read from
+         * user preferences
+         * @returns {Object} promise - when resolved return the list of settings
+         */
+        this.readSettings = function() {
+            return workspaces.getActiveId()
+                .then(angular.bind(this, function(activeWorkspaceId) {
+                    if (activeWorkspaceId) {
+                        return preferencesService.get(PREFERENCES_KEY)
+                            .then(angular.bind(this, function(preference) {
+                                if (preference && preference[activeWorkspaceId] && preference[activeWorkspaceId].groups) {
+                                    return preference[activeWorkspaceId].groups;
+                                }
+                            }));
+                    } else {
+                        var desk = this.deskLookup[desks.getCurrentDeskId()];
+                        if (desk && desk.monitoring_settings) {
+                            return desk.monitoring_settings;
+                        }
+                    }
+                    return [];
+                }));
+        };
+
+        /**
+         * Init groups by filter out from groups stages or saved searches that
+         * are not available(deleted or no right on them for stages only) and return all
+         * stages for current desk if monitoring setting is not set
+         **/
+        function initGroups(groups) {
+            if (self.groups.length > 0) {
+                self.groups.length = 0;
+            }
+            if (!groups || groups.length === 0) {
+                _.each(self.stageLookup, function(item) {
+                    if (item.desk === desks.getCurrentDeskId()) {
+                        self.groups.push({_id: item._id, type: 'stage', header: item.name});
+                    }
+                });
+            } else {
+                _.each(groups, function(item) {
+                    if (item.type === 'stage' && !self.stageLookup[item._id]) {
+                        return;
+                    }
+                    if (item.type === 'search' && !self.searchLookup[item._id]) {
+                        return;
+                    }
+                    self.groups.push(item);
+                });
+            }
+            initSpikeGroups();
+        }
+
+        /**
+         * Init the spike desks based on already initialized groups
+         */
+        function initSpikeGroups() {
+            var spikeDesks = {};
+            if (self.spikeGroups.length > 0) {
+                self.spikeGroups.length = 0;
+            }
+            if (self.groups.length === 0) {
+                return;
+            }
+            _.each(self.groups, function(item, index) {
+                if (item.type === 'stage') {
+                    var stage = self.stageLookup[item._id];
+                    spikeDesks[stage.desk] = self.deskLookup[stage.desk];
+                }
+            });
+            _.each(spikeDesks, function(item) {
+                self.spikeGroups.push({_id: item._id, type: 'spike', header: item.name});
+            });
+        }
+
+        /**
          * Refresh view after setup
          */
-        this.refresh = function() {
-            setupCards();
-        };
+        function refresh() {
+            if (self.loading) {
+                return null;
+            }
+            return self.readSettings()
+                .then(function(groups) {
+                    initGroups(groups);
+                    setupCards();
+                });
+        }
+
+        this.refreshGroups = refresh;
+
+        /**
+         * Read the settings when the current workspace
+         * selection is changed
+         */
+        $scope.$watch(function() {
+            return workspaces.active;
+        }, refresh);
 
         /**
          * Return true if the 'fileType' filter is selected
@@ -110,25 +204,16 @@
             _.each(this.groups, function(item) {
                 item.fileType = value;
             });
-            if (this.allStages) {
-                _.each(this.allStages, function(item) {
-                    item.fileType = value;
-                });
-            }
-            if (this.spikeGroups) {
-                _.each(this.spikeGroups, function(item) {
-                    item.fileType = value;
-                });
-            }
-            if (this.allDesks) {
-                _.each(this.allDesks, function(item) {
-                    item.fileType = value;
-                });
-            }
+            _.each(this.spikeGroups, function(item) {
+                item.fileType = value;
+            });
         };
 
+        /**
+         * Add card metadata into current groups
+         */
         function setupCards() {
-            var cards = self.getGroups();
+            var cards = self.groups;
             angular.forEach(cards, setupCard);
             self.cards = cards;
 
@@ -137,8 +222,8 @@
              */
             function setupCard(card) {
                 if (card.type === 'stage') {
-                    var stage = self.stageLookup[card._id],
-                        desk = self.deskLookup[stage.desk];
+                    var stage = self.stageLookup[card._id];
+                    var desk = self.deskLookup[stage.desk];
                     card.header = desk.name;
                     card.subheader = stage.name;
                 }
@@ -158,6 +243,9 @@
             this.selected = item;
         };
 
+        /**
+         * For edit monitoring settings add desk groups to the list
+         */
         this.edit = function() {
             this.editGroups = {};
             _.each(this.groups, function(item, index) {
@@ -181,90 +269,28 @@
             this.modalActive = true;
         };
 
+        /**
+         * Set the search set by user on all groups
+         */
         this.search = function(query) {
             _.each(this.groups, function(item) {
                 item.query = query;
             });
-            if (this.allStages) {
-                _.each(this.allStages, function(item) {
-                    item.query = query;
-                });
-            }
-            if (this.spikeGroups) {
-                _.each(this.spikeGroups, function(item) {
-                    item.query = query;
-                });
-            }
-            if (this.allDesks) {
-                _.each(this.allDesks, function(item) {
-                    item.query = query;
-                });
-            }
+            _.each(this.spikeGroups, function(item) {
+                item.query = query;
+            });
         };
 
+        /**
+         * Reset on all groups the search set by user
+         */
         this.resetSearch = function() {
             _.each(this.groups, function(item) {
                 item.query = null;
             });
-            if (this.allStages) {
-                _.each(this.allStages, function(item) {
-                    item.query = null;
-                });
-            }
-            if (this.spikeGroups) {
-                _.each(this.spikeGroups, function(item) {
-                    item.query = null;
-                });
-            }
-            if (this.allDesks) {
-                _.each(this.allDesks, function(item) {
-                    item.query = null;
-                });
-            }
-        };
-
-        /**
-         * Creates a list of spike desk groups based on the setting from agg:view property.
-         * If a stage is selected the correspondent desk will appear in the result list.
-         * If agg:view is not set, all desks will be returned
-         * @return [{_id: string, type: string, header:string}]
-         */
-        this.getSpikeGroups = function() {
-            if (this.groups.length > 0) {
-                if (!this.spikeGroups) {
-                    var spikeDesks = {};
-                    _.each(this.groups, function(item, index) {
-                        if (item.type === 'stage') {
-                            var stage = self.stageLookup[item._id];
-                            spikeDesks[stage.desk] = self.deskLookup[stage.desk].name;
-                        }
-                    });
-
-                    this.spikeGroups = Object.keys(spikeDesks).map(function(key) {
-                        return {_id: key, type: 'spike', header: spikeDesks[key]};
-                    });
-                }
-                return this.spikeGroups;
-            }
-
-            if (!this.allDesks) {
-                this.allDesks = Object.keys(this.deskLookup).map(function(key) {
-                    return {_id: key, type: 'spike', header: self.deskLookup[key].name};
-                });
-            }
-            return this.allDesks;
-        };
-
-        this.getGroups = function() {
-            if (this.groups.length > 0) {
-                return this.groups;
-            }
-            if (!this.allStages) {
-                this.allStages = Object.keys(this.stageLookup).map(function(key) {
-                    return {_id: key, type: 'stage'};
-                });
-            }
-            return this.allStages;
+            _.each(this.spikeGroups, function(item) {
+                item.query = null;
+            });
         };
 
         this.state = storage.getItem('agg:state') || {};
@@ -290,8 +316,8 @@
         };
     }
 
-    AggregateSettingsDirective.$inject = ['desks', 'preferencesService', 'WizardHandler'];
-    function AggregateSettingsDirective(desks, preferencesService, WizardHandler) {
+    AggregateSettingsDirective.$inject = ['desks', 'workspaces', 'preferencesService', 'WizardHandler'];
+    function AggregateSettingsDirective(desks, workspaces, preferencesService, WizardHandler) {
         return {
             templateUrl: 'scripts/superdesk-desks/views/aggregate-settings-configuration.html',
             scope: {
@@ -371,6 +397,10 @@
                     }
                 };
 
+                /**
+                 * Return the list of selected groups (stages, personal or saved searches)
+                 * @return {Array} list of groups
+                 */
                 scope.getValues = function() {
                     var values = Object.keys(scope.editGroups).map(function(key) {
                         return scope.editGroups[key];
@@ -380,8 +410,8 @@
                             return false;
                         }
                         if (item.type === 'stage') {
-                            var desk = scope.stageLookup[item._id].desk;
-                            return scope.editGroups[desk].selected;
+                            var stage = scope.stageLookup[item._id];
+                            return scope.editGroups[stage.desk].selected;
                         }
                         if (item.type === 'personal') {
                             return scope.editGroups.personal.selected;
@@ -405,10 +435,10 @@
                 };
 
                 scope.save = function() {
-                    scope.groups.length = 0;
+                    var groups = [];
                     _.each(scope.getValues(), function(item, index) {
                         if (item.selected && item.type !== 'desk') {
-                            scope.groups.push({
+                            groups.push({
                                 _id: item._id,
                                 type: item.type,
                                 max_items: item.max_items
@@ -417,11 +447,27 @@
                     });
 
                     var updates = {};
-                    updates[PREFERENCES_KEY] = {groups: scope.groups};
-                    preferencesService.update(updates, PREFERENCES_KEY)
-                        .then(angular.bind(this, function() {
-                            WizardHandler.wizard('aggregatesettings').finish();
-                        }));
+                    workspaces.getActiveId()
+                    .then(function(activeWorkspaceId) {
+                        if (activeWorkspaceId) {
+                            preferencesService.get(PREFERENCES_KEY)
+                            .then(function(preferences) {
+                                if (preferences) {
+                                    updates[PREFERENCES_KEY] = preferences;
+                                }
+                                updates[PREFERENCES_KEY][activeWorkspaceId] = {groups: groups};
+                                preferencesService.update(updates, PREFERENCES_KEY)
+                                .then(function() {
+                                    WizardHandler.wizard('aggregatesettings').finish();
+                                });
+                            });
+                        } else {
+                            desks.save(scope.deskLookup[desks.getCurrentDeskId()], {monitoring_settings: groups})
+                            .then(function() {
+                                WizardHandler.wizard('aggregatesettings').finish();
+                            });
+                        }
+                    });
 
                     scope.onclose();
                 };
@@ -475,7 +521,7 @@
         };
     }
 
-    angular.module('superdesk.aggregate', ['superdesk.authoring.widgets', 'superdesk.desks'])
+    angular.module('superdesk.aggregate', ['superdesk.authoring.widgets', 'superdesk.desks', 'superdesk.workspace'])
     .controller('AggregateCtrl', AggregateCtrl)
     .directive('sdAggregateSettings', AggregateSettingsDirective)
     .directive('sdSortGroups', SortGroupsDirective);

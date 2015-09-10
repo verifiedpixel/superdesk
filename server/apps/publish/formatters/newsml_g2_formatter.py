@@ -12,7 +12,7 @@ import xml.etree.ElementTree as etree
 from xml.etree.ElementTree import SubElement
 
 from apps.publish.formatters import Formatter
-from superdesk.metadata.item import ITEM_TYPE, CONTENT_TYPE
+from superdesk.metadata.item import ITEM_TYPE, CONTENT_TYPE, EMBARGO
 from superdesk.utc import utcnow
 import superdesk
 from superdesk.errors import FormatterError
@@ -97,9 +97,11 @@ class NewsMLG2Formatter(Formatter):
         self._format_versioncreated(article, itemMeta)
         self._format_firstcreated(article, itemMeta)
         self._format_pubstatus(article, itemMeta)
+
+        if article.get(EMBARGO):
+            SubElement(itemMeta, 'embargoed').text = article[EMBARGO].isoformat()
+
         # optional properties
-        # TODO Work out what to do with embargo, it may involve if we are publishing to media or none media
-        # include the tag if the word embargoed is found in the ednote !!!!!
         self._format_ednote(article, itemMeta)
         self._format_signal(article, itemMeta)
 
@@ -111,6 +113,7 @@ class NewsMLG2Formatter(Formatter):
         self._format_genre(article, contentMeta)
         self._format_slugline(article, contentMeta)
         self._format_headline(article, contentMeta)
+
         if article[ITEM_TYPE] == CONTENT_TYPE.PICTURE:
             self._format_description(article, contentMeta)
             self._format_creditline(article, contentMeta)
@@ -246,13 +249,17 @@ class NewsMLG2Formatter(Formatter):
                     SubElement(group_Elem, 'groupRef', attrib={'idref': ref.get('idRef')})
                 else:
                     if 'residRef' in ref:
-                        itemRef = SubElement(group_Elem, 'itemRef',
-                                             attrib={'residref': ref.get('guid'),
-                                                     'contenttype': 'application/vnd.iptc.g2.newsitem+xml'})
-                        SubElement(itemRef, 'itemClass', attrib={'qcode': 'ninat:' + ref.get('type', 'text')})
-                        self._format_pubstatus(ref, itemRef)
-                        self._format_headline(ref, itemRef)
-                        self._format_slugline(ref, itemRef)
+                        # get the current archive item being refered to
+                        archive_item = superdesk.get_resource_service('archive').find_one(req=None,
+                                                                                          _id=ref.get('residRef'))
+                        if archive_item:
+                            itemRef = SubElement(group_Elem, 'itemRef',
+                                                 attrib={'residref': ref.get('guid'),
+                                                         'contenttype': 'application/vnd.iptc.g2.newsitem+xml'})
+                            SubElement(itemRef, 'itemClass', attrib={'qcode': 'ninat:' + ref.get('type', 'text')})
+                            self._format_pubstatus(archive_item, itemRef)
+                            self._format_headline(archive_item, itemRef)
+                            self._format_slugline(archive_item, itemRef)
 
     def _format_contentset(self, article, item):
         """

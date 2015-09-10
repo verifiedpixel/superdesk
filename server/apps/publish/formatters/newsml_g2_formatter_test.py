@@ -8,14 +8,16 @@
 # AUTHORS and LICENSE files distributed with this source code, or
 # at https://www.sourcefabric.org/superdesk/license
 
-from superdesk.tests import TestCase
+from superdesk.utc import utcnow
+from test_factory import SuperdeskTestCase
 from apps.publish.formatters.newsml_g2_formatter import NewsMLG2Formatter
 import xml.etree.ElementTree as etree
 import datetime
 from apps.publish import init_app
 
 
-class NewsMLG2FormatterTest(TestCase):
+class NewsMLG2FormatterTest(SuperdeskTestCase):
+    embargo_ts = (utcnow() + datetime.timedelta(days=2))
     article = {
         'guid': 'tag:aap.com.au:20150613:12345',
         '_current_version': 1,
@@ -41,7 +43,8 @@ class NewsMLG2FormatterTest(TestCase):
         'creditline': 'sample creditline',
         'keywords': ['traffic'],
         'abstract': 'sample abstract',
-        'place': 'Australia'
+        'place': 'Australia',
+        'embargo': embargo_ts
     }
 
     package = {
@@ -160,10 +163,6 @@ class NewsMLG2FormatterTest(TestCase):
                                 'href': 'http://localhost:5000/api/upload/55cc03731d41c8cea12b650e/raw?_schema=http',
                                 'media': '55cc03731d41c8cea12b650e'
                             },
-                            'original_source': {
-                                'mimetype': 'image/jpeg',
-                                'href': 'http://one-cdn.aap.com.au/Preview/20150813001165688150?assetType=IMAGE&path=/aap_dev17/device/imagearc/2015/08-13/ad/36/ef/aapimage-6lscjhydkmhwztrg1t6_minihighres.jpg'  # noqa
-                            },
                             'original': {
                                 'height': 800,
                                 'mimetype': 'image/jpeg',
@@ -201,10 +200,6 @@ class NewsMLG2FormatterTest(TestCase):
             'date': '2015-08-14T04:45:53.000Z'
         },
         'renditions': {
-            'original_source': {
-                'href': 'https://one-api.aap.com.au/api/v3/Assets/20150731001161435160/Original/download',
-                'mimetype': 'image/jpeg'
-            },
             'viewImage': {
                 'height': 415,
                 'href': 'http://localhost:5000/api/upload/55cd72811d41c828e1773786/raw?_schema=http',
@@ -336,6 +331,15 @@ class NewsMLG2FormatterTest(TestCase):
         'unique_id': 573
     }
 
+    packaged_articles = [{'_id': 'tag:localhost:2015:5838657b-b3ec-4e5a-9b39-36039e16400b',
+                          'headline': 'package article headline',
+                          'slugline': 'slugline',
+                          'pubStatus': 'usable'},
+                         {'_id': 'tag:localhost:2015:0c12aa0a-82ef-4c58-a363-c5bd8a368037',
+                          'headline': 'package article headline',
+                          'slugline': 'slugline',
+                          'pubStatus': 'usable'}]
+
     vocab = [{'_id': 'rightsinfo', 'items': [{'name': 'AAP',
                                               'copyrightHolder': 'copy right holder',
                                               'copyrightNotice': 'copy right notice',
@@ -356,95 +360,93 @@ class NewsMLG2FormatterTest(TestCase):
         self.formatter = NewsMLG2Formatter()
         self.formatter.now = self.now
         self.formatter.string_now = self.now.strftime('%Y-%m-%dT%H:%M:%S.0000Z')
-        with self.app.app_context():
-            init_app(self.app)
-            self.app.data.insert('vocabularies', self.vocab)
+        init_app(self.app)
+        self.app.data.insert('vocabularies', self.vocab)
+        self.app.data.insert('archive', self.packaged_articles)
 
     def testFomatter(self):
-        with self.app.app_context():
-            seq, doc = self.formatter.format(self.article, {'name': 'Test Subscriber'})[0]
-            xml = etree.fromstring(doc)
-            self.assertEquals(xml.find(
-                '{http://iptc.org/std/nar/2006-10-01/}header/{http://iptc.org/std/nar/2006-10-01/}sender').text,
-                'sourcefabric.org')
-            self.assertEquals(xml.find(
-                '{http://iptc.org/std/nar/2006-10-01/}header/{http://iptc.org/std/nar/2006-10-01/}origin').text, 'AAP')
-            self.assertEquals(xml.find(
-                '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}newsItem/' +
-                '{http://iptc.org/std/nar/2006-10-01/}rightsInfo/{http://iptc.org/std/nar/2006-10-01/}usageTerms').text,
-                'terms')
-            self.assertEquals(xml.find(
-                '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}newsItem/' +
-                '{http://iptc.org/std/nar/2006-10-01/}itemMeta/{http://iptc.org/std/nar/2006-10-01/}provider/' +
-                '{http://iptc.org/std/nar/2006-10-01/}name').text,
-                'sourcefabric.org')
-            self.assertEquals(xml.find(
-                '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}newsItem/' +
-                '{http://iptc.org/std/nar/2006-10-01/}contentMeta/{http://iptc.org/std/nar/2006-10-01/}headline').text,
-                'This is a test headline')
-            self.assertEquals(xml.find(
-                '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}newsItem/' +
-                '{http://iptc.org/std/nar/2006-10-01/}contentSet/{http://iptc.org/std/nar/2006-10-01/}inlineXML/' +
-                '{http://iptc.org/std/nar/2006-10-01/}nitf/{http://iptc.org/std/nar/2006-10-01/}body/' +
-                '{http://iptc.org/std/nar/2006-10-01/}body.content').text, 'The story body')
+        seq, doc = self.formatter.format(self.article, {'name': 'Test Subscriber'})[0]
+        xml = etree.fromstring(doc)
+        self.assertEquals(xml.find(
+            '{http://iptc.org/std/nar/2006-10-01/}header/{http://iptc.org/std/nar/2006-10-01/}sender').text,
+            'sourcefabric.org')
+        self.assertEquals(xml.find(
+            '{http://iptc.org/std/nar/2006-10-01/}header/{http://iptc.org/std/nar/2006-10-01/}origin').text, 'AAP')
+        self.assertEquals(xml.find(
+            '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}newsItem/' +
+            '{http://iptc.org/std/nar/2006-10-01/}rightsInfo/{http://iptc.org/std/nar/2006-10-01/}usageTerms').text,
+            'terms')
+        self.assertEquals(xml.find(
+            '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}newsItem/' +
+            '{http://iptc.org/std/nar/2006-10-01/}itemMeta/{http://iptc.org/std/nar/2006-10-01/}provider/' +
+            '{http://iptc.org/std/nar/2006-10-01/}name').text,
+            'sourcefabric.org')
+        self.assertEquals(xml.find(
+            '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}newsItem/' +
+            '{http://iptc.org/std/nar/2006-10-01/}contentMeta/{http://iptc.org/std/nar/2006-10-01/}headline').text,
+            'This is a test headline')
+        self.assertEquals(xml.find(
+            '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}newsItem/' +
+            '{http://iptc.org/std/nar/2006-10-01/}contentSet/{http://iptc.org/std/nar/2006-10-01/}inlineXML/' +
+            '{http://iptc.org/std/nar/2006-10-01/}nitf/{http://iptc.org/std/nar/2006-10-01/}body/' +
+            '{http://iptc.org/std/nar/2006-10-01/}body.content').text, 'The story body')
+        self.assertEquals(xml.find(
+            '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}newsItem/' +
+            '{http://iptc.org/std/nar/2006-10-01/}itemMeta/{http://iptc.org/std/nar/2006-10-01/}embargoed').text,
+            self.embargo_ts.isoformat())
 
     def testPreformattedFomatter(self):
-        with self.app.app_context():
-            article = dict(self.article)
-            article['type'] = 'preformatted'
-            seq, doc = self.formatter.format(article, {'name': 'Test Subscriber'})[0]
-            xml = etree.fromstring(doc)
-            self.assertEquals(xml.find(
-                '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}newsItem/' +
-                '{http://iptc.org/std/nar/2006-10-01/}contentSet/{http://iptc.org/std/nar/2006-10-01/}inlineData').text,
-                'The story body')
+        article = dict(self.article)
+        article['type'] = 'preformatted'
+        seq, doc = self.formatter.format(article, {'name': 'Test Subscriber'})[0]
+        xml = etree.fromstring(doc)
+        self.assertEquals(xml.find(
+            '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}newsItem/' +
+            '{http://iptc.org/std/nar/2006-10-01/}contentSet/{http://iptc.org/std/nar/2006-10-01/}inlineData').text,
+            'The story body')
 
     def testDefaultRightsFomatter(self):
-        with self.app.app_context():
-            article = dict(self.article)
-            article['source'] = 'BOGUS'
-            seq, doc = self.formatter.format(article, {'name': 'Test Subscriber'})[0]
-            xml = etree.fromstring(doc)
-            self.assertEquals(xml.find(
-                '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}newsItem/' +
-                '{http://iptc.org/std/nar/2006-10-01/}rightsInfo/{http://iptc.org/std/nar/2006-10-01/}usageTerms').text,
-                'default terms')
+        article = dict(self.article)
+        article['source'] = 'BOGUS'
+        seq, doc = self.formatter.format(article, {'name': 'Test Subscriber'})[0]
+        xml = etree.fromstring(doc)
+        self.assertEquals(xml.find(
+            '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}newsItem/' +
+            '{http://iptc.org/std/nar/2006-10-01/}rightsInfo/{http://iptc.org/std/nar/2006-10-01/}usageTerms').text,
+            'default terms')
 
     def testPackagePublish(self):
-        with self.app.app_context():
-            article = dict(self.package)
-            article['firstcreated'] = self.now
-            article['versioncreated'] = self.now
-            seq, doc = self.formatter.format(article, {'name': 'Test Subscriber'})[0]
-            xml = etree.fromstring(doc)
-            self.assertEqual(xml.find(
-                '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}packageItem/' +
-                '{http://iptc.org/std/nar/2006-10-01/}groupSet/{http://iptc.org/std/nar/2006-10-01/}group/' +
-                '{http://iptc.org/std/nar/2006-10-01/}itemRef/{http://iptc.org/std/nar/2006-10-01/}slugline').text,
-                'US Police')
+        article = dict(self.package)
+        article['firstcreated'] = self.now
+        article['versioncreated'] = self.now
+        seq, doc = self.formatter.format(article, {'name': 'Test Subscriber'})[0]
+        xml = etree.fromstring(doc)
+        self.assertEqual(xml.find(
+            '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}packageItem/' +
+            '{http://iptc.org/std/nar/2006-10-01/}groupSet/{http://iptc.org/std/nar/2006-10-01/}group/' +
+            '{http://iptc.org/std/nar/2006-10-01/}itemRef/{http://iptc.org/std/nar/2006-10-01/}slugline').text,
+            'slugline')
 
     def testPicturePackagePublish(self):
-        with self.app.app_context():
-            article = dict(self.picture_package)
-            article['firstcreated'] = self.now
-            article['versioncreated'] = self.now
-            seq, doc = self.formatter.format(article, {'name': 'Test Subscriber'})[0]
-            xml = etree.fromstring(doc)
-            self.assertEqual(xml.find(
-                '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}packageItem/' +
-                '{http://iptc.org/std/nar/2006-10-01/}groupSet/{http://iptc.org/std/nar/2006-10-01/}group/' +
-                '{http://iptc.org/std/nar/2006-10-01/}itemRef/{http://iptc.org/std/nar/2006-10-01/}slugline').text,
-                'Prison Riot')
+        article = dict(self.picture_package)
+        article['firstcreated'] = self.now
+        article['versioncreated'] = self.now
+        seq, doc = self.formatter.format(article, {'name': 'Test Subscriber'})[0]
+        xml = etree.fromstring(doc)
+        self.assertEqual(xml.find(
+            '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}packageItem/' +
+            '{http://iptc.org/std/nar/2006-10-01/}groupSet/{http://iptc.org/std/nar/2006-10-01/}group/' +
+            '{http://iptc.org/std/nar/2006-10-01/}itemRef/{http://iptc.org/std/nar/2006-10-01/}slugline').text,
+            'slugline')
 
     def testPicturePublish(self):
-        with self.app.app_context():
-            article = dict(self.picture)
-            article['firstcreated'] = self.now
-            article['versioncreated'] = self.now
-            seq, doc = self.formatter.format(article, {'name': 'Test Subscriber'})[0]
-            xml = etree.fromstring(doc)
-            self.assertEqual(xml.find(
-                '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}newsItem/' +
-                '{http://iptc.org/std/nar/2006-10-01/}contentMeta/' +
-                '{http://iptc.org/std/nar/2006-10-01/}creditline').text,
-                'AAP Image/AAP')
+        article = dict(self.picture)
+        article['firstcreated'] = self.now
+        article['versioncreated'] = self.now
+        seq, doc = self.formatter.format(article, {'name': 'Test Subscriber'})[0]
+        xml = etree.fromstring(doc)
+        self.assertEqual(xml.find(
+            '{http://iptc.org/std/nar/2006-10-01/}itemSet/{http://iptc.org/std/nar/2006-10-01/}newsItem/' +
+            '{http://iptc.org/std/nar/2006-10-01/}contentMeta/' +
+            '{http://iptc.org/std/nar/2006-10-01/}creditline').text,
+            'AAP Image/AAP')

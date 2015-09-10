@@ -1,10 +1,15 @@
-
 (function() {
 
 'use strict';
 
-MetadataCtrl.$inject = ['$scope', 'desks', 'metadata', '$filter', 'privileges', 'datetimeHelper'];
-function MetadataCtrl($scope, desks, metadata, $filter, privileges, datetimeHelper) {
+MetadataCtrl.$inject = [
+    '$scope', 'desks', 'metadata', '$filter', 'privileges', 'datetimeHelper',
+    'preferencesService', 'archiveService'
+];
+function MetadataCtrl(
+    $scope, desks, metadata, $filter,
+    privileges, datetimeHelper, preferencesService, archiveService) {
+
     desks.initialize()
     .then(function() {
         $scope.deskLookup = desks.deskLookup;
@@ -19,21 +24,16 @@ function MetadataCtrl($scope, desks, metadata, $filter, privileges, datetimeHelp
                 $scope.associatedItem = item;
             });
         }
-    });
+
+        return preferencesService.get();
+    })
+    .then(setAvailableCategories);
 
     $scope.processGenre = function() {
         $scope.item.genre = _.map($scope.item.genre, function(g) {
             return _.pick(g, 'name');
         });
     };
-
-    $scope.$watch('item.publish_schedule_date', function(newValue, oldValue) {
-        setPublishScheduleDate(newValue, oldValue);
-    });
-
-    $scope.$watch('item.publish_schedule_time', function(newValue, oldValue) {
-        setPublishScheduleDate(newValue, oldValue);
-    });
 
     $scope.disableAddingTargetedFor = function() {
         return !$scope.item._editable || angular.isUndefined($scope.item.targeted_for_value) || $scope.item.targeted_for_value === '';
@@ -63,6 +63,49 @@ function MetadataCtrl($scope, desks, metadata, $filter, privileges, datetimeHelp
         }
     };
 
+    /**
+    * Builds a list of categories available for selection in scope. Used by
+    * the "category" menu in the Authoring metadata section.
+    *
+    * @function setAvailableCategories
+    * @param {Object} prefs - user preferences setting, including the
+    *   preferred categories settings, among other things
+    */
+    function setAvailableCategories(prefs) {
+        var all,        // all available categories
+            assigned = {},   // category codes already assigned to the article
+            filtered,
+            itemCategories,  // existing categories assigned to the article
+
+            // user's category preference settings , i.e. a map
+            // object (<category_code> --> true/false)
+            userPrefs;
+
+        all = metadata.values.categories || [];
+        userPrefs = prefs['categories:preferred'].selected || {};
+
+        // gather article's existing category codes
+        itemCategories = $scope.item.anpa_category || [];
+
+        itemCategories.forEach(function (cat) {
+            assigned[cat.qcode] = true;
+        });
+
+        filtered = _.filter(all, function (cat) {
+            return userPrefs[cat.qcode] || assigned[cat.qcode];
+        });
+
+        $scope.availableCategories = filtered;
+    }
+
+    $scope.$watch('item.publish_schedule_date', function(newValue, oldValue) {
+        setPublishScheduleDate(newValue, oldValue);
+    });
+
+    $scope.$watch('item.publish_schedule_time', function(newValue, oldValue) {
+        setPublishScheduleDate(newValue, oldValue);
+    });
+
     function setPublishScheduleDate(newValue, oldValue) {
         if (newValue !== oldValue) {
             if ($scope.item.publish_schedule_date && $scope.item.publish_schedule_time) {
@@ -76,7 +119,43 @@ function MetadataCtrl($scope, desks, metadata, $filter, privileges, datetimeHelp
         }
     }
 
-    function resolvePublishScheduleDate() {
+    $scope.$watch('item.embargo_date', function(newValue, oldValue) {
+        setEmbargoTS(newValue, oldValue);
+    });
+
+    $scope.$watch('item.embargo_time', function(newValue, oldValue) {
+        setEmbargoTS(newValue, oldValue);
+    });
+
+    /**
+     * Listener method which gets invoked when either Embargo Date or Embargo Time has changed. This function takes
+     * values of both Embargo Date and Embargo Time to form Timestamp.
+     */
+    function setEmbargoTS(newValue, oldValue) {
+        if (newValue !== oldValue) {
+            if ($scope.item.embargo_date && $scope.item.embargo_time) {
+                $scope.item.embargo = datetimeHelper.mergeDateTime(
+                    $scope.item.embargo_date, $scope.item.embargo_time).format();
+            } else {
+                $scope.item.embargo = null;
+            }
+
+            $scope.autosave($scope.item);
+        }
+    }
+
+    /**
+     * Publish Schedule and Embargo are saved as Timestamps in DB but each field has date and time as two different
+     * inputs in UI. This function breaks the timestamp fetched from API to Date and Time and assigns those values to
+     * the appropriate field.
+     */
+    function resolvePublishScheduleAndEmbargoTS() {
+        if ($scope.item.embargo) {
+            var embargoTS = new Date(Date.parse($scope.item.embargo));
+            $scope.item.embargo_date = $filter('formatDateTimeString')(embargoTS, 'MM/DD/YYYY');
+            $scope.item.embargo_time = $filter('formatDateTimeString')(embargoTS, 'HH:mm:ss');
+        }
+
         if ($scope.item.publish_schedule) {
             var publishSchedule = new Date(Date.parse($scope.item.publish_schedule));
             $scope.item.publish_schedule_date = $filter('formatDateTimeString')(publishSchedule, 'MM/DD/YYYY');
@@ -84,8 +163,31 @@ function MetadataCtrl($scope, desks, metadata, $filter, privileges, datetimeHelp
         }
     }
 
+    /**
+     * Returns true if Publish Schedule needs to be displayed, false otherwise.
+     */
+    $scope.showPublishSchedule = function() {
+        return $scope.item.type !== 'composite' && !$scope.item.embargo_date && !$scope.item.embargo_time &&
+            ['published', 'killed', 'corrected'].indexOf($scope.item.state) === -1;
+    };
+
+    /**
+     * Returns true if Embargo needs to be displayed, false otherwise.
+     */
+    $scope.showEmbargo = function() {
+        return $scope.item.type !== 'composite' && !$scope.item.publish_schedule_date &&
+            !$scope.item.publish_schedule_time && !archiveService.isPublished($scope.item);
+    };
+
+    /**
+     * Returns true if Embargo needs to be displayed, false otherwise.
+     */
+    $scope.isEmbargoEditable = function() {
+        return $scope.item._editable && !archiveService.isPublished($scope.item);
+    };
+
     $scope.unique_name_editable = Boolean(privileges.privileges.metadata_uniquename);
-    resolvePublishScheduleDate();
+    resolvePublishScheduleAndEmbargoTS();
 }
 
 MetadataDropdownDirective.$inject = [];
@@ -180,8 +282,8 @@ function MetadataWordsListEditingDirective() {
  * @param {String} unique - specify the name of the field, in list item which is unique (qcode, value...)
  *
  */
-MetadataListEditingDirective.$inject = [];
-function MetadataListEditingDirective() {
+MetadataListEditingDirective.$inject = ['metadata'];
+function MetadataListEditingDirective(metadata) {
     return {
         scope: {
             item: '=',
@@ -195,10 +297,11 @@ function MetadataListEditingDirective() {
         },
         templateUrl: 'scripts/superdesk-authoring/metadata/views/metadata-terms.html',
         link: function(scope) {
+            metadata.subjectScope = scope;
+
             scope.$watch('list', function(items) {
                 if (
-                    !items || items.length === 0 ||
-                    !items[0].hasOwnProperty('parent')
+                    !items || items.length === 0
                 ) {
                     return;
                 }
@@ -212,8 +315,13 @@ function MetadataListEditingDirective() {
                     }
                 });
 
+                scope.terms = items;
                 scope.tree = tree;
                 scope.activeTree = tree[null];
+            });
+
+            scope.$on('$destroy', function() {
+                metadata.subjectScope = null;
             });
 
             scope.openParent = function(term, $event) {
@@ -227,7 +335,6 @@ function MetadataListEditingDirective() {
                 $event.stopPropagation();
             };
 
-            scope.terms = scope.list;
             scope.activeList = false;
             scope.selectedTerm = '';
             var uniqueField = scope.unique || 'qcode';

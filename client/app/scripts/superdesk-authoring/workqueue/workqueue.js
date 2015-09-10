@@ -44,11 +44,6 @@ function WorkqueueService(session, api) {
     };
 }
 
-ArticleDashboardCtrl.$inject = ['$scope', 'ContentCtrl'];
-function ArticleDashboardCtrl($scope, ContentCtrl) {
-    $scope.content = new ContentCtrl();
-}
-
 WorkqueueCtrl.$inject = ['$scope', '$route', 'workqueue', 'multiEdit', 'superdesk', 'lock'];
 function WorkqueueCtrl($scope, $route, workqueue, multiEdit, superdesk, lock) {
 
@@ -56,14 +51,13 @@ function WorkqueueCtrl($scope, $route, workqueue, multiEdit, superdesk, lock) {
     $scope.workqueue = workqueue;
     $scope.multiEdit = multiEdit;
 
-    updateWorkqueue();
-
-    $scope.$on('$routeChangeSuccess', updateWorkqueue);
     $scope.$on('item:lock', updateWorkqueue);
     $scope.$on('item:unlock', updateWorkqueue);
     $scope.$on('media_archive', function(e, data) {
         workqueue.updateItem(data.item);
     });
+
+    updateWorkqueue();
 
     /**
      * Update list of opened items and set one active if its id is in current route path.
@@ -73,8 +67,8 @@ function WorkqueueCtrl($scope, $route, workqueue, multiEdit, superdesk, lock) {
             var route = $route.current || {_id: null, params: {}};
             $scope.isMultiedit = route._id === 'multiedit';
             $scope.active = null;
-            if (route.params._id) {
-                $scope.active = _.find(workqueue.items, {_id: route.params._id});
+            if (route.params.edit) {
+                $scope.active = _.find(workqueue.items, {_id: route.params.edit});
             }
         });
     }
@@ -96,10 +90,27 @@ function WorkqueueCtrl($scope, $route, workqueue, multiEdit, superdesk, lock) {
     };
 }
 
-function WorkqueueListDirective() {
+WorkqueueListDirective.$inject = ['$rootScope', 'authoringWorkspace'];
+function WorkqueueListDirective($rootScope, authoringWorkspace) {
     return {
         templateUrl: 'scripts/superdesk-authoring/views/opened-articles.html',
-        controller: 'Workqueue'
+        controller: 'Workqueue',
+        scope: {},
+        link: function(scope) {
+            scope.edit = function(item, event) {
+                if (!event.ctrlKey) {
+                    scope.active = item;
+                    authoringWorkspace.edit(item);
+                    event.preventDefault();
+                }
+            };
+
+            scope.link = function(item) {
+                if (item) {
+                    return $rootScope.link('authoring', item);
+                }
+            };
+        }
     };
 }
 
@@ -118,19 +129,5 @@ angular.module('superdesk.authoring.workqueue', [
     .service('workqueue', WorkqueueService)
     .controller('Workqueue', WorkqueueCtrl)
     .directive('sdWorkqueue', WorkqueueListDirective)
-    .directive('sdDashboardArticles', ArticleDashboardDirective)
-
-    .config(['superdeskProvider', function(superdesk) {
-        superdesk
-            .activity('/authoring/', {
-                label: gettext('Authoring'),
-                description: gettext('Create articles'),
-                templateUrl: 'scripts/superdesk-authoring/views/dashboard.html',
-                topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
-                beta: true,
-                controller: ArticleDashboardCtrl,
-                category: superdesk.MENU_MAIN,
-                filters: [{action: 'author', type: 'dashboard'}]
-            });
-    }]);
+    .directive('sdDashboardArticles', ArticleDashboardDirective);
 })();

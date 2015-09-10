@@ -16,6 +16,7 @@ describe('Search', function() {
         expect(element.all(by.repeater('items._items')).count()).toBe(2);
 
         var searchTextbox = element(by.id('search-input'));
+        searchTextbox.click();
         searchTextbox.clear();
         searchTextbox.sendKeys('item3');
         var focused = browser.driver.switchTo().activeElement().getAttribute('id');
@@ -57,19 +58,5 @@ describe('Search', function() {
         expect(element.all(by.repeater('t in item[field]')).count()).toBe(1);
         expect(element.all(by.repeater('parameter in tags.selectedParameters')).count()).toBe(1);
         expect(element.all(by.repeater('item in items._items')).count()).toBe(0);
-    });
-
-    it('can filter by state', function() {
-        workspace.switchToDesk('SPORTS DESK').then(content.setListView);
-        expect(element.all(by.repeater('items._items')).count()).toBe(2);
-
-        var filterPanelButton = element(by.css('.filter-trigger'));
-        filterPanelButton.click();
-
-        element.all(by.repeater('(key,value) in aggregations.state'))
-        .first().element(by.css('.sd-checkbox')).click();
-
-        expect(element.all(by.repeater('items._items')).count()).toBe(2);
-        expect(element.all(by.repeater('(type,keys) in tags.selectedFacets')).count()).toBe(1);
     });
 });

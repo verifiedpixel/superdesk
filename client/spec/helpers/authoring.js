@@ -6,14 +6,18 @@ module.exports = new Authoring();
 function Authoring() {
 
     this.lock = element(by.css('[ng-click="lock()"]'));
-    this.publish_button = element(by.css('[ng-click="publish()"]'));
-    this.close_button = element(by.css('[ng-click="close()"]'));
-    this.save_button = element(by.css('[ng-click="save(item)"]'));
+    this.publish_button = element(by.buttonText('PUBLISH'));
+    this.close_button = element(by.buttonText('CLOSE'));
+    this.save_button = element(by.buttonText('SAVE'));
 
-    this.navbarMenuBtn = $('.dropdown-toggle.sd-create-btn');
+    this.navbarMenuBtn = element(by.css('.dropdown-toggle.sd-create-btn'));
+    this.newPlainArticleLink = element(by.id('create_text_article'));
     this.newEmptyPackageLink = element(by.id('create_package'));
-    this.infoIconsBox = $('.info-icons');
+    this.infoIconsBox = element(by.css('.info-icons'));
     this.sendToButton = element(by.id('send-to-btn'));
+
+    this.setCategoryBtn = element(by.id('category-setting'))
+        .element(by.tagName('button'));
 
     /**
      * Find all file type icons in the item's info icons box matching the
@@ -44,7 +48,7 @@ function Authoring() {
     };
 
     this.sendToSidebarOpened = function(desk, stage) {
-        var sidebar = element(by.css('.send-to-pane')),
+        var sidebar = element.all(by.css('.send-to-pane')).last(),
             dropdown = sidebar.element(by.css('.desk-select .dropdown-toggle'));
 
         dropdown.waitReady();
@@ -102,6 +106,22 @@ function Authoring() {
         return element(by.css('[ng-click="tab = \'history\'"]')).click();
     };
 
+    this.getHistoryItems = function() {
+        return element.all(by.repeater('version in versions'));
+    };
+
+    this.getHistoryItem = function(index) {
+        return this.getHistoryItems().get(index);
+    };
+
+    this.getQueuedItemsSwitch = function(item) {
+        return item.element(by.className('icon-plus-small'));
+    };
+
+    this.getQueuedItems = function() {
+        return element.all(by.repeater('queuedItem in queuedItems'));
+    };
+
     this.getSearchItem = function(item) {
         return element.all(by.repeater('pitem in contentItems')).get(item);
     };
@@ -131,20 +151,12 @@ function Authoring() {
     };
 
     this.getGroupedItems = function(group) {
-        return element(by.css('[data-title="' + group.toLowerCase() + '"]'))
-            .all(by.repeater('child in item.childData'));
+        return element(by.css('[data-group="' + group.toLowerCase() + '"]'))
+            .all(by.repeater('item in group.items'));
     };
 
     this.getGroupItems = function(group) {
         return element(by.id(group.toUpperCase())).all(by.repeater('item in group.items'));
-    };
-
-    this.getHistoryItems = function() {
-        return element.all(by.repeater('version in versions'));
-    };
-
-    this.getHistoryItem = function(index) {
-        return this.getHistoryItems().get(index);
     };
 
     this.getGroupItem = function(group, item) {
@@ -172,7 +184,7 @@ function Authoring() {
 
     this.selectSearchItem = function(item) {
         var crtItem = this.getSearchItem(item);
-        var icon = crtItem.element(by.tagName('i'));
+        var icon = crtItem.all(by.tagName('i')).first();
         return icon.waitReady().then(function() {
             browser.actions()
                 .mouseMove(icon)
@@ -183,7 +195,13 @@ function Authoring() {
     };
 
     this.markForHighlights = function() {
-        element(by.className('icon-dots-vertical')).click();
+        var toggle = element(by.id('authoring-extra-dropdown')).element(by.className('icon-dots-vertical'));
+
+        browser.wait(function() {
+            return toggle.isDisplayed();
+        });
+
+        toggle.click();
         browser.actions().mouseMove(element(by.css('.highlights-toggle .dropdown-toggle'))).perform();
     };
 
@@ -200,6 +218,7 @@ function Authoring() {
     var bodyHtml = element(by.model('item.body_html')).all(by.className('editor-type-html')).first();
     var headline = element(by.model('item.headline')).all(by.className('editor-type-html')).first();
     var abstract = element(by.model('item.abstract')).all(by.className('editor-type-html')).first();
+    var packageSlugline = element.all(by.className('keyword')).last();
 
     this.writeText = function (text) {
         bodyHtml.sendKeys(text);
@@ -213,11 +232,22 @@ function Authoring() {
         abstract.sendKeys(text);
     };
 
+    this.writeTextToPackageSlugline = function (text) {
+        browser.wait(function() {
+            return packageSlugline.isDisplayed();
+        }, 100);
+        packageSlugline.sendKeys(text);
+    };
+
     this.getBodyText = function() {
         return bodyHtml.getText();
     };
 
     this.getHeadlineText = function() {
         return headline.getText();
+    };
+
+    this.closeHeader = function() {
+        element(by.className('icon-chevron-up-thin')).click();
     };
 }

@@ -11,7 +11,7 @@
             {field: 'firstcreated', label: gettext('Created')},
             {field: 'urgency', label: gettext('News Value')},
             {field: 'anpa_category.name', label: gettext('Category')},
-            {field: 'slugline', label: gettext('Keyword')},
+            {field: 'slugline', label: gettext('Slugline')},
             {field: 'priority', label: gettext('Priority')}
         ];
 
@@ -235,10 +235,9 @@
                     label: gettext('Legal Archive'),
                     description: gettext('Confidential data'),
                     priority: 100,
-                    beta: true,
                     controller: LegalArchiveController,
                     templateUrl: 'scripts/superdesk-legal-archive/views/legal_archive.html',
-                    sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html',
+                    sideTemplateUrl: 'scripts/superdesk-workspace/views/workspace-sidenav.html',
                     category: superdesk.MENU_MAIN,
                     reloadOnSearch: false,
                     filters: [],

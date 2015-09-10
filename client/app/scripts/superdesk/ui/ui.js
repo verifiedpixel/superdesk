@@ -259,9 +259,10 @@ define([
         return {
             link: function(scope, element) {
 
-                var tolerance = 250;
-                var isRightOriented = null;
-                var menu = null;
+                var tolerance = 300,
+                    isRightOriented = null,
+                    isInlineOriented = null,
+                    menu = null;
 
                 element.bind('click', function(event) {
 
@@ -281,12 +282,33 @@ define([
                         } else {
                             menu.addClass('pull-right');
                         }
+
+                        if (closeToRight(event)) {
+                            menu.addClass('pull-right');
+                        } else {
+                            menu.removeClass('pull-right');
+                        }
+                    }
+
+                    if (isInlineOriented) {
+                        if (closeToLeft(event)) {
+                            element.removeClass('dropleft').addClass('dropright');
+                        } else {
+                            element.addClass('dropleft').removeClass('dropright');
+                        }
+
+                        if (closeToRight(event)) {
+                            element.removeClass('dropright').addClass('dropleft');
+                        } else {
+                            element.addClass('dropright').removeClass('dropleft');
+                        }
                     }
                 });
 
                 function checkOrientation() {
                     menu = element.children('.dropdown-menu');
                     isRightOriented = menu.hasClass('pull-right');
+                    isInlineOriented = element.hasClass('dropright') || element.hasClass('dropleft');
                 }
 
                 function closeToBottom(e) {
@@ -296,6 +318,11 @@ define([
 
                 function closeToLeft(e) {
                     return e.pageX < tolerance;
+                }
+
+                function closeToRight(e) {
+                    var docWidth = $document.width();
+                    return (docWidth - e.pageX) < tolerance;
                 }
             }
         };
@@ -328,11 +355,37 @@ define([
                         };
 
                         css.left = 'auto';
-                        css.right = Math.max(5, window.innerWidth - pos.left) + 'px';
+                        css.right = Math.max(5, window.innerWidth - pos.left);
 
                         dropdown.dropdownMenu.css({opacity: '0'}); // avoid flickering
-                        scope.$applyAsync(function() {
+
+                        scope.$applyAsync(function () {
                             dropdown.dropdownMenu.css(css);
+
+                            /*
+                             * Calculate if there is enough space for showing after the icon
+                             * if not, show it above the icon
+                             */
+                            var windowHeight = window.innerHeight - 30, //Subracting 30 is for submenu bar
+                                dropdownHeight = dropdown.dropdownMenu.outerHeight();
+
+                            if ((windowHeight - pos.top) < dropdownHeight) {
+                                if ((pos.top - 110) < dropdownHeight) { //Substracting 110 is for topmenu and submenu bar
+                                    css = {
+                                        top: '110px',
+                                        right: css.right + 30
+                                        // Addition 30 so the drodpown would not overlap icon
+                                    };
+                                } else {
+                                    css.top = pos.top - dropdownHeight - icon.outerHeight() - 15;
+                                    //Subtracting 15 so the dropdown is not stick to the icon
+                                }
+
+                                dropdown.dropdownMenu.css({
+                                    top: css.top,
+                                    right: css.right
+                                });
+                            }
                         });
                     }
                 });

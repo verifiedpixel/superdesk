@@ -97,16 +97,11 @@
                 scope.cachePreviousItems = [];
 
                 scope.preview = function(item) {
-                    desks.setWorkspace(item.task.desk, item.task.stage);
-                    if (!sessionStorage.getItem('previewUrl')) {
-                        sessionStorage.setItem('previewUrl', $location.url());
-                    }
-                    superdesk.intent('read_only', 'content_article', item);
+                    superdesk.intent('preview', 'item', item);
                 };
 
                 scope.edit = function(item) {
-                    desks.setWorkspace(item.task.desk, item.task.stage);
-                    superdesk.intent('author', 'article', item);
+                    superdesk.intent('edit', 'item', item);
                 };
 
                 function queryItems(queryString) {
@@ -432,6 +427,7 @@
                     label: gettext('Master Desk'),
                     description: gettext('Navigate through the newsroom'),
                     templateUrl: 'scripts/superdesk-desks/views/main.html',
+                    sideTemplateUrl: 'scripts/superdesk-workspace/views/workspace-sidenav.html',
                     controller: DeskListController,
                     category: superdesk.MENU_MAIN,
                     privileges: {desks: 1}
@@ -1027,8 +1023,12 @@
                             desks.fetchDeskById(stage.desk).then(function(desk) {
                                 scope.desk.edit = desk;
                             });
-                        }, function(result) {
-                            scope.message = gettext('There was a problem, stage was not deleted.');
+                        }, function(response) {
+                            if (angular.isDefined(response.data._message)) {
+                                scope.message = gettext('Error: ' + response.data._message);
+                            } else {
+                                scope.message = gettext('There was a problem, stage was not deleted.');
+                            }
                         });
                     };
 

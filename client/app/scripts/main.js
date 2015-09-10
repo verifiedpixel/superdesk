@@ -34,6 +34,11 @@ define('main', [
         superdesk.constant('config', config);
         superdesk.constant('lodash', _);
 
+        // setup default route for superdesk - set it here to avoid it being used in unit tests
+        superdesk.config(['$routeProvider', function($routeProvider) {
+            $routeProvider.when('/', {redirectTo: '/workspace'});
+        }]);
+
         // load apps & bootstrap
         var body = angular.element('body');
         body.ready(function() {

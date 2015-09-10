@@ -4,8 +4,7 @@
 module.exports = new Workspace();
 
 var content = require('./content'),
-    nav = require('./utils').nav,
-    authoring = require('./authoring');
+    nav = require('./utils').nav;
 
 function Workspace() {
     function openContent() {
@@ -28,12 +27,10 @@ function Workspace() {
      * Open a workspace of given name, can be both desk or custom
      *
      * @param {string} desk Desk or workspace name.
-     * @return {Promise}
      */
-    this.switchToDesk = function(desk) {
-
+    this.selectDesk = function(desk) {
         var dropdownBtn = element(by.id('selected-desk')),
-            dropdownMenu = element(by.id('select-desk-menu'));
+        dropdownMenu = element(by.id('select-desk-menu'));
 
         // open dropdown
         dropdownBtn.click();
@@ -67,12 +64,23 @@ function Workspace() {
                 dropdownBtn.click();
             }
         });
+    };
+
+    /**
+     * Open a workspace of given name, can be both desk or custom and then navigate
+     * to content view
+     *
+     * @param {string} desk Desk or workspace name.
+     * @return {Promise}
+     */
+    this.switchToDesk = function(desk) {
+        this.selectDesk(desk);
 
         openContent();
 
         return browser.wait(function() {
             return element(by.className('list-view')).isPresent();
-        });
+        }, 300);
     };
 
     this.selectStage = function(stage) {
@@ -100,13 +108,11 @@ function Workspace() {
         });
     };
 
-    this.duplicateItem = function(item, desk, stage) {
+    this.duplicateItem = function(item, desk) {
         return this.switchToDesk(desk || 'PERSONAL')
         .then(content.setListView)
         .then(function() {
             return content.actionOnItem('Duplicate', item);
-        }).then(function() {
-            return authoring.sendToSidebarOpened(desk, stage);
         });
     };
 

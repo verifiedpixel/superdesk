@@ -16,6 +16,7 @@ describe('authoring', function() {
     beforeEach(module('superdesk.mocks'));
     beforeEach(module('superdesk.privileges'));
     beforeEach(module('superdesk.desks'));
+    beforeEach(module('templates'));
 
     beforeEach(inject(function($window) {
         $window.onbeforeunload = angular.noop;
@@ -71,20 +72,19 @@ describe('authoring', function() {
     }));
 
     it('unlocks a locked item and locks by current user',
-        inject(function(authoring, lock, $rootScope, $timeout, api, $q, $location) {
+    inject(function(authoring, lock, $rootScope, $timeout, api, $q, $location) {
+        spyOn(api, 'save').and.returnValue($q.when({}));
+        spyOn(lock, 'unlock').and.returnValue($q.when({}));
 
-            spyOn(api, 'save').and.returnValue($q.when({}));
-            spyOn(lock, 'unlock').and.returnValue($q.when({}));
+        var lockedItem = {guid: GUID, _id: GUID, _locked: true, lock_user: 'user:5', task: 'desk:1'};
+        var $scope = startAuthoring(lockedItem, 'edit');
+        $rootScope.$digest();
 
-            var lockedItem = {guid: GUID, _id: GUID, _locked: true, lock_user: 'user:5', task: 'desk:1'};
-            var $scope = startAuthoring(lockedItem, 'edit');
-            $rootScope.$digest();
-
-            $scope.unlock();
-            $timeout.flush(5000);
-            $rootScope.$digest();
-            expect($location.path(), '/authoring/' + $scope.item._id);
-        }));
+        $scope.unlock();
+        $timeout.flush(5000);
+        $rootScope.$digest();
+        expect($location.path(), '/authoring/' + $scope.item._id);
+    }));
 
     it('can autosave and save an item', inject(function(api, $q, $timeout, $rootScope) {
         var $scope = startAuthoring({guid: GUID, _id: GUID, task: 'desk:1'}, 'edit'),
@@ -161,7 +161,7 @@ describe('authoring', function() {
                 item: item,
                 action: action
             });
-            $compile(angular.element('<div sd-authoring></div>'))($scope);
+            $compile(angular.element('<div sd-authoring-workspace><div sd-authoring></div></div>'))($scope);
         });
 
         return $scope;
@@ -309,18 +309,77 @@ describe('authoring', function() {
     });
 });
 
+describe('cropImage', function() {
+    beforeEach(module('superdesk.authoring'));
+    beforeEach(module('superdesk.mocks'));
+    beforeEach(module('templates'));
+
+    function startCropping() {
+        var $scope;
+
+        inject(function($rootScope, $controller, superdesk, gettext, notify, modal) {
+            $scope = $rootScope.$new();
+            $controller(superdesk.activity('edit.crop').controller, {
+                $scope: $scope,
+                'gettext': gettext,
+                'notify': notify,
+                'modal': modal
+            });
+        });
+
+        return $scope;
+    }
+
+    it('can record crop coordinates for cropped image',
+    inject(function($rootScope, $q, gettext, notify, modal, $injector, superdesk) {
+        $rootScope.locals = {data: {}};
+        var $scope = startCropping();
+
+        $scope.data = {
+            isDirty: false,
+            cropsizes: {0: {name: '4-3'}},
+            cropData: {}
+        };
+
+        $scope.preview = {
+            '4-3': {
+                cords: {x: 0, x2: 800, y: 0, y2: 600, w: 800, h: 600}
+            }
+        };
+
+        var toMatch = {'CropLeft': 0, 'CropRight': 800, 'CropTop': 0, 'CropBottom': 600};
+
+        $scope.resolve = jasmine.createSpy('resolve');
+        $scope.done();
+        $rootScope.$digest();
+        expect($scope.data.cropData['4-3']).toEqual(toMatch);
+    }));
+
+});
+
 describe('autosave', function() {
     beforeEach(module('superdesk.authoring'));
     beforeEach(module('superdesk.mocks'));
+    beforeEach(module('templates'));
 
-    it('can fetch an autosave for not locked item', inject(function(autosave, api, $q, $rootScope) {
+    it('can fetch an autosave for item locked by user and is editable',
+        inject(function(autosave, api, $q, $rootScope) {
         spyOn(api, 'find').and.returnValue($q.when({}));
-        autosave.open({_locked: false, _id: 1});
+        autosave.open({_locked: false, _editable: true, _id: 1});
         $rootScope.$digest();
         expect(api.find).toHaveBeenCalledWith('archive_autosave', 1);
     }));
 
-    it('will skip autosave fetch when item is locked', inject(function(autosave, api, $rootScope) {
+    it('will skip autosave fetch when item is locked by user but not editable',
+        inject(function(autosave, api, $q, $rootScope) {
+        spyOn(api, 'find').and.returnValue($q.when({}));
+        autosave.open({_locked: false, _editable: false, _id: 1});
+        $rootScope.$digest();
+        expect(api.find).not.toHaveBeenCalled();
+    }));
+
+    it('will skip autosave fetch when item is locked by another user',
+        inject(function(autosave, api, $rootScope) {
         spyOn(api, 'find');
         autosave.open({_locked: true});
         $rootScope.$digest();
@@ -364,6 +423,7 @@ describe('autosave', function() {
 describe('lock service', function() {
     beforeEach(module('superdesk.authoring'));
     beforeEach(module('superdesk.mocks'));
+    beforeEach(module('templates'));
 
     var user = {_id: 'user'};
     var sess = {_id: 'sess'};
@@ -416,9 +476,6 @@ describe('authoring actions', function() {
     */
     function allowedActions(actions, keys) {
         _.forOwn(actions, function(value, key) {
-
-            //console.log('checking state for', key, value, _.contains(keys, key));
-
             if (_.contains(keys, key)) {
                 expect(value).toBeTruthy();
             } else {
@@ -430,6 +487,7 @@ describe('authoring actions', function() {
     beforeEach(module('superdesk.authoring'));
     beforeEach(module('superdesk.mocks'));
     beforeEach(module('superdesk.desks'));
+    beforeEach(module('templates'));
 
     beforeEach(inject(function(desks, $q) {
         spyOn(desks, 'fetchCurrentUserDesks').and.returnValue($q.when({_items: userDesks}));
@@ -1027,4 +1085,147 @@ describe('authoring actions', function() {
             allowedActions(itemActions, ['new_take', 'save', 'edit', 'duplicate', 'view', 'spike',
                     'mark_item', 'package_item', 'multi_edit', 'publish', 'send']);
         }));
+});
+
+describe('authoring workspace', function() {
+
+    var item = {_id: 'foo'};
+
+    beforeEach(module('superdesk.authoring'));
+
+    beforeEach(inject(function($q, authoring) {
+        spyOn(authoring, 'open').and.returnValue($q.when(item));
+    }));
+
+    it('can edit item', inject(function(superdeskFlags, authoringWorkspace, $rootScope) {
+
+        expect(superdeskFlags.flags.authoring).toBeFalsy();
+
+        authoringWorkspace.edit(item);
+        $rootScope.$apply();
+
+        expect(authoringWorkspace.item).toBe(item);
+        expect(authoringWorkspace.action).toBe('edit');
+        expect(authoringWorkspace.getItem()).toBe(item);
+        expect(authoringWorkspace.getAction()).toBe('edit');
+        expect(superdeskFlags.flags.authoring).toBeTruthy();
+
+        authoringWorkspace.close();
+        expect(authoringWorkspace.item).toBe(null);
+        expect(authoringWorkspace.getItem()).toBe(null);
+        expect(superdeskFlags.flags.authoring).toBeFalsy();
+    }));
+
+    it('can open item in readonly mode', inject(function(superdeskFlags, authoringWorkspace, $rootScope) {
+        authoringWorkspace.view(item);
+        $rootScope.$apply();
+        expect(authoringWorkspace.item).toBe(item);
+        expect(authoringWorkspace.action).toBe('view');
+        expect(superdeskFlags.flags.authoring).toBe(true);
+    }));
+
+    it('can kill an item', inject(function(authoringWorkspace, $rootScope) {
+        authoringWorkspace.kill(item);
+        $rootScope.$apply();
+        expect(authoringWorkspace.item).toBe(item);
+        expect(authoringWorkspace.action).toBe('kill');
+    }));
+
+    it('can handle edit.item activity', inject(function(superdesk, authoringWorkspace, $rootScope) {
+        superdesk.intent('edit', 'item', item);
+        $rootScope.$digest();
+        expect(authoringWorkspace.item).toBe(item);
+        expect(authoringWorkspace.action).toBe('edit');
+    }));
+
+    describe('init', function() {
+        it('can open item from $location for editing', inject(function(api, $location, $rootScope, $injector) {
+            $location.search('item', item._id);
+            $location.search('action', 'edit');
+            $rootScope.$digest();
+
+            var authoringWorkspace = $injector.get('authoringWorkspace');
+            $rootScope.$digest();
+
+            expect(authoringWorkspace.item).toBe(item);
+            expect(authoringWorkspace.action).toBe('edit');
+        }));
+
+        it('can open item from $location for viewing', inject(function($location, $rootScope, $injector) {
+            $location.search('item', 'bar');
+            $location.search('action', 'view');
+            $rootScope.$digest();
+            var authoringWorkspace = $injector.get('authoringWorkspace');
+            $rootScope.$digest();
+            expect(authoringWorkspace.item).toBe(item);
+            expect(authoringWorkspace.action).toBe('view');
+        }));
+    });
+});
+
+describe('authoring container directive', function() {
+
+    beforeEach(module('superdesk.authoring'));
+    beforeEach(module('templates'));
+
+    beforeEach(inject(function($templateCache) {
+        // avoid loading of authoring
+        $templateCache.put('scripts/superdesk-authoring/views/authoring-container.html', '<div></div>');
+    }));
+
+    var item, scope, elem, iscope;
+
+    beforeEach(inject(function($compile, $rootScope, $q, authoring) {
+        item = {_id: 'foo'};
+        spyOn(authoring, 'open').and.returnValue($q.when(item));
+
+        scope = $rootScope.$new();
+        elem = $compile('<div sd-authoring-container></div>')(scope);
+        scope.$digest();
+        iscope = elem.isolateScope();
+    }));
+
+    it('handles edit', inject(function(authoringWorkspace, $rootScope) {
+        authoringWorkspace.edit(item);
+        $rootScope.$digest();
+
+        // testing reset in first cyclte between
+        expect(iscope.authoring.item).toBe(null);
+
+        $rootScope.$digest();
+
+        expect(iscope.authoring.item).toBe(item);
+        expect(iscope.authoring.action).toBe('edit');
+        expect(iscope.authoring.state.opened).toBe(true);
+
+        authoringWorkspace.close();
+        $rootScope.$digest();
+        expect(iscope.authoring.item).toBe(null);
+        expect(iscope.authoring.state.opened).toBe(false);
+    }));
+
+    it('handles view', inject(function(authoringWorkspace, $rootScope) {
+        authoringWorkspace.view(item);
+        $rootScope.$digest();
+        $rootScope.$digest();
+        expect(iscope.authoring.item).toBe(item);
+        expect(iscope.authoring.action).toBe('view');
+        expect(iscope.authoring.state.opened).toBe(true);
+    }));
+
+    it('handles kill', inject(function(authoringWorkspace, $rootScope) {
+        authoringWorkspace.kill(item);
+        $rootScope.$digest();
+        $rootScope.$digest();
+        expect(iscope.authoring.item).toBe(item);
+        expect(iscope.authoring.action).toBe('kill');
+    }));
+
+    it('handles correct', inject(function(authoringWorkspace, $rootScope) {
+        authoringWorkspace.correct(item);
+        $rootScope.$digest();
+        $rootScope.$digest();
+        expect(iscope.authoring.item).toBe(item);
+        expect(iscope.authoring.action).toBe('correct');
+    }));
 });

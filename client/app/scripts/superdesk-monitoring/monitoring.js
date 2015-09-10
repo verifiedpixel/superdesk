@@ -2,7 +2,7 @@
 
     'use strict';
 
-    angular.module('superdesk.monitoring', ['superdesk.api', 'superdesk.aggregate', 'superdesk.search'])
+    angular.module('superdesk.monitoring', ['superdesk.api', 'superdesk.aggregate', 'superdesk.search', 'superdesk.ui'])
         .service('cards', CardsService)
         .controller('Monitoring', MonitoringController)
         .directive('sdMonitoringView', MonitoringViewDirective)
@@ -10,7 +10,8 @@
         .directive('sdMonitoringGroupHeader', MonitoringGroupHeader)
         .directive('sdItemActionsMenu', ItemActionsMenu)
         .config(configureMonitoring)
-        .config(configureSpikeMonitoring);
+        .config(configureSpikeMonitoring)
+        .config(configurePersonal);
 
     configureMonitoring.$inject = ['superdeskProvider'];
     function configureMonitoring(superdesk) {
@@ -20,7 +21,7 @@
                 priority: 100,
                 templateUrl: 'scripts/superdesk-monitoring/views/monitoring.html',
                 topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
-                sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html'
+                sideTemplateUrl: 'scripts/superdesk-workspace/views/workspace-sidenav.html'
             });
     }
 
@@ -32,7 +33,22 @@
                 priority: 100,
                 templateUrl: 'scripts/superdesk-monitoring/views/spike-monitoring.html',
                 topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
-                sideTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-sidenav.html'
+                sideTemplateUrl: 'scripts/superdesk-workspace/views/workspace-sidenav.html'
+            });
+    }
+
+    /**
+     * Configure personal option from left menu
+     */
+    configurePersonal.$inject = ['superdeskProvider'];
+    function configurePersonal(superdesk) {
+        superdesk
+            .activity('/workspace/personal', {
+                label: gettext('Personal'),
+                priority: 100,
+                templateUrl: 'scripts/superdesk-monitoring/views/personal.html',
+                topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
+                sideTemplateUrl: 'scripts/superdesk-workspace/views/workspace-sidenav.html'
             });
     }
 
@@ -50,18 +66,28 @@
          * @param {string} queryString
          */
         function getCriteria(card, queryString, queryParam) {
-            var params = (card.type === 'search') ? JSON.parse(JSON.stringify(card.search.filter.query)): {};
-            params.spike = (card.type === 'spike');
-            if (card.fileType) {
-                params.type = card.fileType;
-            }
+            var params = {};
 
-            if (card.type === 'search') {
+            if (card.type === 'search' && card.search && card.search.filter.query) {
                 if (card.query) {
-                    params.q = '(' + card.query + ') ' + card.search.filter.query.q;
+                    if (card.search.filter.query.q) {
+                        params.q = '(' + card.query + ') ' + card.search.filter.query.q;
+                    } else {
+                        params.q = '(' + card.query + ') ';
+                    }
+                } else {
+                    params = card.search.filter.query;
                 }
             } else {
                 params.q = card.query;
+            }
+
+            params.spike = (card.type === 'spike');
+
+            if (card.fileType) {
+                params.type = card.fileType;
+            } else {
+                delete params.type;
             }
 
             var query = search.query(params);
@@ -97,6 +123,9 @@
             }
 
             var criteria = {source: query.getCriteria()};
+            if (card.type === 'search' && card.search && card.search.filter.query.repo) {
+                criteria.repo = card.search.filter.query.repo;
+            }
             criteria.source.from = 0;
             criteria.source.size = 25;
             return criteria;
@@ -164,8 +193,8 @@
         };
     }
 
-    MonitoringGroupDirective.$inject = ['cards', 'api', 'superdesk', 'desks', '$timeout'];
-    function MonitoringGroupDirective(cards, api, superdesk, desks, $timeout) {
+    MonitoringGroupDirective.$inject = ['cards', 'api', 'desks', 'authoringWorkspace', '$timeout', 'superdesk', 'activityService'];
+    function MonitoringGroupDirective(cards, api, desks, authoringWorkspace, $timeout, superdesk, activityService) {
         var ITEM_HEIGHT = 57,
             ITEMS_COUNT = 5,
             BUFFER = 8,
@@ -179,15 +208,15 @@
 
         return {
             templateUrl: 'scripts/superdesk-monitoring/views/monitoring-group.html',
-            require: ['^sdMonitoringView', '^sdAuthoringContainer'],
+            require: ['^sdMonitoringView'],
             scope: {
                 group: '=',
-                numItems: '='
+                numItems: '=',
+                viewType: '='
             },
             link: function(scope, elem, attrs, ctrls) {
 
-                var monitoring = ctrls[0],
-                    authoring = ctrls[1];
+                var monitoring = ctrls[0];
 
                 scope.view = 'compact';
                 scope.page = 1;
@@ -203,13 +232,26 @@
                 scope.renderNew = renderNew;
                 scope.viewSingleGroup = viewSingleGroup;
 
-                scope.$watch('group', queryItems);
-                scope.$watch('group.query', queryItems);
-                scope.$watch('group.fileType', queryItems);
-                scope.$on('task:stage', handleStage);
-                scope.$on('ingest:update', update);
-                scope.$on('item:spike', update);
-                scope.$on('item:unspike', update);
+                scope.$watchCollection('group', queryItems);
+                scope.$on('task:stage', queryItems);
+                scope.$on('ingest:update', queryItems);
+                scope.$on('item:spike', queryItems);
+                scope.$on('item:unspike', queryItems);
+
+                scope.$on('content:update', function(event, data) {
+                    switch (scope.group.type) {
+                        case 'stage':
+                            // refresh stage if it matches updated stage
+                            if (data.stage === scope.group._id) {
+                                queryItems();
+                            }
+                            break;
+
+                        default:
+                            // no way to determine if item should be visible, refresh
+                            queryItems();
+                    }
+                });
 
                 var list = elem[0].getElementsByClassName('inline-content-items')[0],
                     scrollElem = elem.find('.stage-content').first();
@@ -224,14 +266,20 @@
                     updateTimeout,
                     moveTimeout;
 
-                function handleStage(event, data) {
-                    if (data.new_stage === scope.stage || data.old_stage === scope.stage) {
-                        update();
-                    }
-                }
-
                 function edit(item, lock) {
-                    authoring.edit(item, lock);
+                    if (item._type === 'ingest') {
+                        var intent = {action: 'list', type: 'ingest'},
+                        activity = superdesk.findActivities(intent, item)[0];
+
+                        activityService.start(activity, {data: {item: item}})
+                            .then(function (item) {
+                                authoringWorkspace.edit(item, !lock);
+                                monitoring.preview(null);
+                            });
+                    } else {
+                        authoringWorkspace.edit(item, !lock);
+                        monitoring.preview(null);
+                    }
                 }
 
                 function select(item) {
@@ -282,8 +330,25 @@
                     });
                 }
 
-                function apiquery(query) {
-                    return api.query('archive', query ? {source: query} : criteria);
+                /**
+                 * Request the data on search or archive endpoints
+                 * return {promise} list of items
+                 */
+                function apiquery() {
+
+                    var provider = 'search';
+                    if (scope.group.type === 'search') {
+                        if (criteria.repo && criteria.repo.indexOf(',') === -1) {
+                            provider = criteria.repo;
+                            if (!criteria.source.size) {
+                                criteria.source.size = 25;
+                            }
+                        }
+                    } else {
+                        provider = 'archive';
+                    }
+
+                    return api.query(provider, criteria);
                 }
 
                 function renderNew() {
@@ -305,30 +370,6 @@
                     });
 
                     return next;
-                }
-
-                function updateCurrentView() {
-                    var ids = _.pluck(scope.items, '_id'),
-                        query = {query: {filtered: {filter: {and: [
-                            {terms: {_id: ids}},
-                            {term: {'task.stage': scope.stage}}
-                        ]}}}};
-                    query.size = ids.length;
-                    apiquery(query).then(function(items) {
-                        var nextItems = _.indexBy(items._items, '_id');
-                        angular.forEach(scope.items, function(item, i) {
-                            var diff = nextItems[item._id] || {_deleted: 1};
-                            angular.extend(item, diff);
-                        });
-                    });
-                }
-
-                function update() {
-                    if (scrollElem[0].scrollTop || scope.selected) {
-                        updateCurrentView();
-                    } else {
-                        render();
-                    }
                 }
 
                 function handleScroll(event) {

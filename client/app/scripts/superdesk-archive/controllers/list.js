@@ -6,9 +6,9 @@ define([
 
     ArchiveListController.$inject = [
         '$scope', '$injector', '$location', '$q', '$timeout', 'superdesk',
-        'session', 'api', 'desks', 'ContentCtrl', 'StagesCtrl', 'notify', 'multi'
+        'session', 'api', 'desks', 'content', 'StagesCtrl', 'notify', 'multi'
     ];
-    function ArchiveListController($scope, $injector, $location, $q, $timeout, superdesk, session, api, desks, ContentCtrl,
+    function ArchiveListController($scope, $injector, $location, $q, $timeout, superdesk, session, api, desks, content,
         StagesCtrl, notify, multi) {
 
         var resource,
@@ -17,7 +17,7 @@ define([
         $injector.invoke(BaseListController, this, {$scope: $scope});
         $scope.currentModule = 'archive';
         $scope.stages = new StagesCtrl($scope);
-        $scope.content = new ContentCtrl($scope);
+        $scope.content = content;
         $scope.type = 'archive';
         $scope.repo = {
             ingest: false,
@@ -60,10 +60,6 @@ define([
 
             $scope.stages.select(stage);
             multi.reset();
-        };
-
-        $scope.openUpload = function openUpload() {
-            superdesk.intent('upload', 'media');
         };
 
         this.fetchItems = function fetchItems(criteria) {
@@ -133,7 +129,7 @@ define([
         $scope.$on('item:replaced', refreshItems);
         $scope.$on('item:deleted', refreshItems);
         $scope.$on('item:mark', refreshItems);
-        $scope.$on('item:spike', refreshItems);
+        $scope.$on('item:spike', reset);
         $scope.$on('item:unspike', reset);
         $scope.$on('item:published:no_post_publish_actions', refreshItems);
 

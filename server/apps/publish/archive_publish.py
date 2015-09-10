@@ -18,9 +18,10 @@ from eve.utils import config, ParsedRequest
 from eve.validation import ValidationError
 
 from superdesk.metadata.item import PUB_STATUS, CONTENT_TYPE, ITEM_TYPE, GUID_FIELD, ITEM_STATE, CONTENT_STATE, \
-    PUBLISH_STATES
+    PUBLISH_STATES, EMBARGO
 from superdesk.metadata.packages import SEQUENCE, PACKAGE_TYPE, TAKES_PACKAGE, LINKED_IN_PACKAGES
 from apps.publish.subscribers import SUBSCRIBER_TYPES
+from apps.archive.archive_crop import ArchiveCropService
 from settings import DEFAULT_SOURCE_VALUE_FOR_MANUAL_ARTICLES
 import superdesk
 from superdesk.emails import send_article_killed_email
@@ -35,7 +36,8 @@ from superdesk.workflow import is_workflow_state_transition_valid
 from apps.publish.formatters import get_formatter
 from apps.common.components.utils import get_component
 from apps.item_autosave.components.item_autosave import ItemAutosave
-from apps.archive.common import item_url, get_user, insert_into_versions, \
+from superdesk.metadata.utils import item_url
+from apps.archive.common import get_user, insert_into_versions, \
     set_sign_off, item_operations, ITEM_OPERATION
 from apps.packages import TakesPackageService
 from apps.packages.package_service import PackageService
@@ -107,6 +109,12 @@ class BasePublishService(BaseService):
             raise PublishQueueError.previous_take_not_published_error(
                 Exception("Previous takes are not published."))
 
+        if original[ITEM_TYPE] != CONTENT_TYPE.COMPOSITE:
+            if updates.get(EMBARGO) and self.publish_type in ['correct', 'kill']:
+                raise SuperdeskApiError.badRequestError("Embargo can't be set after publishing")
+
+            get_resource_service(ARCHIVE).validate_embargo(updated)
+
         # validate the publish schedule
         validate_schedule(updated.get('publish_schedule'), takes_package.get(SEQUENCE, 1))
         validation_errors = get_resource_service('validate').post([validate_item])
@@ -115,8 +123,12 @@ class BasePublishService(BaseService):
             raise ValidationError(validation_errors)
 
         # validate the package if it is one
-        self._validate_package_contents(original, takes_package)
-        self._set_version_last_modified_and_state(original, updates, updates.get(config.LAST_UPDATED, utcnow()))
+        package_validation_errors = []
+        self._validate_package_contents(original, takes_package, package_validation_errors)
+        if len(package_validation_errors) > 0:
+            raise ValidationError(package_validation_errors)
+
+        self._set_updates(original, updates, updates.get(config.LAST_UPDATED, utcnow()))
 
     def on_updated(self, updates, original):
         self.update_published_collection(published_item_id=original[config.ID_FIELD])
@@ -197,12 +209,22 @@ class BasePublishService(BaseService):
                                              original_of_take_to_be_published=original,
                                              package=package)
 
-        self._set_version_last_modified_and_state(package, package_updates, last_updated)
+        self._set_updates(package, package_updates, last_updated)
         self._update_archive(package, package_updates)
-        package.update(package_updates)
 
-        # send it to the digital channels
-        queued_digital = self.publish(doc=package, updates=None, target_media_type=DIGITAL)
+        '''
+        When embargo is lapsed and the article should go to Digital Subscribers the BasePublishService creates a
+        Takes Package whose state is draft. In this case, we can't initiate post-publish actions on the Takes Package as
+        the package hasn't been published. And post-publish service's get_subscribers() will return empty list.
+        Also, logically without publishing a package post-publish actions on the item doesn't make sense.
+        That's the reason checking the Takes Package state and invoking the appropriate Publish Service.
+        '''
+        if package[ITEM_STATE] in [CONTENT_STATE.PUBLISHED, CONTENT_STATE.CORRECTED]:
+            package.update(package_updates)
+            queued_digital = self.publish(doc=package, updates=None, target_media_type=DIGITAL)
+        else:
+            package.update(package_updates)
+            queued_digital = ArchivePublishService().publish(doc=package, updates=None, target_media_type=DIGITAL)
 
         self.update_published_collection(published_item_id=package[config.ID_FIELD])
         return queued_digital
@@ -240,16 +262,22 @@ class BasePublishService(BaseService):
 
                     if package_item[ITEM_TYPE] == CONTENT_TYPE.COMPOSITE:
                         # if the item is a package do recursion to publish
-                        self._publish_package_items(package_item, updates)
-                        self._update_archive(original=package_item, updates=updates, should_insert_into_versions=False)
+                        sub_updates = {i: updates[i] for i in ['state', 'operation'] if i in updates}
+                        sub_updates['groups'] = list(package_item['groups'])
+                        self._publish_package_items(package_item, sub_updates)
+                        self._update_archive(original=package_item, updates=sub_updates,
+                                             should_insert_into_versions=False)
                         self.update_published_collection(published_item_id=package_item[config.ID_FIELD])
                     else:
                         # publish the item
                         archive_publish.patch(id=package_item.pop(config.ID_FIELD), updates=package_item)
 
+                    insert_into_versions(id_=guid)
                     package_item = super().find_one(req=None, _id=guid)
 
                 subscribers = self._get_subscribers_for_package_item(package_item)
+                self.package_service.update_field_in_package(updates, package_item[config.ID_FIELD],
+                                                             config.VERSION, package_item[config.VERSION])
 
                 if package_item[config.ID_FIELD] in removed_items:
                     digital_item_id = None
@@ -327,9 +355,11 @@ class BasePublishService(BaseService):
 
         return self._get_subscribers_for_previously_sent_items(query)
 
-    def _set_version_last_modified_and_state(self, original, updates, last_updated):
+    def _set_updates(self, original, updates, last_updated):
         """
         Sets config.VERSION, config.LAST_UPDATED, ITEM_STATE in updates document.
+        If item is being published and embargo is available then append Editorial Note with 'Embargoed'.
+
         :param dict original: original document
         :param dict updates: updates related to the original document
         :param datetime last_updated: datetime of the updates.
@@ -340,6 +370,10 @@ class BasePublishService(BaseService):
 
         if original[config.VERSION] == updates.get(config.VERSION, original[config.VERSION]):
             resolve_document_version(document=updates, resource=ARCHIVE, method='PATCH', latest_doc=original)
+
+        if updates.get(EMBARGO, original.get(EMBARGO)) \
+                and updates.get('ednote', original.get('ednote', '')).find('Embargo') == -1:
+            updates['ednote'] = '{}{}'.format(original.get('ednote', ''), ' Embargoed.')
 
     def _update_archive(self, original, updates, versioned_doc=None, should_insert_into_versions=True):
         """
@@ -436,7 +470,7 @@ class BasePublishService(BaseService):
         :param target_subscribers: List of subscriber and items-per-subscriber
         """
         self._process_publish_updates(package, updates)
-        all_items = PackageService().get_residrefs(package)
+        all_items = self.package_service.get_residrefs(package)
         for items in target_subscribers.values():
             updated = deepcopy(package)
             updates_copy = deepcopy(updates)
@@ -445,13 +479,13 @@ class BasePublishService(BaseService):
             wanted_items = [item for item in items['items'] if items['items'].get(item, None)]
             unwanted_items = [item for item in all_items if item not in wanted_items]
             for i in unwanted_items:
-                still_items_left = PackageService().remove_ref_from_inmem_package(updated, i)
+                still_items_left = self.package_service.remove_ref_from_inmem_package(updated, i)
                 if not still_items_left and self.publish_type != 'correct':
                     # if nothing left in the package to be published and
                     # if not correcting then don't send the package
                     return
             for key in wanted_items:
-                PackageService().replace_ref_in_package(updated, key, items['items'][key])
+                self.package_service.replace_ref_in_package(updated, key, items['items'][key])
             self.queue_transmission(updated, [subscriber])
 
     def _process_publish_updates(self, doc, updates):
@@ -527,8 +561,21 @@ class BasePublishService(BaseService):
         return queued
 
     def sending_to_digital_subscribers(self, doc):
+        """
+        Returns False if item has embargo and is in future.
+        Returns True if there is a digital subscriber either in the previously sent or in yet to be sent subscribers
+
+        :param doc: document
+        :return bool: True if there's at least one
+        """
+
+        if doc.get(EMBARGO) and doc.get(EMBARGO) > utcnow():
+            return False
+
         subscribers, subscribers_yet_to_receive = self.get_subscribers(doc, DIGITAL)
-        return len(subscribers) > 0
+        subscribers = list(self.digital(subscribers))
+        subscribers_yet_to_receive = list(self.digital(subscribers_yet_to_receive))
+        return len(subscribers) > 0 or len(subscribers_yet_to_receive) > 0
 
     def get_subscribers(self, doc, target_media_type):
         """
@@ -725,36 +772,51 @@ class BasePublishService(BaseService):
         if doc.get(SEQUENCE):
             doc['headline'] = '{}={}'.format(doc['headline'], doc.get(SEQUENCE))
 
-    def _validate_package_contents(self, package, takes_package):
+    def _validate_package_contents(self, package, takes_package, validation_errors=[]):
         """
         If the item passed is a package this function will ensure that the unpublished content validates and none of
-         the content is locked by other than the publishing session, also do not allow any killed or spiked content
+        the content is locked by other than the publishing session, also do not allow any killed or spiked content
+
         :param package:
         :param takes_package:
-        :raises: Validation exceptions if the validation fails
+        :param validation_errors: validation errors are appended if there are any.
         """
         # Ensure it is the sort of thing we need to validate
         if package[ITEM_TYPE] == CONTENT_TYPE.COMPOSITE and not takes_package and self.publish_type == ITEM_PUBLISH:
             items = self.package_service.get_residrefs(package)
 
-            validation_errors = []
+            # make sure package is not scheduled or spiked
+            if package[ITEM_STATE] in (CONTENT_STATE.SPIKED, CONTENT_STATE.SCHEDULED):
+                validation_errors.append('Package cannot be {}'.format(package[ITEM_STATE]))
+
+            if package.get(EMBARGO):
+                validation_errors.append('Package cannot have Embargo')
+
             if items:
                 for guid in items:
                     doc = super().find_one(req=None, _id=guid)
-                    # make sure no items are killed or locked
-                    if doc[ITEM_STATE] in (CONTENT_STATE.KILLED, CONTENT_STATE.SPIKED):
-                        raise ValidationError(['Package contains killed or spike item'])
+
+                    if package[ITEM_TYPE] == CONTENT_TYPE.COMPOSITE:
+                        digital = self.takes_package_service.get_take_package(doc) or {}
+                        self._validate_package_contents(doc, digital, validation_errors)
+
+                    # make sure no items are killed or spiked or scheduled
+                    if doc[ITEM_STATE] in (CONTENT_STATE.KILLED, CONTENT_STATE.SPIKED, CONTENT_STATE.SCHEDULED):
+                        validation_errors.append('Package cannot contain {} item'.format(doc[ITEM_STATE]))
+
+                    if doc.get(EMBARGO):
+                        validation_errors.append('Package cannot have Items with Embargo')
+
                     # don't validate items that already have published
                     if doc[ITEM_STATE] not in [CONTENT_STATE.PUBLISHED, CONTENT_STATE.CORRECTED]:
                         validate_item = {'act': self.publish_type, 'type': doc[ITEM_TYPE], 'validate': doc}
                         errors = get_resource_service('validate').post([validate_item], headline=True)
                         if errors[0]:
                             validation_errors.extend(errors[0])
+
                     # check the locks on the items
                     if doc.get('lock_session', None) and package['lock_session'] != doc['lock_session']:
-                        validation_errors.extend(['{}: packaged item is locked'.format(doc['headline'])])
-                if len(validation_errors) > 0:
-                    raise ValidationError(validation_errors)
+                        validation_errors.extend(['{}: packaged item cannot be locked'.format(doc['headline'])])
 
 
 class ArchivePublishResource(BasePublishResource):
@@ -785,7 +847,8 @@ class ArchivePublishService(BasePublishService):
     def get_subscribers(self, doc, target_media_type):
         """
         Get the subscribers for this document based on the target_media_type for publishing.
-        1. Get the list of all active subscribers.
+        1. If the item has embargo and is a future date then fetch active Wire Subscribers.
+           Otherwise get all active subscribers.
             a. Get the list of takes subscribers if Takes Package
         2. If targeted_for is set then exclude internet/digital subscribers.
         3. If takes package then subsequent takes are sent to same wire subscriber as first take.
@@ -800,8 +863,13 @@ class ArchivePublishService(BasePublishService):
         """
         subscribers, subscribers_yet_to_receive, takes_subscribers = [], [], []
         first_take = None
+
         # Step 1
-        subscribers = list(get_resource_service('subscribers').get(req=None, lookup={'is_active': True}))
+        query = {'is_active': True}
+        if doc.get(EMBARGO) and doc.get(EMBARGO) > utcnow():
+            query['subscriber_type'] = SUBSCRIBER_TYPES.WIRE
+
+        subscribers = list(get_resource_service('subscribers').get(req=None, lookup=query))
 
         if doc.get(ITEM_TYPE) in [CONTENT_TYPE.COMPOSITE] and doc.get(PACKAGE_TYPE) == TAKES_PACKAGE:
             # Step 1a
@@ -893,7 +961,7 @@ class KillPublishService(BasePublishService):
                     queued = self.publish(doc=original_data, updates=updates_data, target_media_type=WIRE)
                     # we need to update the archive item and not worry about queued as we could have
                     # a takes only going to digital client.
-                    self._set_version_last_modified_and_state(original_data, updates_data, last_updated)
+                    self._set_updates(original_data, updates_data, last_updated)
                     self._update_archive(original=original_data, updates=updates_data,
                                          should_insert_into_versions=True)
                     self.update_published_collection(published_item_id=original_data['_id'])
@@ -923,6 +991,7 @@ class KillPublishService(BasePublishService):
 
 
 class CorrectPublishResource(BasePublishResource):
+
     def __init__(self, endpoint_name, app, service):
         super().__init__(endpoint_name, app, service, 'correct')
 
@@ -933,6 +1002,7 @@ class CorrectPublishService(BasePublishService):
 
     def on_update(self, updates, original):
         updates[ITEM_OPERATION] = ITEM_CORRECT
+        ArchiveCropService().validate_multiple_crops(updates, original)
         super().on_update(updates, original)
         set_sign_off(updates, original)
 
@@ -947,7 +1017,8 @@ class CorrectPublishService(BasePublishService):
         original_updates['operation'] = updates['operation']
         original_updates[ITEM_STATE] = updates[ITEM_STATE]
         super().on_updated(updates, original)
-        packages = PackageService().get_packages(original[config.ID_FIELD])
+        ArchiveCropService().delete_replaced_crop_files(updates, original)
+        packages = self.package_service.get_packages(original[config.ID_FIELD])
         if packages and packages.count() > 0:
             archive_correct = get_resource_service('archive_correct')
             processed_packages = []
@@ -955,17 +1026,33 @@ class CorrectPublishService(BasePublishService):
                 if package[ITEM_STATE] in [CONTENT_STATE.PUBLISHED, CONTENT_STATE.CORRECTED] and \
                         package.get(PACKAGE_TYPE, '') == '' and \
                         str(package[config.ID_FIELD]) not in processed_packages:
+                    original_updates['groups'] = package['groups']
+
+                    if updates.get('headline'):
+                        self.package_service.update_field_in_package(original_updates, original[config.ID_FIELD],
+                                                                     'headline', updates.get('headline'))
+
+                    if updates.get('slugline'):
+                        self.package_service.update_field_in_package(original_updates, original[config.ID_FIELD],
+                                                                     'slugline', updates.get('slugline'))
+
                     archive_correct.patch(id=package[config.ID_FIELD], updates=original_updates)
+                    insert_into_versions(id_=package[config.ID_FIELD])
                     processed_packages.append(package[config.ID_FIELD])
+
+    def update(self, id, updates, original):
+        ArchiveCropService().create_multiple_crops(updates, original)
+        super().update(id, updates, original)
 
     def get_subscribers(self, doc, target_media_type):
         """
-        Get the subscribers for this document based on the target_media_type
-        for article Correction.
+        Get the subscribers for this document based on the target_media_type for article Correction.
         1. The article is sent to Subscribers (digital and wire) who has received the article previously.
         2. For subsequent takes, only published to previously published wire clients. Digital clients don't get
            individual takes but digital client takes package.
-        3. Fetch Active Subscribers and exclude those who received the article previously.
+        3. If the item has embargo and is a future date then fetch active Wire Subscribers.
+           Otherwise fetch Active Subscribers. After fetching exclude those who received the article previously from
+           active subscribers list.
         4. If article has 'targeted_for' property then exclude subscribers of type Internet from Subscribers list.
         5. Filter the subscriber that have not received the article previously against publish filters
         and global filters for this document.
@@ -986,7 +1073,11 @@ class CorrectPublishService(BasePublishService):
             # step 2
             if not self.takes_package_service.get_take_package_id(doc):
                 # Step 3
-                active_subscribers = get_resource_service('subscribers').get(req=None, lookup={'is_active': True})
+                query = {'is_active': True}
+                if doc.get(EMBARGO) and doc.get(EMBARGO) > utcnow():
+                    query['subscriber_type'] = SUBSCRIBER_TYPES.WIRE
+
+                active_subscribers = list(get_resource_service('subscribers').get(req=None, lookup=query))
                 subscribers_yet_to_receive = [a for a in active_subscribers
                                               if not any(a[config.ID_FIELD] == s[config.ID_FIELD]
                                                          for s in subscribers)]
