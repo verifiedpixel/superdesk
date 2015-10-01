@@ -9,7 +9,7 @@
     </div>
 
     <div class="button-stack right-stack">
-        <button class="btn btn-medium pull-left" ng-if="action === 'view' && item._locked && can_unlock() && itemActions.save" ng-click="unlock()" ng-disabled="unlockClicked" translate>Unlock</button>
+        <button class="btn btn-medium pull-left" ng-if="item._locked && can_unlock() && itemActions.save" ng-click="unlock()" ng-disabled="unlockClicked" translate>Unlock</button>
 
         <button id="Edit" class="btn btn-medium pull-left" ng-if="item._type !== 'legal_archive'"
             ng-show="action === 'view' && !item._locked && itemActions.edit"
@@ -31,7 +31,7 @@
             ng-click="openAction('kill')"
             translate>Edit and Kill</button>
 
-        <button class="btn btn-medium pull-left" ng-click="close()" translate>CLOSE</button>
+        <button class="btn btn-medium pull-left" id="closeAuthoringBtn" ng-click="close()" translate>CLOSE</button>
 
         <button class="btn btn-medium btn-info pull-left" type="submit"
             ng-click="save(item)"
@@ -45,17 +45,6 @@
 			 ng-disabled="!_editable"
 			 ng-if="highlight"
 			 translate>Export</button>
-
-        <button class="btn btn-medium btn-info pull-left" type="submit"
-            ng-click="publish()"
-            ng-if = "action !== 'view' && (itemActions.publish || itemActions.kill || itemActions.correct)"
-            ng-show="_editable"
-            translate>{{action === "edit" ? "PUBLISH": action}}</button>
-
-        <div ng-if="item._type !== 'legal_archive'" class="navbtn dropdown strict pull-left" title="{{ :: 'Create' | translate }}" dropdown>
-            <button class="dropdown-toggle sd-create-btn" dropdown-toggle></button>
-            <ul class="dropdown-menu pull-right" sd-content-create></ul>
-        </div>
 
         <div ng-if="item._type !== 'legal_archive' && itemActions.multi_edit" class="navbtn dropdown strict multiedit-dropdown pull-left" title="{{ :: 'Multiedit' | translate }}" dropdown>
             <button class="dropdown-toggle" dropdown-toggle>
@@ -118,8 +107,8 @@
             </div>
         </div>
 
-        <button id="send-to-btn" ng-show="_editable && $root.isActionAllowed(item, 'move') && itemActions.send"
-            class="navbtn navbtn-hover" title="{{ :: 'Send to desk' | translate }}"
+        <button id="send-to-btn" ng-show="_editable"
+            class="navbtn navbtn-hover" title="{{ :: 'Send to / Publish' | translate }}"
             ng-click="views.send = !views.send">
             <i class="svg-icon-sendto"></i>
         </button>

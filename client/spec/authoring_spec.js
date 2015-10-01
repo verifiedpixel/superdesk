@@ -91,13 +91,13 @@ describe('authoring', function() {
         workspace.open();
         workspace.switchToDesk('SPORTS DESK');
         workspace.editItem('item5', 'Politic');
-        expect(authoring.sendToButton.isDisplayed()).toBe(false);
         authoring.writeText(' ');
         authoring.save();
         expect(authoring.sendToButton.isDisplayed()).toBe(true);
         authoring.showHistory();
         expect(authoring.getHistoryItems().count()).toBe(2);
         authoring.sendTo('Politic Desk', 'two');
+        authoring.confirmSendTo();
         workspace.selectStage('two');
         workspace.editItem('item5', 'Politic');
         authoring.showHistory();
@@ -127,7 +127,7 @@ describe('authoring', function() {
         authoring.publish();
         workspace.selectStage('Published');
         workspace.filterItems('composite');
-        content.actionOnItem('View item', 0);
+        content.actionOnItem('Open', 0);
         authoring.showHistory();
         expect(authoring.getHistoryItems().count()).toBe(2);
         var publishItem = authoring.getHistoryItem(1);
@@ -142,5 +142,70 @@ describe('authoring', function() {
         monitoring.openMonitoring();
         monitoring.createItemAction('create_package');
         expect(element(by.className('packaging-screen')).isDisplayed()).toBe(true);
+    });
+
+    it('can change normal theme', function () {
+        workspace.open();
+        workspace.switchToDesk('SPORTS DESK');
+        workspace.editItem('item6', 'Politic');
+        authoring.changeNormalTheme('dark-theme');
+
+        expect(monitoring.hasClass(element(by.className('main-article')), 'dark-theme')).toBe(true);
+    });
+
+    it('can change proofread theme', function () {
+        workspace.open();
+        workspace.switchToDesk('SPORTS DESK');
+        workspace.editItem('item6', 'Politic');
+        authoring.changeProofreadTheme('dark-theme-mono');
+
+        expect(monitoring.hasClass(element(by.className('main-article')), 'dark-theme-mono')).toBe(true);
+    });
+
+    it('can show correct and kill buttons based on the selected action', function() {
+        workspace.open();
+        workspace.switchToDesk('SPORTS DESK');
+        workspace.editItem('item5', 'Politic');
+        authoring.writeText('some text');
+        authoring.save();
+        authoring.publish();
+
+        workspace.selectStage('Published');
+        workspace.filterItems('text');
+
+        content.actionOnItem('Correct item', 0);
+        authoring.sendToButton.click();
+        expect(authoring.correct_button.isDisplayed()).toBe(true);
+        element(by.id('closeAuthoringBtn')).click();
+
+        content.actionOnItem('Kill item', 0);
+        authoring.sendToButton.click();
+        expect(authoring.kill_button.isDisplayed()).toBe(true);
+        element(by.id('closeAuthoringBtn')).click();
+    });
+
+    it('can show correct and kill buttons for latest version only', function() {
+        workspace.open();
+        workspace.switchToDesk('SPORTS DESK');
+        workspace.editItem('item5', 'Politic');
+        authoring.writeText('some text');
+        authoring.save();
+        authoring.publish();
+
+        workspace.selectStage('Published');
+        workspace.filterItems('text');
+
+        content.actionOnItem('Correct item', 0);
+        authoring.correct();
+
+        content.actionOnItem('Open', 0);
+        expect(authoring.edit_correct_button.isDisplayed()).toBe(true);
+        expect(authoring.edit_kill_button.isDisplayed()).toBe(true);
+        element(by.id('closeAuthoringBtn')).click();
+
+        content.actionOnItem('Open', 1);
+        expect(authoring.edit_correct_button.isDisplayed()).toBe(false);
+        expect(authoring.edit_kill_button.isDisplayed()).toBe(false);
+        element(by.id('closeAuthoringBtn')).click();
     });
 });

@@ -15,7 +15,7 @@ describe('Content', function() {
 
         browser.wait(function() {
             return headline.isDisplayed();
-        }, 100); // animated sidebar
+        }, 200); // animated sidebar
 
         return headline.getText();
     }
@@ -30,6 +30,17 @@ describe('Content', function() {
     function pressKey(key) {
         body.sendKeys(key);
         browser.sleep(50);
+    }
+
+    function setEmbargo() {
+        var embargoTS = new Date();
+        embargoTS.setDate(embargoTS.getDate() + 2);
+        var embargoDate = embargoTS.getDate() + '/' + (embargoTS.getMonth() + 1) + '/' +
+            embargoTS.getFullYear();
+        var embargoTime = embargoTS.toTimeString().slice(0, 8);
+
+        element(by.model('item.embargo_date')).element(by.tagName('input')).sendKeys(embargoDate);
+        element(by.model('item.embargo_time')).element(by.tagName('input')).sendKeys(embargoTime);
     }
 
     it('can navigate with keyboard', function() {
@@ -132,6 +143,111 @@ describe('Content', function() {
 
         element.all(by.className('btn-warning')).first().click();
         expect(content.count()).toBe(2);
+    });
+
+    it('can open item using hotkey ctrl+0', function() {
+        content.setListView();
+
+        browser.actions().sendKeys(protractor.Key.chord(protractor.Key.CONTROL, '0')).perform();
+        browser.sleep(500);
+
+        var storyNameEl = element(by.model('meta.unique_name'));
+        expect(storyNameEl.isDisplayed()).toBe(true);
+
+        storyNameEl.clear();
+        storyNameEl.sendKeys('item1');
+
+        element(by.id('searchItemByNameBtn')).click();
+        browser.sleep(500);
+
+        expect(element(by.className('info-icons')).all(by.className('filetype-icon-text'))
+            .first().isDisplayed()).toBe(true);
+        expect(element(by.className('navigation-tabs')).all(by.repeater('widget in widgets')).count()).toBe(7);
+
+        element(by.id('closeAuthoringBtn')).click();
+    });
+
+    it('can open package using hotkey ctrl+0', function() {
+        content.setListView();
+
+        browser.actions().sendKeys(protractor.Key.chord(protractor.Key.CONTROL, '0')).perform();
+        browser.sleep(500);
+
+        var storyNameEl = element(by.model('meta.unique_name'));
+        expect(storyNameEl.isDisplayed()).toBe(true);
+
+        storyNameEl.clear();
+        storyNameEl.sendKeys('package1');
+
+        element(by.id('searchItemByNameBtn')).click();
+        browser.sleep(500);
+
+        expect(element(by.className('info-icons')).all(by.className('filetype-icon-composite'))
+            .first().isDisplayed()).toBe(true);
+        expect(element(by.className('navigation-tabs')).all(by.repeater('widget in widgets')).count()).toBe(6);
+
+        element(by.id('closeAuthoringBtn')).click();
+    });
+
+    it('can display embargo in metadata when set', function() {
+        workspace.editItem('item3', 'SPORTS');
+        authoring.sendToButton.click();
+
+        setEmbargo();
+
+        element(by.css('[ng-click="save(item)"]')).click();
+        element(by.id('closeAuthoringBtn')).click();
+
+        content.previewItem('item3');
+        element(by.css('[ng-click="tab = \'metadata\'"]')).click();
+        expect(element(by.model('item.embargo')).isDisplayed()).toBe(true);
+    });
+
+    it('cannot display embargo items in search widget of the package', function() {
+        workspace.editItem('item3', 'SPORTS');
+        authoring.sendToButton.click();
+
+        setEmbargo();
+
+        element(by.css('[ng-click="save(item)"]')).click();
+        element(by.id('closeAuthoringBtn')).click();
+
+        element(by.className('sd-create-btn')).click();
+        element(by.id('create_package')).click();
+
+        element(by.id('Search')).click();
+        element(by.className('search-box')).element(by.model('query')).sendKeys('item3');
+        expect(element.all(by.repeater('pitem in contentItems')).count()).toBe(0);
+    });
+
+    it('can enable/disable send and continue based on emabrgo', function() {
+        workspace.editItem('item3', 'SPORTS');
+        authoring.sendToButton.click();
+
+        // Initial State
+        expect(authoring.sendAndContinueBtn.isEnabled()).toBe(false);
+        expect(authoring.sendBtn.isEnabled()).toBe(false);
+
+        var sidebar = element.all(by.css('.slide-pane')).last(),
+            dropdown = sidebar.element(by.css('.dropdown--dark .dropdown-toggle'));
+
+        dropdown.waitReady();
+
+        // State after selecting different Stage in the same desk
+        sidebar.element(by.buttonText('two')).click();
+        expect(authoring.sendAndContinueBtn.isEnabled()).toBe(true);
+        expect(authoring.sendBtn.isEnabled()).toBe(true);
+
+        // State after setting Embargo
+        setEmbargo();
+        expect(authoring.sendAndContinueBtn.isEnabled()).toBe(false);
+        expect(authoring.sendBtn.isEnabled()).toBe(true);
+
+        //State after changing Desk
+        dropdown.click();
+        sidebar.element(by.buttonText('Politic Desk')).click();
+        expect(authoring.sendAndContinueBtn.isEnabled()).toBe(false);
+        expect(authoring.sendBtn.isEnabled()).toBe(true);
     });
 
 });

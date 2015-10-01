@@ -6,15 +6,22 @@ module.exports = new Authoring();
 function Authoring() {
 
     this.lock = element(by.css('[ng-click="lock()"]'));
-    this.publish_button = element(by.buttonText('PUBLISH'));
+    this.publish_button = element(by.buttonText('publish'));
+    this.correct_button = element(by.buttonText('correct'));
+    this.kill_button = element(by.buttonText('kill'));
     this.close_button = element(by.buttonText('CLOSE'));
     this.save_button = element(by.buttonText('SAVE'));
+    this.edit_correct_button = element(by.buttonText('Edit and Correct'));
+    this.edit_kill_button = element(by.buttonText('Edit and Kill'));
 
     this.navbarMenuBtn = element(by.css('.dropdown-toggle.sd-create-btn'));
     this.newPlainArticleLink = element(by.id('create_text_article'));
     this.newEmptyPackageLink = element(by.id('create_package'));
     this.infoIconsBox = element(by.css('.info-icons'));
+
     this.sendToButton = element(by.id('send-to-btn'));
+    this.sendAndContinueBtn = element(by.buttonText('send and continue'));
+    this.sendBtn = element(by.buttonText('send'));
 
     this.setCategoryBtn = element(by.id('category-setting'))
         .element(by.tagName('button'));
@@ -48,8 +55,8 @@ function Authoring() {
     };
 
     this.sendToSidebarOpened = function(desk, stage) {
-        var sidebar = element.all(by.css('.send-to-pane')).last(),
-            dropdown = sidebar.element(by.css('.desk-select .dropdown-toggle'));
+        var sidebar = element.all(by.css('.slide-pane')).last(),
+            dropdown = sidebar.element(by.css('.dropdown--dark .dropdown-toggle'));
 
         dropdown.waitReady();
         dropdown.click();
@@ -57,7 +64,7 @@ function Authoring() {
         if (stage !== undefined) {
             sidebar.element(by.buttonText(stage)).click();
         }
-        sidebar.element(by.buttonText('send')).click();
+        this.sendBtn.click();
     };
 
     this.markAction = function() {
@@ -75,7 +82,13 @@ function Authoring() {
     };
 
     this.publish = function() {
+        this.sendToButton.click();
         return this.publish_button.click();
+    };
+
+    this.correct = function() {
+        this.sendToButton.click();
+        return this.correct_button.click();
     };
 
     this.save = function() {
@@ -249,5 +262,22 @@ function Authoring() {
 
     this.closeHeader = function() {
         element(by.className('icon-chevron-up-thin')).click();
+    };
+
+    this.changeNormalTheme = function (theme) {
+        element(by.className('theme-select'))
+                .element(by.className('dropdown-toggle')).click();
+
+        element(by.className('normal-theme-list'))
+                .all(by.className(theme)).first().click();
+    };
+
+    this.changeProofreadTheme = function (theme) {
+        element(by.className('proofread-toggle')).click();
+        element(by.className('theme-select'))
+                .element(by.className('dropdown-toggle')).click();
+
+        element(by.className('proofread-theme-list'))
+                .all(by.className(theme)).first().click();
     };
 }

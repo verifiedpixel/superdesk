@@ -40,7 +40,7 @@ class ninjsFormatterTest(SuperdeskTestCase):
             'body_html': 'The story body',
             'type': 'text',
             'word_count': '1',
-            'priority': '1',
+            'priority': 1,
             '_id': 'urn:localhost.abc',
             'state': 'published',
             'urgency': 2,
@@ -56,7 +56,7 @@ class ninjsFormatterTest(SuperdeskTestCase):
                     "type": "text", "subject": [{"qcode": "02011001", "name": "international court or tribunal"},
                                                 {"qcode": "02011002", "name": "extradition"}],
                     "headline": "This is a test headline", "byline": "joe", "_id": "urn:localhost.abc", "urgency": 2,
-                    "embargoed": embargo_ts.isoformat()}
+                    "priority": 1, "embargoed": embargo_ts.isoformat()}
         self.assertEqual(json.loads(doc), expected)
 
     def testPictureFomatter(self):
@@ -96,7 +96,8 @@ class ninjsFormatterTest(SuperdeskTestCase):
                 "https://one-api.aap.com.au/api/v3/Assets/20150723001158606583/Original/download", \
                 "mimetype": "image/jpeg"}}, "headline": "AMAZING PICTURE", "pubstatus": "usable", \
                 "version": "1", "versioncreated": "2015-07-23T00:15:00.000Z", "_id": "20150723001158606583", \
-                "description_text": "The most amazing picture you will ever see", "type": "picture"}')
+                "description_text": "The most amazing picture you will ever see", \
+                "type": "picture", "priority": 5}')
         self.assertEqual(json.loads(doc), expected)
 
     def testCompositeFomatter(self):
@@ -215,13 +216,12 @@ class ninjsFormatterTest(SuperdeskTestCase):
 
         seq, doc = self.formatter.format(article, {'name': 'Test Subscriber'})[0]
         expected = json.loads('{"headline": "WA:Navy steps in with WA asylum-seeker boat", \
-        "_created": "2015-07-24T05:05:00.000Z", "version": "2", \
+        "version": "2", \
         "_id": "urn:newsml:localhost:2015-07-24T15:05:00.116047:435c93c2-492c-4668-ab47-ae6e2b9b1c2c", \
-        "_updated": "2015-07-24T05:05:25.000Z", \
         "associations": {"main": \
         [{"_id": "tag:localhost:2015:515b895a-b336-48b2-a506-5ffaf561b916", "type": "text"}], \
         "sidebars": \
         [{"_id": "urn:newsml:localhost:2015-07-24T15:04:29.589984:af3bef9a-5002-492b-a15a-8b460e69b164", \
         "type": "picture"}]}, "description_text": "", "versioncreated": "2015-07-24T05:05:14.000Z", "type": \
-        "composite", "pubstatus": "usable", "language": "en"}')
+        "composite", "pubstatus": "usable", "language": "en", "priority": 5}')
         self.assertEqual(json.loads(doc), expected)

@@ -12,6 +12,7 @@
 import os
 from datetime import datetime, timedelta
 from superdesk.io.commands.update_ingest import LAST_ITEM_UPDATE
+import superdesk
 import superdesk.tests as tests
 from behave import given, when, then  # @UnresolvedImport
 from flask import json
@@ -119,6 +120,10 @@ def get_res(url, context):
     response = context.client.get(get_prefixed_url(context.app, url), headers=context.headers)
     expect_status(response, 200)
     return json.loads(response.get_data())
+
+
+def parse_date(datestr):
+    return datetime.strptime(datestr, "%Y-%m-%dT%H:%M:%S%z")
 
 
 def assert_200(response):
@@ -308,15 +313,44 @@ def step_impl_fetch_from_provider_ingest(context, provider_name, guid):
         fetch_from_provider(context, provider_name, guid)
 
 
+def embed_routing_scheme_rules(scheme):
+    """Fetch all content filters referenced by the given routing scheme and
+    embed them into the latter (replacing the plain references to filters).
+
+    :param dict scheme: routing scheme configuration
+    """
+    filters_service = superdesk.get_resource_service('content_filters')
+
+    rules_filters = (
+        (rule, str(rule['filter']))
+        for rule in scheme['rules'] if rule.get('filter'))
+
+    for rule, filter_id in rules_filters:
+        content_filter = filters_service.find_one(_id=filter_id, req=None)
+        rule['filter'] = content_filter
+
+
 @when('we fetch from "{provider_name}" ingest "{guid}" using routing_scheme')
 def step_impl_fetch_from_provider_ingest_using_routing(context, provider_name, guid):
     with context.app.test_request_context(context.app.config['URL_PREFIX']):
         _id = apply_placeholders(context, context.text)
         routing_scheme = get_resource_service('routing_schemes').find_one(_id=_id, req=None)
+        embed_routing_scheme_rules(routing_scheme)
         fetch_from_provider(context, provider_name, guid, routing_scheme)
 
 
-def fetch_from_provider(context, provider_name, guid, routing_scheme=None):
+@when('we ingest and fetch "{provider_name}" "{guid}" to desk "{desk}" stage "{stage}" using routing_scheme')
+def step_impl_fetch_from_provider_ingest_using_routing_with_desk(context, provider_name, guid, desk, stage):
+    with context.app.test_request_context(context.app.config['URL_PREFIX']):
+        _id = apply_placeholders(context, context.text)
+        desk_id = apply_placeholders(context, desk)
+        stage_id = apply_placeholders(context, stage)
+        routing_scheme = get_resource_service('routing_schemes').find_one(_id=_id, req=None)
+        embed_routing_scheme_rules(routing_scheme)
+        fetch_from_provider(context, provider_name, guid, routing_scheme, desk_id, stage_id)
+
+
+def fetch_from_provider(context, provider_name, guid, routing_scheme=None, desk_id=None, stage_id=None):
     ingest_provider_service = get_resource_service('ingest_providers')
     provider = ingest_provider_service.find_one(name=provider_name, req=None)
     provider['routing_scheme'] = routing_scheme
@@ -331,6 +365,10 @@ def fetch_from_provider(context, provider_name, guid, routing_scheme=None):
     for item in items:
         item['versioncreated'] = utcnow()
         item['expiry'] = utcnow() + timedelta(minutes=20)
+
+        if desk_id:
+            from bson.objectid import ObjectId
+            item['task'] = {'desk': ObjectId(desk_id), 'stage': ObjectId(stage_id)}
 
     failed = context.ingest_items(items, provider, rule_set=provider.get('rule_set'),
                                   routing_scheme=provider.get('routing_scheme'))
@@ -995,7 +1033,7 @@ def step_impl_then_get_file(context):
     assert len(response.get_data()), response
     assert response.mimetype == 'application/json', response.mimetype
     expect_json_contains(response, 'renditions')
-    expect_json_contains(response, {'mime_type': 'image/jpeg'})
+    expect_json_contains(response, {'mimetype': 'image/jpeg'})
     fetched_data = get_json_data(context.response)
     context.fetched_data = fetched_data
 
@@ -1324,7 +1362,7 @@ def get_content_expiry(context, minutes):
 def get_desk_spike_expiry(context, test_minutes):
     response_data = json.loads(context.response.get_data())
     assert response_data['expiry']
-    response_expiry = datetime.strptime(response_data['expiry'], "%Y-%m-%dT%H:%M:%S%z")
+    response_expiry = parse_date(response_data['expiry'])
     expiry = utc.utcnow() + timedelta(minutes=int(test_minutes))
     assert response_expiry <= expiry
 
@@ -1517,11 +1555,11 @@ def then_field_is_not_populated(context, field_name):
         assert resp[field_name] is None, 'item is not populated'
 
 
-@when('we delete publish filter "{name}"')
-def step_delete_publish_filter(context, name):
+@when('we delete content filter "{name}"')
+def step_delete_content_filter(context, name):
     with context.app.test_request_context(context.app.config['URL_PREFIX']):
-        filter = get_resource_service('publish_filters').find_one(req=None, name=name)
-        url = '/publish_filters/{}'.format(filter['_id'])
+        filter = get_resource_service('content_filters').find_one(req=None, name=name)
+        url = '/content_filters/{}'.format(filter['_id'])
         headers = if_match(context, filter.get('_etag'))
         context.response = context.client.delete(get_prefixed_url(context.app, url), headers=headers)
 
@@ -1638,17 +1676,23 @@ def when_we_schedule_the_routing_scheme(context, scheme_id):
         href = get_self_href(res, context)
         headers = if_match(context, res.get('_etag'))
         rule = res.get('rules')[0]
-        day_of_week = get_resource_service('routing_schemes').day_of_week
+
+        from apps.rules.routing_rules import Weekdays
+
         rule['schedule'] = {
-            'day_of_week': [day_of_week[(datetime.now() + timedelta(days=1)).weekday()],
-                            day_of_week[(datetime.now() + timedelta(days=2)).weekday()]],
+            'day_of_week': [
+                Weekdays.dayname(datetime.now() + timedelta(days=1)),
+                Weekdays.dayname(datetime.now() + timedelta(days=2))
+            ],
             'hour_of_day_from': '1600',
             'hour_of_day_to': '2000'
         }
-        rule = res.get('rules')[1]
-        rule['schedule'] = {
-            'day_of_week': [day_of_week[datetime.now().weekday()]]
-        }
+
+        if len(res.get('rules')) > 1:
+            rule = res.get('rules')[1]
+            rule['schedule'] = {
+                'day_of_week': [Weekdays.dayname(datetime.now())]
+            }
 
         context.response = context.client.patch(get_prefixed_url(context.app, href),
                                                 data=json.dumps({'rules': res.get('rules', [])}),
@@ -1765,7 +1809,7 @@ def validate_published_item_expiry(context, publish_expiry_in_desk):
 
 def assert_expiry(context, item, publish_expiry_in_desk):
     embargo = item.get('embargo')
-    actual = datetime.strptime(item.get('expiry'), '%Y-%m-%dT%H:%M:%S%z')
+    actual = parse_date(item.get('expiry'))
     error_message = 'Published Item Expiry validation fails'
     publish_expiry_in_desk = int(publish_expiry_in_desk)
 

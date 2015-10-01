@@ -198,6 +198,8 @@
             params.ignoreScheduled = true;
 
             var query = search.query(params);
+
+            query.filter({'not': {'exists': {'field': 'embargo'}}});
             query.size(25);
             if ($scope.highlight) {
                 query.filter({term: {'highlights': $scope.highlight.toString()}});
@@ -242,6 +244,11 @@
             getPackageItems();
         }, true);
 
+        /**
+         * Add a content item to a given group
+         * @param {Object} group
+         * @param {Object} item
+         */
         $scope.addItemToGroup = function(group, item) {
             packages.addItemsToPackage($scope.item, group, [item]);
             $scope.autosave($scope.item);
@@ -324,8 +331,8 @@
         };
     }
 
-    PackageItemsEditDirective.$inject = ['packages'];
-    function PackageItemsEditDirective(packages) {
+    PackageItemsEditDirective.$inject = ['packages', 'notify'];
+    function PackageItemsEditDirective(packages, notify) {
         return {
             scope: false,
             require: 'ngModel',
@@ -338,7 +345,11 @@
                         groupIndex = scope.list.length - 1;
                     }
                     for (var i = 0; i < data.items.length; i++) {
-                        scope.list[groupIndex].items.unshift(packages.getReferenceFor(data.items[i]));
+                        if (isAdded(data.items[i])) {
+                            notify.error(gettext('Item is already in this package.'));
+                        } else {
+                            scope.list[groupIndex].items.unshift(packages.getReferenceFor(data.items[i]));
+                        }
                     }
                     autosave();
                 });
@@ -424,6 +435,14 @@
                 function autosave() {
                     ngModel.$setViewValue({list: scope.list});
                     scope.autosave(scope.item);
+                }
+
+                function isAdded(item) {
+                    return scope.list.some(function(group) {
+                        return group.items.some(function(i) {
+                            return i.residRef === item._id;
+                        });
+                    });
                 }
             }
         };
@@ -529,7 +548,9 @@
                 });
 
                 scope.open = function(item) {
-                    superdesk.intent('view', 'item', item);
+                    superdesk.intent('view', 'item', item).then(null, function() {
+                        superdesk.intent('edit', 'item', item);
+                    });
                 };
             }
         };
@@ -671,9 +692,9 @@
                 }
             })
             .activity('packageitem', {
-                label: gettext('Package item'),
-                priority: 5,
-                icon: 'package-plus',
+                label: gettext('Create package'),
+                priority: 50,
+                icon: 'package-create',
                 controller: ['data', 'packages', 'authoringWorkspace', 'notify', 'gettext',
                 function(data, packages, authoringWorkspace, notify, gettext) {
                     packages.createPackageFromItems([data.item])
@@ -694,7 +715,7 @@
                 group: 'packaging'
             })
             .activity('addtopackage', {
-                label: gettext('Add to package'),
+                label: gettext('Add to current'),
                 priority: 5,
                 dropdown: true,
                 icon: 'package-plus',
@@ -702,10 +723,40 @@
                 filters: [
                     {action: 'list', type: 'archive'}
                 ],
-                additionalCondition:['packages', 'authoringWorkspace', 'item', function(packages, authoringWorkspace, item) {
+                condition: function(item) {
+                    return item.task && item.task.desk;
+                },
+                additionalCondition:['authoringWorkspace', 'item', function(authoringWorkspace, item) {
                     var pkg = authoringWorkspace.getItem();
-                    return pkg && pkg.type === 'composite' &&
-                        pkg._id !== item._id && !packages.isAdded(pkg, item);
+                    return pkg && pkg.type === 'composite' && pkg._id !== item._id;
+                }],
+                group: 'packaging'
+            })
+            .activity('combineinpackage', {
+                label: gettext('Combine with current'),
+                priority: 49,
+                icon: 'package-plus',
+                controller: ['data', 'packages', 'authoringWorkspace', 'notify', 'gettext',
+                function(data, packages, authoringWorkspace, notify, gettext) {
+                    var openItem = authoringWorkspace.getItem();
+                    packages.createPackageFromItems([data.item, openItem])
+                    .then(function(newPackage) {
+                        authoringWorkspace.edit(newPackage);
+                    }, function(response) {
+                        if (response.status === 403 && response.data && response.data._message) {
+                            notify.error(gettext(response.data._message), 3000);
+                        }
+                    });
+                }],
+                filters: [
+                    {action: 'list', type: 'archive'}
+                ],
+                condition: function(item) {
+                    return item.task && item.task.desk;
+                },
+                additionalCondition:['authoringWorkspace', 'item', function(authoringWorkspace, item) {
+                    var openItem = authoringWorkspace.getItem();
+                    return openItem && openItem.type !== 'composite' && openItem._id !== item._id;
                 }],
                 group: 'packaging'
             });

@@ -22,7 +22,7 @@ class NINJSFormatter(Formatter):
     """
     direct_copy_properties = ['versioncreated', 'usageterms', 'subject', 'language', 'headline',
                               'urgency', 'pubstatus', 'mimetype', 'renditions', 'place',
-                              '_created', '_updated', 'body_text', 'body_html']
+                              'body_text', 'body_html']
 
     def format(self, article, subscriber):
         try:
@@ -38,9 +38,9 @@ class NINJSFormatter(Formatter):
             except:
                 pass
 
-            located = article.get('dateline', {}).get('located', {}).get('city')
+            located = article.get('dateline', {}).get('located', {})
             if located:
-                ninjs['located'] = article.get('dateline', {}).get('located', {}).get('city', '')
+                ninjs['located'] = located.get('city', '')
 
             for copy_property in self.direct_copy_properties:
                 if copy_property in article:
@@ -55,6 +55,8 @@ class NINJSFormatter(Formatter):
             if article.get(EMBARGO):
                 ninjs['embargoed'] = article.get(EMBARGO).isoformat()
 
+            ninjs['priority'] = article.get('priority', 5)
+
             return [(pub_seq_num, json.dumps(ninjs, default=json_serialize_datetime_objectId))]
         except Exception as ex:
             raise FormatterError.ninjsFormatterError(ex, subscriber)
@@ -64,10 +66,10 @@ class NINJSFormatter(Formatter):
 
     def _get_byline(self, article):
         if 'byline' in article:
-            return article['byline']
+            return article['byline'] or ''
         user = superdesk.get_resource_service('users').find_one(req=None, _id=article['original_creator'])
         if user:
-            return user['display_name']
+            return user['display_name'] or ''
         raise Exception('User not found')
 
     def _get_type(self, article):

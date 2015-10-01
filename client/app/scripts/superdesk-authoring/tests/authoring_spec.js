@@ -87,7 +87,8 @@ describe('authoring', function() {
     }));
 
     it('can autosave and save an item', inject(function(api, $q, $timeout, $rootScope) {
-        var $scope = startAuthoring({guid: GUID, _id: GUID, task: 'desk:1'}, 'edit'),
+        var $scope = startAuthoring({guid: GUID, _id: GUID, task: 'desk:1', _locked: false, _editable: true},
+                                    'edit'),
             headline = 'test headline';
 
         expect($scope.dirty).toBe(false);
@@ -387,7 +388,7 @@ describe('autosave', function() {
     }));
 
     it('can create an autosave', inject(function(autosave, api, $q, $timeout, $rootScope) {
-        var item = {_id: 1, _etag: 'x'};
+        var item = {_id: 1, _etag: 'x', _locked: false, _editable: true};
         var edit = Object.create(item);
         edit.headline = 'test';
         spyOn(api, 'save').and.returnValue($q.when({_id: 2}));
@@ -402,8 +403,8 @@ describe('autosave', function() {
     }));
 
     it('can save multiple items', inject(function(autosave, api, $q, $timeout, $rootScope) {
-        var item1 = {_id: 1, _etag: '1'},
-            item2 = {_id: 2, _etag: '2'};
+        var item1 = {_id: 1, _etag: '1', _locked: false, _editable: true},
+            item2 = {_id: 2, _etag: '2', _locked: false, _editable: true};
         spyOn(api, 'save').and.returnValue($q.when({}));
 
         autosave.save(_.create(item1));
@@ -514,8 +515,7 @@ describe('authoring actions', function() {
             privileges.setUserPrivileges(userPrivileges);
             $rootScope.$digest();
             var itemActions = authoring.itemActions(item);
-            allowedActions(itemActions, ['new_take', 'save', 'edit', 'copy', 'view',
-                    'spike', 'package_item', 'multi_edit']);
+            allowedActions(itemActions, ['edit', 'save', 'copy', 'spike', 'multi_edit']);
         }));
 
     it('can perform actions if the item is located on the desk',
@@ -543,7 +543,7 @@ describe('authoring actions', function() {
             privileges.setUserPrivileges(userPrivileges);
             $rootScope.$digest();
             var itemActions = authoring.itemActions(item);
-            allowedActions(itemActions, ['new_take', 'save', 'edit', 'duplicate', 'view', 'spike',
+            allowedActions(itemActions, ['new_take', 'save', 'edit', 'duplicate', 'spike',
                     'mark_item', 'package_item', 'multi_edit', 'publish']);
         }));
 
@@ -572,7 +572,7 @@ describe('authoring actions', function() {
             privileges.setUserPrivileges(userPrivileges);
             $rootScope.$digest();
             var itemActions = authoring.itemActions(item);
-            allowedActions(itemActions, ['new_take', 'save', 'edit', 'duplicate', 'view', 'spike',
+            allowedActions(itemActions, ['new_take', 'save', 'edit', 'duplicate', 'spike',
                 'mark_item', 'package_item', 'multi_edit']);
         }));
 
@@ -683,7 +683,7 @@ describe('authoring actions', function() {
             privileges.setUserPrivileges(userPrivileges);
             $rootScope.$digest();
             var itemActions = authoring.itemActions(item);
-            allowedActions(itemActions, ['save', 'edit', 'duplicate', 'view', 'spike',
+            allowedActions(itemActions, ['save', 'edit', 'duplicate', 'spike',
                 'mark_item', 'package_item', 'multi_edit', 'publish']);
 
             item = {
@@ -700,7 +700,7 @@ describe('authoring actions', function() {
             };
 
             itemActions = authoring.itemActions(item);
-            allowedActions(itemActions, ['save', 'edit', 'duplicate', 'view',
+            allowedActions(itemActions, ['save', 'edit', 'duplicate',
                 'mark_item', 'package_item', 'multi_edit', 'publish']);
         }));
 
@@ -732,7 +732,7 @@ describe('authoring actions', function() {
             privileges.setUserPrivileges(userPrivileges);
             $rootScope.$digest();
             var itemActions = authoring.itemActions(item);
-            allowedActions(itemActions, ['new_take', 'save', 'edit', 'duplicate', 'view', 'spike',
+            allowedActions(itemActions, ['new_take', 'save', 'edit', 'duplicate', 'spike',
                 'mark_item', 'package_item', 'multi_edit', 'publish']);
 
             item = {
@@ -893,7 +893,7 @@ describe('authoring actions', function() {
             allowedActions(itemActions, ['view']);
         }));
 
-    it('Can only view and deschedule if the item is scheduled',
+    it('Can only view, duplicate and deschedule if the item is scheduled',
         inject(function(privileges, desks, authoring, $q, $rootScope) {
             var item = {
                 '_id': 'test',
@@ -933,7 +933,7 @@ describe('authoring actions', function() {
             privileges.setUserPrivileges(userPrivileges);
             $rootScope.$digest();
             var itemActions = authoring.itemActions(item);
-            allowedActions(itemActions, ['view', 'deschedule']);
+            allowedActions(itemActions, ['view', 'duplicate', 'deschedule']);
         }));
 
     it('Can only package if the item is not a take package',
@@ -1012,7 +1012,7 @@ describe('authoring actions', function() {
             privileges.setUserPrivileges(userPrivileges);
             $rootScope.$digest();
             var itemActions = authoring.itemActions(item);
-            allowedActions(itemActions, ['new_take', 'save', 'edit', 'duplicate', 'view', 'spike',
+            allowedActions(itemActions, ['new_take', 'save', 'edit', 'duplicate', 'spike',
                     'mark_item', 'package_item', 'multi_edit', 'publish']);
         }));
 
@@ -1047,7 +1047,7 @@ describe('authoring actions', function() {
             privileges.setUserPrivileges(userPrivileges);
             $rootScope.$digest();
             var itemActions = authoring.itemActions(item);
-            allowedActions(itemActions, ['new_take', 'save', 'edit', 'duplicate', 'view', 'spike',
+            allowedActions(itemActions, ['new_take', 'save', 'edit', 'duplicate', 'spike',
                     'mark_item', 'package_item', 'multi_edit', 'publish']);
         }));
 
@@ -1082,8 +1082,80 @@ describe('authoring actions', function() {
             privileges.setUserPrivileges(userPrivileges);
             $rootScope.$digest();
             var itemActions = authoring.itemActions(item);
-            allowedActions(itemActions, ['new_take', 'save', 'edit', 'duplicate', 'view', 'spike',
+            allowedActions(itemActions, ['new_take', 'save', 'edit', 'duplicate', 'spike',
                     'mark_item', 'package_item', 'multi_edit', 'publish', 'send']);
+        }));
+
+    it('Cannot do new take for embargo item.',
+        inject(function(privileges, desks, authoring, $q, $rootScope) {
+            var item = {
+                '_id': 'test',
+                'state': 'in_progress',
+                'marked_for_not_publication': false,
+                'type': 'text',
+                'task': {
+                    'desk': 'desk1'
+                },
+                'more_coming': false,
+                '_current_version': 1,
+                'embargo': Date()
+            };
+
+            var userPrivileges = {
+                'duplicate': true,
+                'mark_item': false,
+                'spike': true,
+                'unspike': true,
+                'mark_for_highlights': true,
+                'unlock': true,
+                'publish': true,
+                'correct': true,
+                'kill': true,
+                'package_item': true,
+                'move': true
+            };
+
+            privileges.setUserPrivileges(userPrivileges);
+            $rootScope.$digest();
+            var itemActions = authoring.itemActions(item);
+            allowedActions(itemActions, ['save', 'edit', 'duplicate', 'spike',
+                    'mark_item', 'multi_edit', 'publish', 'send']);
+        }));
+
+    it('Cannot do new take for scheduled item.',
+        inject(function(privileges, desks, authoring, $q, $rootScope) {
+            var item = {
+                '_id': 'test',
+                'state': 'in_progress',
+                'marked_for_not_publication': false,
+                'type': 'text',
+                'task': {
+                    'desk': 'desk1'
+                },
+                'more_coming': false,
+                '_current_version': 1,
+                'publish_schedule': Date()
+            };
+
+            var userPrivileges = {
+                'duplicate': true,
+                'mark_item': false,
+                'spike': true,
+                'unspike': true,
+                'mark_for_highlights': true,
+                'unlock': true,
+                'publish': true,
+                'correct': true,
+                'kill': true,
+                'package_item': true,
+                'move': true
+            };
+
+            privileges.setUserPrivileges(userPrivileges);
+            $rootScope.$digest();
+            var itemActions = authoring.itemActions(item);
+            allowedActions(itemActions, ['save', 'edit', 'duplicate', 'spike',
+                    'mark_item', 'multi_edit', 'publish', 'send']);
         }));
 });
 
@@ -1228,4 +1300,166 @@ describe('authoring container directive', function() {
         expect(iscope.authoring.item).toBe(item);
         expect(iscope.authoring.action).toBe('correct');
     }));
+});
+
+describe('authoring themes', function () {
+    beforeEach(module('superdesk.preferences'));
+    beforeEach(module('superdesk.authoring'));
+
+    beforeEach(inject(function ($q, preferencesService) {
+        spyOn(preferencesService, 'get').and.returnValue($q.when({'editor:theme': ['theme:proofreadTheme']}));
+    }));
+
+    var normalTheme = {
+        cssClass: '',
+        label: 'Default Theme normal',
+        key: 'default-normal'
+    },
+    darkTheme = {
+        cssClass: 'dark-theme-mono',
+        label: 'Dark Theme monospace',
+        key: 'dark-mono'
+    };
+
+    it('can define normal theme', inject(function (authThemes) {
+        spyOn(authThemes, 'save');
+        authThemes.save('theme', normalTheme);
+        expect(authThemes.save).toHaveBeenCalledWith('theme', normalTheme);
+    }));
+
+    it('can define proofread theme', inject(function (authThemes) {
+        spyOn(authThemes, 'save');
+        authThemes.save('proofreadTheme', darkTheme);
+        expect(authThemes.save).toHaveBeenCalledWith('proofreadTheme', darkTheme);
+    }));
+
+    it('can get normal theme', inject(function (authThemes, preferencesService, $rootScope, $q) {
+        var theme = null;
+        authThemes.get('theme').then(function (_theme) {
+            theme = _theme;
+        });
+        $rootScope.$digest();
+        expect(theme).not.toBe(null);
+    }));
+
+    it('can get proofread theme', inject(function (authThemes, preferencesService, $rootScope, $q) {
+        var proofreadTheme = null;
+        authThemes.get('proofreadTheme').then(function (_theme) {
+            proofreadTheme = _theme;
+        });
+        $rootScope.$digest();
+        expect(proofreadTheme).not.toBe(null);
+    }));
+});
+
+describe('send item directive', function() {
+    beforeEach(module('superdesk.authoring'));
+    beforeEach(module('templates'));
+
+    beforeEach(inject(function($templateCache) {
+        $templateCache.put('scripts/superdesk-authoring/views/send-item.html', '');
+    }));
+
+    it('can hide embargo and publish schedule if take items more than one',
+        inject(function($compile, $rootScope) {
+
+            var scope, elem, iscope;
+            scope = $rootScope.$new();
+            scope.item = {
+                _id: 'foo',
+                type: 'text',
+                state: 'in-progress',
+                takes: {
+                    sequence: 2
+                }
+            };
+            scope.action = 'edit';
+            elem = $compile('<div sd-send-item data-item="item" data-mode="authoring" ' +
+                'data-action="action"></div>')(scope);
+            scope.$digest();
+            iscope = elem.isolateScope();
+            expect(iscope.showPublishSchedule()).toBe(false);
+            expect(iscope.showEmbargo()).toBe(false);
+        }));
+
+    it('can show embargo and publish schedule if only one take item',
+        inject(function($compile, $rootScope) {
+
+            var scope, elem, iscope;
+            scope = $rootScope.$new();
+            scope.item = {
+                _id: 'foo',
+                type: 'text',
+                state: 'in-progress',
+                takes: {
+                    sequence: 1
+                }
+            };
+            scope.action = 'edit';
+            elem = $compile('<div sd-send-item data-item="item" data-mode="authoring" ' +
+                'data-action="action"></div>')(scope);
+            scope.$digest();
+            iscope = elem.isolateScope();
+            expect(iscope.showPublishSchedule()).toBe(true);
+            expect(iscope.showEmbargo()).toBe(true);
+        }));
+
+    it('can show embargo and publish schedule if not a take item',
+        inject(function($compile, $rootScope) {
+
+            var scope, elem, iscope;
+            scope = $rootScope.$new();
+            scope.item = {
+                _id: 'foo',
+                type: 'text',
+                state: 'in-progress'
+            };
+            scope.action = 'edit';
+            elem = $compile('<div sd-send-item data-item="item" data-mode="authoring" ' +
+                'data-action="action"></div>')(scope);
+            scope.$digest();
+            iscope = elem.isolateScope();
+            expect(iscope.showPublishSchedule()).toBe(true);
+            expect(iscope.showEmbargo()).toBe(true);
+        }));
+
+    it('can show embargo date',
+        inject(function($compile, $rootScope) {
+
+            var scope, elem, iscope;
+            scope = $rootScope.$new();
+            scope.item = {
+                _id: 'foo',
+                type: 'text',
+                state: 'in-progress',
+                embargo_date: Date()
+            };
+            scope.action = 'edit';
+            elem = $compile('<div sd-send-item data-item="item" data-mode="authoring" ' +
+                'data-action="action"></div>')(scope);
+            scope.$digest();
+            iscope = elem.isolateScope();
+            expect(iscope.showPublishSchedule()).toBe(false);
+            expect(iscope.showEmbargo()).toBe(true);
+        }));
+
+    it('can show published schedule date',
+        inject(function($compile, $rootScope) {
+
+            var scope, elem, iscope;
+            scope = $rootScope.$new();
+            scope.item = {
+                _id: 'foo',
+                type: 'text',
+                state: 'in-progress',
+                publish_schedule_date: Date()
+            };
+            scope.action = 'edit';
+            elem = $compile('<div sd-send-item data-item="item" data-mode="authoring" ' +
+                'data-action="action"></div>')(scope);
+            scope.$digest();
+            iscope = elem.isolateScope();
+            expect(iscope.showPublishSchedule()).toBe(true);
+            expect(iscope.showEmbargo()).toBe(false);
+        }));
 });

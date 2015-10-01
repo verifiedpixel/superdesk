@@ -44,7 +44,7 @@ function Content() {
                 // BC: get item by its index
                 return index === item;
             } else {
-                return elem.element(by.className('headline')).getText()
+                return elem.element(by.className('item-heading')).getText()
                     .then(function(text) {
                         return text.toLowerCase().indexOf(item) >= 0;
                     });
@@ -58,7 +58,7 @@ function Content() {
     };
 
     this.editItem = function(item) {
-        return this.actionOnItem('Edit item', item);
+        return this.actionOnItem('Edit', item);
     };
 
     function waitFor(elem) {
@@ -81,6 +81,13 @@ function Content() {
         var menu = element(by.css('.dropdown-menu.open'));
         waitFor(menu);
         return menu;
+    };
+
+    this.previewItem = function(item) {
+        this.getItem(item).click();
+
+        var preview = element(by.id('item-preview'));
+        waitFor(preview);
     };
 
     this.checkMarkedForHighlight = function(highlight, item) {
@@ -132,6 +139,6 @@ function Content() {
     };
 
     function send() {
-        return element(by.id('send-item-btn')).click();
+        return element(by.css('[ng-click="send()"]')).click();
     }
 }

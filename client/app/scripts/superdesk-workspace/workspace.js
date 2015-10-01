@@ -17,16 +17,21 @@
         this.setActive = setActiveWorkspace;
         this.setActiveDesk = setActiveDesk;
         this.getActive = getActiveWorkspace;
-        this.getActiveId = getActiveWorkspaceId;
+        this.getActiveId = readActiveWorkspaceId;
+        this.readActive = readActiveWorkspace;
         this.queryUserWorkspaces = queryUserWorkspaces;
 
         var PREFERENCE_KEY = 'workspace:active',
             RESOURCE = 'workspaces',
             self = this;
 
-        function save(workspace) {
-            workspace.user = workspace.user || session.identity._id;
-            return api.save(RESOURCE, workspace).then(updateActive);
+        function save(workspace, diff) {
+            if (diff) {
+                return api.save(RESOURCE, workspace, diff).then(updateActive);
+            } else {
+                workspace.user = workspace.user || session.identity._id;
+                return api.save(RESOURCE, workspace).then(updateActive);
+            }
         }
 
         function _delete(workspace) {
@@ -48,6 +53,19 @@
         }
 
         /**
+         * Set active workspace for given desk
+         *
+         * @param {Object} desk
+         * @return {Promise}
+         */
+        function setActiveDesk(desk) {
+            var updates = {};
+            updates[PREFERENCE_KEY] = {workspace: desk._id};
+            preferences.update(updates, PREFERENCE_KEY);
+            return getDeskWorkspace(desk._id).then(updateActive);
+        }
+
+        /**
          * Set active workspace
          *
          * @param {Object} workspace
@@ -57,17 +75,6 @@
             var updates = {};
             updates[PREFERENCE_KEY] = {workspace: workspace ? workspace._id : ''};
             preferences.update(updates, PREFERENCE_KEY);
-        }
-
-        /**
-         * Set active workspace for given desk
-         *
-         * @param {Object} desk
-         * @return {Promise}
-         */
-        function setActiveDesk(desk) {
-            setActiveWorkspace(null);
-            return getDeskWorkspace(desk._id, desk.name).then(updateActive);
         }
 
         /**
@@ -88,7 +95,7 @@
          */
         function getActiveWorkspaceId() {
             return preferences.get(PREFERENCE_KEY).then(function(prefs) {
-                return prefs && prefs.workspace ? prefs.workspace : null;
+                return (prefs && prefs.workspace) ? prefs.workspace : null;
             });
         }
 
@@ -100,14 +107,67 @@
          *
          * @return {Promise}
          */
-        function getActiveWorkspace() {
-            return desks.fetchCurrentDeskId()
+        function readActiveWorkspaceId() {
+            return desks.initialize()
                 .then(getActiveWorkspaceId)
                 .then(function(activeId) {
-                    if (activeId) {
-                        return findWorkspace(activeId);
-                    } else if (desks.activeDeskId) {
-                        return getDeskWorkspace(desks.activeDeskId);
+                    var type = null;
+                    var id = null;
+
+                    if (desks.activeDeskId && desks.deskLookup[desks.activeDeskId]) {
+                        type = 'desk';
+                        id = desks.activeDeskId;
+                    } else if (activeId && desks.deskLookup[activeId]) {
+                        type = 'desk';
+                        id = activeId;
+                        desks.setCurrentDeskId(activeId);
+                    } else if (activeId) {
+                        type = 'workspace';
+                        id = activeId;
+                    } else if (desks.getCurrentDeskId()) {
+                        type = 'desk';
+                        id = desks.getCurrentDeskId();
+                    }
+
+                    self.workspaceType = type;
+                    return {'id': id, 'type': type};
+                });
+        }
+
+        /**
+         * Read active workspace
+         *
+         * First it reads preferences to get last workspace id,
+         * in case it's not set it opens workspace for active desk.
+         *
+         * @return {Promise}
+         */
+        function readActiveWorkspace() {
+            return readActiveWorkspaceId()
+                .then(function(activeWorkspace) {
+                    if (activeWorkspace.type === 'desk') {
+                        return getDeskWorkspace(activeWorkspace.id);
+                    } else if (activeWorkspace.type === 'workspace') {
+                        return findWorkspace(activeWorkspace.id);
+                    }
+                });
+        }
+
+        /**
+         * Get active workspace
+         *
+         * First it reads preferences to get last workspace id,
+         * in case it's not set it opens workspace for active desk.
+         *
+         * @return {Promise}
+         */
+        function getActiveWorkspace() {
+            return readActiveWorkspaceId()
+                .then(function(activeWorkspace) {
+                    if (activeWorkspace.type === 'desk') {
+                        return getDeskWorkspace(activeWorkspace.id);
+                    } else if (activeWorkspace.type === 'workspace') {
+                        return findWorkspace(activeWorkspace.id);
                     } else {
                         return createUserWorkspace();
                     }
@@ -131,7 +191,7 @@
          * @return {Promise}
          */
         function getDeskWorkspace(deskId) {
-            return api.query('desks', {where: {desk: deskId}}).then(function(result) {
+            return api.query('workspaces', {where: {desk: deskId}}).then(function(result) {
                 if (result._items.length === 1) {
                     return result._items[0];
                 } else {
@@ -207,14 +267,15 @@
                     $location.search('_id', null);
                 }
 
-                // init
+                /**
+                 * Restore the last desk/current workspace selection
+                 */
                 function initialize() {
-                    var activeId = null;
+                    var activeWorkspace = null;
                     workspaces.getActiveId()
-                    .then(function(id) {
-                        activeId = id;
+                    .then(function(workspace) {
+                        activeWorkspace = workspace;
                     })
-                    .then(angular.bind(desks, desks.initialize))
                     .then(angular.bind(desks, desks.fetchCurrentUserDesks))
                     .then(function(userDesks) {
                         scope.desks = userDesks._items;
@@ -222,10 +283,13 @@
                     .then(workspaces.queryUserWorkspaces)
                     .then(function(_workspaces) {
                         scope.wsList = _workspaces;
-                        if (activeId) {
-                            scope.selected = _.find(scope.wsList, {_id: activeId});
+                        scope.workspaceType = activeWorkspace.type;
+                        if (activeWorkspace.type === 'desk') {
+                            scope.selected = _.find(scope.desks, {_id: activeWorkspace.id});
+                        } else if (activeWorkspace.type === 'workspace') {
+                            scope.selected = _.find(scope.wsList, {_id: activeWorkspace.id});
                         } else {
-                            scope.selected = _.find(scope.desks, {_id: desks.getCurrentDeskId()});
+                            scope.selected = null;
                         }
                     });
                 }

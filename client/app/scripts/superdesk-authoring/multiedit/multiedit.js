@@ -11,8 +11,8 @@
 
     'use strict';
 
-    MultieditService.$inject = ['storage', 'superdesk'];
-    function MultieditService(storage, superdesk) {
+    MultieditService.$inject = ['storage', 'superdesk', 'authoringWorkspace'];
+    function MultieditService(storage, superdesk, authoringWorkspace) {
 
         //1. Service manages multiedit screen
         //2. Screen has it's boards, at least 2 of them
@@ -50,10 +50,12 @@
         this.exit = function(item) {
             this.items = [];
             this.updateItems();
-            superdesk.intent('author', 'dashboard');
         };
 
-        this.open = function() {
+        this.open = function () {
+            if (authoringWorkspace.getState()) {
+                authoringWorkspace.close();
+            }
             superdesk.intent('author', 'multiedit');
         };
 
@@ -87,8 +89,8 @@
         }
     }
 
-    MultieditController.$inject = ['$scope', 'multiEdit'];
-    function MultieditController($scope, multiEdit) {
+    MultieditController.$inject = ['$scope', 'multiEdit', '$location', 'lock', 'workqueue'];
+    function MultieditController($scope, multiEdit, $location, lock, workqueue) {
 
         $scope.$watch(function() {
             return multiEdit.items;
@@ -101,6 +103,11 @@
         $scope.closeBoard = function(board) {
             multiEdit.close(board);
         };
+
+        $scope.closeMulti = function() {
+            multiEdit.exit();
+            $location.url('/workspace/monitoring');
+        };
     }
 
     MultieditDropdownDirective.$inject = ['workqueue', 'multiEdit', '$route'];
@@ -109,7 +116,7 @@
             templateUrl: 'scripts/superdesk-authoring/multiedit/views/sd-multiedit-dropdown.html',
             link: function(scope) {
 
-                scope.current = $route.current.params._id;
+                scope.current = $route.current.params.item;
                 scope.queue = [scope.current];
 
                 scope.$watch(function () {

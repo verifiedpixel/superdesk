@@ -95,6 +95,7 @@ Feature: News Items Archive
 
 
     @auth
+    @vocabulary
     Scenario: Upload image into archive and validate metadata set by API
         Given empty "archive"
         When we upload a file "bike.jpg" to "archive"
@@ -288,6 +289,7 @@ Feature: News Items Archive
         Then we get response code 200
 
     @auth
+    @vocabulary
     Scenario: State of an Uploaded Image, submitted to a desk when updated should change to in-progress
         Given empty "archive"
         And "desks"
@@ -341,7 +343,7 @@ Feature: News Items Archive
       {"_message": "Cannot delete desk as it has article(s)."}
       """
 
-    @auth @test
+    @auth
     Scenario: Sign-off is updated when multiple users modify the article
         When we post to "/archive"
         """
@@ -434,7 +436,7 @@ Feature: News Items Archive
       {"guid": "321", "type": "text", "byline": "by Context User"}
       """
 
-    @auth @test
+    @auth
     Scenario: Sign-off is updated when other user restores version
         When we post to "/archive"
         """

@@ -41,5 +41,21 @@ define([
             return function reldate(date) {
                 return moment(date).fromNow();
             };
-        });
+        })
+
+        .constant('moment', moment)
+
+        .factory('weekdays', ['gettext', function(gettext) {
+            return Object.freeze({
+                MON: gettext('Monday'),
+                TUE: gettext('Tuesday'),
+                WED: gettext('Wednesday'),
+                THU: gettext('Thursday'),
+                FRI: gettext('Friday'),
+                SAT: gettext('Saturday'),
+                SUN: gettext('Sunday')
+            });
+        }])
+
+        ;
 });

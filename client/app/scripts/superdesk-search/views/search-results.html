@@ -15,8 +15,6 @@
             <div sd-multi-action-bar></div>
         </header>
 
-
-
         <div class="content" sd-updown data-items="items._items" data-select="preview(item)">
             <div class="loading-indicator" ng-show="loading" translate>loading</div>
 
@@ -30,18 +28,18 @@
                 </ul>
             </div>
         </div>
+
+        <div sd-item-preview
+             data-item="selected.preview"
+             data-close="preview()"
+             data-open-lightbox="openLightbox"
+             data-open-single-item="openSingleItem">
+        </div>
+
+        <div sd-send-item 
+             class="content-item-preview"
+             data-item="selected.fetch"
+             data-mode="monitoring">
+        </div>
     </div>
-
-    <div sd-item-preview
-        data-item="selected.preview"
-        data-close="preview()"
-        data-open-lightbox="openLightbox"
-        data-open-single-item="openSingleItem"
-        ></div>
-
-    <div class="preview-pane content-item-preview"
-        sd-send-item
-        ng-show="selected.fetch"
-        data-item="selected.fetch"
-        data-mode="{{type}}"></div>
 </div>

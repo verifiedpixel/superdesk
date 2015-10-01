@@ -25,7 +25,7 @@ from superdesk.notification import push_notification
 from superdesk.resource import Resource
 from superdesk.services import BaseService
 from superdesk.metadata.item import not_analyzed, ITEM_STATE, CONTENT_STATE, ITEM_TYPE, CONTENT_TYPE, EMBARGO
-from apps.archive.common import handle_existing_data, item_schema
+from apps.archive.common import handle_existing_data, item_schema, remove_media_files
 from superdesk.metadata.utils import aggregations
 from apps.archive.archive import SOURCE as ARCHIVE
 from superdesk.utc import utcnow, get_expiry_date
@@ -268,6 +268,7 @@ class PublishedItemService(BaseService):
             doc = self.find_one(req=None, item_id=_id)
 
         self.delete(lookup={config.ID_FIELD: doc[config.ID_FIELD]})
+        remove_media_files(doc)
 
     def find_one(self, req, **lookup):
         item = super().find_one(req, **lookup)
@@ -321,7 +322,8 @@ class PublishedItemService(BaseService):
 
             # Step 4
             if self.can_remove_from_production(doc):
-                lookup = {'$and': [{versioned_id_field(): doc['item_id']},
+                resource_def = app.config['DOMAIN']['archive']
+                lookup = {'$and': [{versioned_id_field(resource_def): doc['item_id']},
                                    {config.VERSION: {'$lte': doc[config.VERSION]}}]}
                 get_resource_service('archive_versions').delete(lookup)
 
@@ -428,10 +430,12 @@ class PublishedItemService(BaseService):
         # Step 1 - Get Version History
         req = ParsedRequest()
         req.sort = '[("%s", 1)]' % config.VERSION
-        lookup = {'$and': [{versioned_id_field(): legal_archive_doc[config.ID_FIELD]},
+        resource_def = app.config['DOMAIN']['archive']
+        version_id = versioned_id_field(resource_def)
+        lookup = {'$and': [{version_id: legal_archive_doc[config.ID_FIELD]},
                            {config.VERSION: {'$lte': legal_archive_doc[config.VERSION]}}]}
 
-        version_history = get_resource_service('archive_versions').get(req=req, lookup=lookup)
+        version_history = list(get_resource_service('archive_versions').get(req=req, lookup=lookup))
         legal_archive_doc_versions = []
         for versioned_doc in version_history:
             self._denormalize_user_desk(versioned_doc)
@@ -456,7 +460,6 @@ class PublishedItemService(BaseService):
         # Step 6
         if legal_archive_doc_versions:
             legal_archive_versions_service.post(legal_archive_doc_versions)
-
         # Step 7
         legal_publish_queue_service.post(queue_items)
 

@@ -12,11 +12,11 @@
 from test_factory import SuperdeskTestCase
 from eve.utils import date_to_str
 from superdesk.utc import get_expiry_date, utcnow
-from apps.archive.commands import RemoveExpiredSpikeContent
+from apps.archive.commands import RemoveExpiredSpikeContent, get_overdue_scheduled_items
 from apps.archive.archive import SOURCE as ARCHIVE
 from superdesk.errors import SuperdeskApiError
 from datetime import timedelta
-from apps.archive.common import validate_schedule
+from apps.archive.common import validate_schedule, remove_media_files
 
 
 class RemoveSpikedContentTestCase(SuperdeskTestCase):
@@ -132,6 +132,37 @@ class RemoveSpikedContentTestCase(SuperdeskTestCase):
                  'expiry': utcnow() + timedelta(minutes=20),
                  'unique_name': '#5'}]
 
+    media = {
+        'viewImage': {
+            'media': '1592730d582080f4e9fcc2fcf43aa357bda0ed19ffe314ee3248624cd4d4bc54',
+            'mimetype': 'image/jpeg',
+            'href': 'http://192.168.220.209/api/upload/abc/raw?_schema=http',
+            'height': 452,
+            'width': 640
+        },
+        'thumbnail': {
+            'media': '52250b4f37da50ee663fdbff057a5f064479f8a8bbd24fb8fdc06135d3f807bb',
+            'mimetype': 'image/jpeg',
+            'href': 'http://192.168.220.209/api/upload/abc/raw?_schema=http',
+            'height': 120,
+            'width': 169
+        },
+        'baseImage': {
+            'media': '7a608aa8f51432483918027dd06d0ef385b90702bfeba84ac4aec38ed1660b18',
+            'mimetype': 'image/jpeg',
+            'href': 'http://192.168.220.209/api/upload/abc/raw?_schema=http',
+            'height': 990,
+            'width': 1400
+        },
+        'original': {
+            'media': 'stub.jpeg',
+            'mimetype': 'image/jpeg',
+            'href': 'http://192.168.220.209/api/upload/stub.jpeg/raw?_schema=http',
+            'height': 2475,
+            'width': 3500
+        }
+    }
+
     def setUp(self):
         super().setUp()
 
@@ -146,8 +177,37 @@ class RemoveSpikedContentTestCase(SuperdeskTestCase):
             self.app.data.insert(ARCHIVE, [{'unique_id': 97, 'state': 'spiked'}])
 
             now = date_to_str(utcnow())
-            expiredItems = RemoveExpiredSpikeContent().get_expired_items(now)
-            self.assertEquals(2, expiredItems.count())
+            expired_items = RemoveExpiredSpikeContent().get_expired_items(now)
+            self.assertEquals(2, expired_items.count())
+
+    def test_query_removing_media_files_keeps(self):
+        with self.app.app_context():
+            self.app.data.insert(ARCHIVE, [{'state': 'spiked',
+                                            'expiry': get_expiry_date(-10),
+                                            'type': 'picture',
+                                            'renditions': self.media}])
+
+            self.app.data.insert('ingest', [{'type': 'picture', 'renditions': self.media}])
+            self.app.data.insert('archive_versions', [{'type': 'picture', 'renditions': self.media}])
+            self.app.data.insert('legal_archive', [{'_id': 1, 'type': 'picture', 'renditions': self.media}])
+            self.app.data.insert('legal_archive_versions', [{'_id': 1, 'type': 'picture', 'renditions': self.media}])
+
+            archive_items = self.app.data.find_all('archive', None)
+            self.assertEqual(archive_items.count(), 1)
+            deleted = remove_media_files(archive_items[0])
+            self.assertFalse(deleted)
+
+    def test_query_getting_overdue_scheduled_content(self):
+        with self.app.app_context():
+            self.app.data.insert(ARCHIVE, [{'publish_schedule': get_expiry_date(-10), 'state': 'published'}])
+            self.app.data.insert(ARCHIVE, [{'publish_schedule': get_expiry_date(-10), 'state': 'scheduled'}])
+            self.app.data.insert(ARCHIVE, [{'publish_schedule': get_expiry_date(0), 'state': 'spiked'}])
+            self.app.data.insert(ARCHIVE, [{'publish_schedule': get_expiry_date(10), 'state': 'scheduled'}])
+            self.app.data.insert(ARCHIVE, [{'unique_id': 97, 'state': 'spiked'}])
+
+            now = date_to_str(utcnow())
+            overdueItems = get_overdue_scheduled_items(now, 'archive')
+            self.assertEquals(1, overdueItems.count())
 
 
 class ArchiveTestCase(SuperdeskTestCase):

@@ -89,8 +89,7 @@ class BasePublishService(BaseService):
 
     def on_update(self, updates, original):
         if original.get('marked_for_not_publication', False):
-            raise SuperdeskApiError.badRequestError(
-                message='Cannot publish an item which is marked as Not for Publication')
+            raise SuperdeskApiError.badRequestError('Cannot publish an item which is marked as Not for Publication')
 
         if not is_workflow_state_transition_valid(self.publish_type, original[ITEM_STATE]):
             error_message = "Can't {} as item state is {}" if original[ITEM_TYPE] == CONTENT_TYPE.TEXT else \
@@ -99,26 +98,30 @@ class BasePublishService(BaseService):
 
         updated = original.copy()
         updated.update(updates)
-        validate_item = {'act': self.publish_type, 'type': original['type'], 'validate': updated}
 
-        takes_package = self.takes_package_service.get_take_package(original) or {}
-        # validate if take can be published
-        if self.publish_type == 'publish' and takes_package \
-            and not self.takes_package_service.can_publish_take(takes_package,
-                                                                updates.get(SEQUENCE, original.get(SEQUENCE, 1))):
-            raise PublishQueueError.previous_take_not_published_error(
-                Exception("Previous takes are not published."))
+        takes_package = self.takes_package_service.get_take_package(original)
 
-        if original[ITEM_TYPE] != CONTENT_TYPE.COMPOSITE:
-            if updates.get(EMBARGO) and self.publish_type in ['correct', 'kill']:
+        if self.publish_type == 'publish':
+            # validate if take can be published
+            if takes_package and not self.takes_package_service.can_publish_take(
+                    takes_package, updates.get(SEQUENCE, original.get(SEQUENCE, 1))):
+                raise PublishQueueError.previous_take_not_published_error(
+                    Exception("Previous takes are not published."))
+
+            validate_schedule(updated.get('publish_schedule'), takes_package.get(SEQUENCE, 1) if takes_package else 1)
+
+            if original[ITEM_TYPE] != CONTENT_TYPE.COMPOSITE and updates.get(EMBARGO):
+                get_resource_service(ARCHIVE).validate_embargo(updated)
+
+        if self.publish_type in ['correct', 'kill']:
+            if updates.get(EMBARGO):
                 raise SuperdeskApiError.badRequestError("Embargo can't be set after publishing")
 
-            get_resource_service(ARCHIVE).validate_embargo(updated)
+            if updates.get('dateline'):
+                raise SuperdeskApiError.badRequestError("Dateline can't be modified after publishing")
 
-        # validate the publish schedule
-        validate_schedule(updated.get('publish_schedule'), takes_package.get(SEQUENCE, 1))
+        validate_item = {'act': self.publish_type, 'type': original['type'], 'validate': updated}
         validation_errors = get_resource_service('validate').post([validate_item])
-
         if validation_errors[0]:
             raise ValidationError(validation_errors)
 
@@ -160,18 +163,20 @@ class BasePublishService(BaseService):
                     if package:
                         queued_digital = self._publish_takes_package(package, updates, original, last_updated)
                     else:
-                        # if text or preformatted item is going to be sent to digital subscribers, package it as a take
-                        if self.sending_to_digital_subscribers(original):
-                            # takes packages are only created for these types
-                            if original[ITEM_TYPE] in [CONTENT_TYPE.TEXT, CONTENT_TYPE.PREFORMATTED]:
-                                updated = copy(original)
-                                updated.update(updates)
-                                # create a takes package
-                                package_id = self.takes_package_service.package_story_as_a_take(updated, {}, None)
-                                updates[LINKED_IN_PACKAGES] = updated[LINKED_IN_PACKAGES]
-                                package = get_resource_service(ARCHIVE).find_one(req=None, _id=package_id)
-                                queued_digital = self._publish_takes_package(package, updates,
-                                                                             original, last_updated)
+                        '''
+                        If type of the item is text or preformatted then item need to be sent to digital subscribers.
+                        So, package the item as a take.
+                        '''
+                        updated = copy(original)
+                        updated.update(updates)
+
+                        if original[ITEM_TYPE] in [CONTENT_TYPE.TEXT, CONTENT_TYPE.PREFORMATTED] and \
+                                self.sending_to_digital_subscribers(updated):
+                            # create a takes package
+                            package_id = self.takes_package_service.package_story_as_a_take(updated, {}, None)
+                            updates[LINKED_IN_PACKAGES] = updated[LINKED_IN_PACKAGES]
+                            package = get_resource_service(ARCHIVE).find_one(req=None, _id=package_id)
+                            queued_digital = self._publish_takes_package(package, updates, original, last_updated)
 
                 # queue only text items
                 queued_wire = \
@@ -373,7 +378,7 @@ class BasePublishService(BaseService):
 
         if updates.get(EMBARGO, original.get(EMBARGO)) \
                 and updates.get('ednote', original.get('ednote', '')).find('Embargo') == -1:
-            updates['ednote'] = '{}{}'.format(original.get('ednote', ''), ' Embargoed.')
+            updates['ednote'] = '{} {}'.format(original.get('ednote', ''), 'Embargoed.').strip()
 
     def _update_archive(self, original, updates, versioned_doc=None, should_insert_into_versions=True):
         """
@@ -444,9 +449,8 @@ class BasePublishService(BaseService):
             else:
                 package_updates['body_html'] = body_html
 
-            metadata_tobe_copied = ['headline', 'abstract', 'anpa_category', 'pubstatus', 'slugline', 'urgency',
-                                    'subject', 'byline', 'dateline', 'publish_schedule']
-
+            metadata_tobe_copied = self.takes_package_service.fields_for_creating_take.copy()
+            metadata_tobe_copied.extend(['publish_schedule', 'byline'])
             updated_take = original_of_take_to_be_published.copy()
             updated_take.update(updates_of_take_to_be_published)
             metadata_from = updated_take
@@ -618,7 +622,7 @@ class BasePublishService(BaseService):
         filtered_subscribers = []
         req = ParsedRequest()
         req.args = {'is_global': True}
-        service = get_resource_service('publish_filters')
+        service = get_resource_service('content_filters')
         global_filters = list(service.get(req=req, lookup=None))
 
         for subscriber in subscribers:
@@ -641,7 +645,7 @@ class BasePublishService(BaseService):
             if not self.conforms_global_filter(subscriber, global_filters, doc):
                 continue
 
-            if not self.conforms_publish_filter(subscriber, doc):
+            if not self.conforms_content_filter(subscriber, doc):
                 continue
 
             filtered_subscribers.append(subscriber)
@@ -720,7 +724,7 @@ class BasePublishService(BaseService):
         get_resource_service('published').update_published_items(published_item_id, LAST_PUBLISHED_VERSION, False)
         get_resource_service('published').post([published_item])
 
-    def conforms_publish_filter(self, subscriber, doc):
+    def conforms_content_filter(self, subscriber, doc):
         """
         Checks if the document matches the subscriber filter
         :param subscriber: Subscriber to get the filter
@@ -732,19 +736,19 @@ class BasePublishService(BaseService):
         False if doesn't match and permitting
         True if doesn't match and blocking
         """
-        publish_filter = subscriber.get('publish_filter')
+        content_filter = subscriber.get('content_filter')
 
-        if publish_filter is None or 'filter_id' not in publish_filter or publish_filter['filter_id'] is None:
+        if content_filter is None or 'filter_id' not in content_filter or content_filter['filter_id'] is None:
             return True
 
-        service = get_resource_service('publish_filters')
-        filter = service.find_one(req=None, _id=publish_filter['filter_id'])
+        service = get_resource_service('content_filters')
+        filter = service.find_one(req=None, _id=content_filter['filter_id'])
         does_match = service.does_match(filter, doc)
 
         if does_match:
-            return publish_filter['filter_type'] == 'permitting'
+            return content_filter['filter_type'] == 'permitting'
         else:
-            return publish_filter['filter_type'] == 'blocking'
+            return content_filter['filter_type'] == 'blocking'
 
     def conforms_global_filter(self, subscriber, global_filters, doc):
         """
@@ -757,7 +761,7 @@ class BasePublishService(BaseService):
         and it matches the document
         False if global filter matches the document or all of them overriden
         """
-        service = get_resource_service('publish_filters')
+        service = get_resource_service('content_filters')
         gfs = subscriber.get('global_filters', {})
         for global_filter in global_filters:
             if gfs.get(str(global_filter['_id']), True):

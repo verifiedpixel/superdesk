@@ -9,29 +9,30 @@
 # at https://www.sourcefabric.org/superdesk/license
 
 
-from datetime import datetime
-
-from eve.utils import config
 import flask
+from eve.utils import config
+from datetime import datetime
 from flask import current_app as app
 from eve.versioning import insert_versioning_documents
 from pytz import timezone
 
+import superdesk
 from superdesk.users.services import get_sign_off
 from superdesk.celery_app import update_key
 from superdesk.utc import utcnow, get_expiry_date
 from settings import ORGANIZATION_NAME_ABBREVIATION
 from superdesk import get_resource_service
 from superdesk.metadata.item import metadata_schema, ITEM_STATE, CONTENT_STATE, \
-    LINKED_IN_PACKAGES, BYLINE, SIGN_OFF, EMBARGO
+    LINKED_IN_PACKAGES, BYLINE, SIGN_OFF, EMBARGO, ITEM_TYPE, CONTENT_TYPE
 from superdesk.workflow import set_default_state, is_workflow_state_transition_valid
-import superdesk
-from apps.archive.archive import SOURCE as ARCHIVE
 from superdesk.metadata.item import GUID_NEWSML, GUID_FIELD, GUID_TAG, not_analyzed
 from superdesk.metadata.packages import PACKAGE_TYPE, TAKES_PACKAGE, SEQUENCE
 from superdesk.metadata.utils import generate_guid
 from superdesk.errors import SuperdeskApiError, IdentifierGenerationError
+from apps.auth import get_user
 
+
+ARCHIVE = 'archive'
 CUSTOM_HATEOAS = {'self': {'title': 'Archive', 'href': '/archive/{_id}'}}
 ITEM_OPERATION = 'operation'
 ITEM_CREATE = 'create'
@@ -93,7 +94,8 @@ def set_dateline(doc, repo_type):
 
     if repo_type == ARCHIVE and 'dateline' not in doc:
         current_date_time = dateline_ts = utcnow()
-        doc['dateline'] = {'date': current_date_time, 'source': ORGANIZATION_NAME_ABBREVIATION}
+        doc['dateline'] = {'date': current_date_time, 'source': ORGANIZATION_NAME_ABBREVIATION, 'located': None,
+                           'text': None}
 
         user = get_user()
         if user and user.get('user_preferences', {}).get('dateline:located'):
@@ -140,13 +142,6 @@ def update_dates_for(doc):
         doc.setdefault(item, utcnow())
 
 
-def get_user(required=False):
-    user = flask.g.get('user', {})
-    if '_id' not in user and required:
-        raise SuperdeskApiError.notFoundError('Invalid user.')
-    return user
-
-
 def get_auth():
     auth = flask.g.get('auth', {})
     return auth
@@ -154,7 +149,7 @@ def get_auth():
 
 def set_original_creator(doc):
     usr = get_user()
-    user = str(usr.get('_id', ''))
+    user = str(usr.get('_id', doc.get('original_creator', '')))
     doc['original_creator'] = user
 
 
@@ -237,6 +232,44 @@ def remove_unwanted(doc):
     for attr in ['_type', 'desk', 'archived']:
         if attr in doc:
             del doc[attr]
+
+
+def remove_media_files(doc):
+        """
+        Removes the media files of the given doc if they are not references by any other
+        story across all repos. Returns true if the medis files are removed.
+        """
+        print('Removing Media Files...')
+
+        if doc.get(ITEM_TYPE) in [CONTENT_TYPE.PICTURE, CONTENT_TYPE.VIDEO, CONTENT_TYPE.AUDIO]:
+            base_image_id = doc.get('renditions', {}).get('baseImage', {}).get('media')
+
+            if base_image_id:
+                try:
+                    archive_docs = superdesk.get_resource_service('archive'). \
+                        get_from_mongo(None, {'renditions.baseImage.media': base_image_id})
+                    ingest_docs = superdesk.get_resource_service('ingest'). \
+                        get_from_mongo(None, {'renditions.baseImage.media': base_image_id})
+                    legal_archive_docs = superdesk.get_resource_service('legal_archive'). \
+                        get_from_mongo(None, {'renditions.baseImage.media': base_image_id})
+                    archive_version_docs = superdesk.get_resource_service('archive_versions'). \
+                        get_from_mongo(None, {'renditions.baseImage.media': base_image_id})
+                    legal_archive_version_docs = superdesk.get_resource_service('legal_archive_versions'). \
+                        get_from_mongo(None, {'renditions.baseImage.media': base_image_id})
+
+                    if archive_docs.count() == 0 and ingest_docs.count() == 0 and legal_archive_docs.count() == 0 and \
+                            archive_version_docs.count() == 0 and legal_archive_version_docs.count() == 0:
+                        # there's no reference so do remove the file
+                        for name, rendition in doc.get('renditions').items():
+                            if 'media' in rendition:
+                                print('Deleting media:{}'.format(rendition.get('media')))
+                                app.media.delete(rendition.get('media'))
+                        # files are removed
+                        return True
+                except Exception as ex:
+                    print('Removing Media Exception:{}'.format(ex))
+                    return False
+        return False
 
 
 def is_assigned_to_a_desk(doc):

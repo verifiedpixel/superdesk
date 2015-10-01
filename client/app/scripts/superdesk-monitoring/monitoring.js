@@ -55,6 +55,7 @@
     CardsService.$inject = ['api', 'search', 'session'];
     function CardsService(api, search, session) {
         this.criteria = getCriteria;
+        this.shouldUpdate = shouldUpdate;
 
         /**
          * Get items criteria for given card
@@ -69,53 +70,51 @@
             var params = {};
 
             if (card.type === 'search' && card.search && card.search.filter.query) {
+                params = card.search.filter.query;
                 if (card.query) {
                     if (card.search.filter.query.q) {
                         params.q = '(' + card.query + ') ' + card.search.filter.query.q;
                     } else {
                         params.q = '(' + card.query + ') ';
                     }
-                } else {
-                    params = card.search.filter.query;
                 }
             } else {
                 params.q = card.query;
             }
 
-            params.spike = (card.type === 'spike');
-
-            if (card.fileType) {
-                params.type = card.fileType;
-            } else {
-                delete params.type;
-            }
+            params.spike = (card.type === 'spike' || card.type === 'spike-personal');
 
             var query = search.query(params);
 
             switch (card.type) {
-                case 'search':
-                    break;
+            case 'search':
+                break;
 
-                case 'personal':
-                    query.filter({bool: {
-                        must: {term: {original_creator: session.identity._id}},
-                        must_not: {exists: {field: 'task.desk'}}
-                    }});
-                    break;
+            case 'spike-personal':
+            case 'personal':
+                query.filter({bool: {
+                    must: {term: {original_creator: session.identity._id}},
+                    must_not: {exists: {field: 'task.desk'}}
+                }});
+                break;
 
-                case 'spike':
-                    query.filter({term: {'task.desk': card._id}});
-                    break;
+            case 'spike':
+                query.filter({term: {'task.desk': card._id}});
+                break;
 
-                case 'highlights':
-                    query.filter({and: [
-                        {term: {'highlights': queryParam.highlight}}
-                    ]});
-                    break;
+            case 'highlights':
+                query.filter({and: [
+                    {term: {'highlights': queryParam.highlight}}
+                ]});
+                break;
 
-                default:
-                    query.filter({term: {'task.stage': card._id}});
-                    break;
+            default:
+                query.filter({term: {'task.stage': card._id}});
+                break;
+            }
+
+            if (card.fileType) {
+                query.filter({terms: {'type': JSON.parse(card.fileType)}});
             }
 
             if (queryString) {
@@ -129,6 +128,21 @@
             criteria.source.from = 0;
             criteria.source.size = 25;
             return criteria;
+        }
+
+        function shouldUpdate(card, data) {
+            switch (card.type) {
+            case 'stage':
+                // refresh stage if it matches updated stage
+                return !!data.stages[card._id];
+
+            case 'personal':
+                return data.user === session.identity._id;
+
+            default:
+                // no way to determine if item should be visible, refresh
+                return true;
+            }
         }
     }
 
@@ -237,21 +251,25 @@
                 scope.$on('ingest:update', queryItems);
                 scope.$on('item:spike', queryItems);
                 scope.$on('item:unspike', queryItems);
+                scope.$on('$routeUpdate', queryItems);
 
                 scope.$on('content:update', function(event, data) {
-                    switch (scope.group.type) {
-                        case 'stage':
-                            // refresh stage if it matches updated stage
-                            if (data.stage === scope.group._id) {
-                                queryItems();
-                            }
-                            break;
-
-                        default:
-                            // no way to determine if item should be visible, refresh
-                            queryItems();
+                    if (cards.shouldUpdate(scope.group, data)) {
+                        scheduleQuery();
                     }
                 });
+
+                var queryTimeout;
+
+                /**
+                 * Schedule content reload in next 50ms
+                 *
+                 * In case there is another signal within timeout it will trigger it only once.
+                 */
+                function scheduleQuery() {
+                    $timeout.cancel(queryTimeout);
+                    queryTimeout = $timeout(queryItems, 50, false);
+                }
 
                 var list = elem[0].getElementsByClassName('inline-content-items')[0],
                     scrollElem = elem.find('.stage-content').first();
@@ -365,7 +383,9 @@
                     var next = [],
                         olditems = scope.items || [];
                     angular.forEach(newItems, function(item) {
-                        var old = _.find(olditems, {_id: item._id});
+                        var filter = (item.state === 'ingested') ?
+                                        {_id: item._id} : {_id: item._id, _current_version: item._current_version};
+                        var old = _.find(olditems, filter);
                         next.push(old ? angular.extend(old, item) : item);
                     });
 
@@ -435,7 +455,7 @@
         };
 
         function uuid(item) {
-            return item._id;
+            return (item.state === 'ingested') ? item._id : item._id + ':' + item._current_version;
         }
     }
 

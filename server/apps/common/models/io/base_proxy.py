@@ -34,11 +34,7 @@ class BaseProxy(DataLayer):
         req = ParsedRequest()
         req.args = {}
         req.projection = projection
-
-        if hasattr(self.data_layer, 'find'):
-            return self.data_layer.find(resource, req, lookup)
-        else:
-            return self.data_layer.get(resource, req, lookup)
+        return self.data_layer.get(resource, req, lookup)
 
     def create(self, resource, docs):
         return self.data_layer.create(resource, docs)
@@ -53,11 +49,10 @@ class BaseProxy(DataLayer):
         return self.data_layer.delete(resource, filter)
 
     def _update(self, resource, filter, doc, method='update'):
-        _id = doc.get(ID_FIELD, None)
-        if ID_FIELD in doc:
-            del doc[ID_FIELD]
+        _id = doc.pop(ID_FIELD, None)
         original = self.find_one(resource, filter, None)
-        res = getattr(self.data_layer, method)(resource, filter[ID_FIELD], doc, original)
-        if _id is not None:
-            doc[ID_FIELD] = _id
+        filter[ID_FIELD] = original[ID_FIELD]  # make sure it's correct type
+        updates = doc.copy()
+        res = getattr(self.data_layer, method)(resource, filter[ID_FIELD], updates, original)
+        doc.setdefault(ID_FIELD, _id)
         return res

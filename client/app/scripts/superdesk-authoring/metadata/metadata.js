@@ -163,29 +163,6 @@ function MetadataCtrl(
         }
     }
 
-    /**
-     * Returns true if Publish Schedule needs to be displayed, false otherwise.
-     */
-    $scope.showPublishSchedule = function() {
-        return $scope.item.type !== 'composite' && !$scope.item.embargo_date && !$scope.item.embargo_time &&
-            ['published', 'killed', 'corrected'].indexOf($scope.item.state) === -1;
-    };
-
-    /**
-     * Returns true if Embargo needs to be displayed, false otherwise.
-     */
-    $scope.showEmbargo = function() {
-        return $scope.item.type !== 'composite' && !$scope.item.publish_schedule_date &&
-            !$scope.item.publish_schedule_time && !archiveService.isPublished($scope.item);
-    };
-
-    /**
-     * Returns true if Embargo needs to be displayed, false otherwise.
-     */
-    $scope.isEmbargoEditable = function() {
-        return $scope.item._editable && !archiveService.isPublished($scope.item);
-    };
-
     $scope.unique_name_editable = Boolean(privileges.privileges.metadata_uniquename);
     resolvePublishScheduleAndEmbargoTS();
 }
@@ -391,8 +368,8 @@ function MetadataListEditingDirective(metadata) {
     };
 }
 
-MetadataLocatorsDirective.$inject = [];
-function MetadataLocatorsDirective() {
+MetadataLocatorsDirective.$inject = ['$timeout'];
+function MetadataLocatorsDirective($timeout) {
     return {
         scope: {
             item: '=',
@@ -407,17 +384,19 @@ function MetadataLocatorsDirective() {
 
         templateUrl: 'scripts/superdesk-authoring/metadata/views/metadata-locators.html',
         link: function(scope, element) {
-            scope.locators = scope.list;
             scope.selectedTerm = '';
 
-            scope.$watch('item', function(item) {
-                if (angular.isDefined(item)) {
-                    if (angular.isDefined(scope.fieldprefix) && angular.isDefined(item[scope.fieldprefix][scope.field]) &&
-                            !_.isNull(item[scope.fieldprefix][scope.field])) {
-                        scope.selectedTerm = item[scope.fieldprefix][scope.field].city;
-                    } else if (angular.isDefined(item[scope.field]) && !_.isNull(item[scope.field])) {
-                        scope.selectedTerm = item[scope.field].city;
+            $timeout(function() {
+                if (scope.item) {
+                    if (scope.fieldprefix && scope.item[scope.fieldprefix][scope.field]) {
+                        scope.selectedTerm = scope.item[scope.fieldprefix][scope.field].city;
+                    } else if (scope.item[scope.field]) {
+                        scope.selectedTerm = scope.item[scope.field].city;
                     }
+                }
+
+                if (scope.list) {
+                    scope.locators = scope.list;
                 }
             });
 
@@ -436,10 +415,7 @@ function MetadataLocatorsDirective() {
                     });
                 }
 
-                // Since blur is disabled explicitly on "sdTypeahead" need to do this
                 scope.selectedTerm = locator_to_find;
-                scope.selectLocator(null, false);
-
                 return scope.locators;
             };
 
@@ -448,33 +424,31 @@ function MetadataLocatorsDirective() {
              * located object.
              *
              * @param {Object} locator user selected located object
-             * @param {boolean} propogateChangeEvent when true invokes the method specified in change attribute.
              */
-            scope.selectLocator = function(locator, propogateChangeEvent) {
+            scope.selectLocator = function(locator) {
                 var updates = {};
 
-                if (!locator) {
+                if (!locator && scope.selectedTerm) {
                     locator = {'city': scope.selectedTerm, 'city_code': scope.selectedTerm, 'tz': 'UTC',
                         'dateline': 'city', 'country': '', 'country_code': '', 'state_code': '', 'state': ''};
-                } else {
+                }
+
+                if (locator) {
+                    if (angular.isDefined(scope.fieldprefix)) {
+                        updates[scope.fieldprefix] = scope.item[scope.fieldprefix];
+                        updates[scope.fieldprefix][scope.field] = locator;
+                    } else {
+                        updates[scope.field] = locator;
+                    }
+
                     scope.selectedTerm = locator.city;
+                    _.extend(scope.item, updates);
                 }
 
-                if (angular.isDefined(scope.fieldprefix)) {
-                    updates[scope.fieldprefix] = {};
-                    updates[scope.fieldprefix][scope.field] = locator;
-                } else {
-                    updates[scope.field] = locator;
-                }
-
-                _.extend(scope.item, updates);
                 var selectedLocator = {item: scope.item, city: scope.selectedTerm};
 
                 scope.postprocessing(selectedLocator);
-
-                if (angular.isUndefined(propogateChangeEvent) || propogateChangeEvent) {
-                    scope.change(selectedLocator);
-                }
+                scope.change(selectedLocator);
             };
         }
     };
@@ -553,6 +527,7 @@ angular.module('superdesk.authoring.metadata', ['superdesk.authoring.widgets'])
             .widget('metadata', {
                 icon: 'info',
                 label: gettext('Info'),
+                removeHeader: true,
                 template: 'scripts/superdesk-authoring/metadata/views/metadata-widget.html',
                 order: 1,
                 side: 'right',

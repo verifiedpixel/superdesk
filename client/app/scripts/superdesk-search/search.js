@@ -686,13 +686,30 @@
                         criteria = search.query($location.search()).getCriteria(true);
                         criteria.source.size = 0;
                         scope.total = null;
-                        return api.query('search', criteria).then(function (items) {
+                        return api.query(getProvider(criteria), criteria).then(function (items) {
                             scope.total = items._meta.total;
                             scope.$applyAsync(render);
                         });
                     }
 
                     queryItems();
+
+                    /*
+                     * Function to get the search endpoint name based on the criteria
+                     *
+                     * @param {Object} criteria
+                     * @returns {string}
+                     */
+                    function getProvider(criteria) {
+                        var provider = 'search';
+                        if (criteria.repo && criteria.repo.indexOf(',') === -1) {
+                            provider = criteria.repo;
+                        }
+                        if (scope.repo.search && scope.repo.search !== 'local') {
+                            provider = scope.repo.search;
+                        }
+                        return provider;
+                    }
 
                     /*
                      * Function for fetching the elements from the database
@@ -708,20 +725,12 @@
                         }
 
                         criteria = search.query($location.search()).getCriteria(true);
-                        var provider = 'search', tempItems;
-
-                        if (criteria.repo && criteria.repo.indexOf(',') === -1) {
-                            provider = criteria.repo;
-                        }
-
-                        if (scope.repo.search && scope.repo.search !== 'local') {
-                            provider = scope.repo.search;
-                        }
+                        var tempItems;
 
                         criteria.source.from = parameters.from;
                         criteria.source.size = parameters.to - parameters.from;
 
-                        api.query(provider, criteria).then(function (items) {
+                        api.query(getProvider(criteria), criteria).then(function (items) {
                             scope.$applyAsync(function () {
                                 list.style.paddingTop = parameters.padding;
                                 if (!scope.items) {
@@ -908,7 +917,8 @@
                     item: '=',
                     close: '&',
                     openLightbox: '=',
-                    openSingleItem: '='
+                    openSingleItem: '=',
+                    hideActionsMenu: '='
                 },
                 link: function(scope) {
                     scope.tab = 'content';
@@ -916,6 +926,20 @@
                     scope.$watch('item', function(item) {
                         scope.selected = {preview: item || null};
                     });
+
+                    scope.$on('item:spike', scope.close);
+
+                    scope.$on('item:unspike', scope.close);
+
+                    /**
+                     * Return true if the menu actions from
+                     * preview should be hidden
+                     *
+                     * @return {boolean}
+                     */
+                    scope.hideActions = function () {
+                        return scope.hideActionsMenu;
+                    };
                 }
             };
         }])
@@ -924,8 +948,8 @@
          * Open Item dialog
          */
         .directive('sdItemGlobalsearch', ['superdesk', 'session', '$location', 'search', 'api', 'notify',
-            'gettext', 'keyboardManager', 'asset',
-            function(superdesk, session, $location, search, api, notify, gettext, keyboardManager, asset) {
+            'gettext', 'keyboardManager', 'asset', 'authoringWorkspace',
+            function(superdesk, session, $location, search, api, notify, gettext, keyboardManager, asset, authoringWorkspace) {
             return {
                 scope: {repo: '=', context: '='},
                 templateUrl: asset.templateUrl('superdesk-search/views/item-globalsearch.html'),
@@ -951,11 +975,7 @@
                         if (items.length > 0) {
                             reset();
                             scope.flags.enabled = false;
-                            if (items[0].type === 'composite') {
-                                superdesk.intent('author', 'package', items[0]);
-                            } else {
-                                superdesk.intent('author', 'article', items[0]);
-                            }
+                            authoringWorkspace.edit(items[0]);
                         } else {
                             notify.error(gettext('Item not found...'));
                             scope.flags.enabled = true;
@@ -975,7 +995,7 @@
                             {term: {unique_name: scope.meta.unique_name}}
                         ];
                         var criteria = {
-                            repo: 'ingest,archive,published,archived',
+                            repo: 'archive',
                             source: {
                                 query: {filtered: {filter: {
                                     and: filter
@@ -1357,8 +1377,8 @@
             };
         })
 
-        .directive('sdMultiActionBar', ['asset', 'multi',
-        function(asset, multi) {
+        .directive('sdMultiActionBar', ['asset', 'multi', 'authoringWorkspace',
+        function(asset, multi, authoringWorkspace) {
             return {
                 controller: 'MultiActionBar',
                 controllerAs: 'action',
@@ -1367,6 +1387,11 @@
                 link: function(scope) {
                     scope.multi = multi;
                     scope.$watch(multi.getItems, detectType);
+
+                    scope.isOpenItemType = function(type) {
+                        var openItem = authoringWorkspace.getItem();
+                        return openItem.type === type;
+                    };
 
                     /**
                      * Detects type of all selected items and assign it to scope,
@@ -1394,7 +1419,6 @@
             superdesk.activity('/search', {
                 description: gettext('Find live and archived content'),
                 priority: 200,
-                category: superdesk.MENU_MAIN,
                 label: gettext('Search'),
                 templateUrl: asset.templateUrl('superdesk-search/views/search.html'),
                 sideTemplateUrl: 'scripts/superdesk-workspace/views/workspace-sidenav.html'
@@ -1426,6 +1450,10 @@
                     notify.error(gettext(response.data._message), 3000);
                 }
             });
+        };
+
+        this.addToPackage = function() {
+            $rootScope.$broadcast('package:addItems', {items: multi.getItems(), group: 'main'});
         };
 
         /**

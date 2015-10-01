@@ -48,9 +48,12 @@
                                     <label translate>Scheme rules</label>
                                 </div>
                                 <ul sd-sortrules class="pills-list rule-list">
-                                    <li ng-repeat="rule in editScheme.rules" class="clearfix" ng-click="editRule(rule)">
+                                    <li ng-repeat="schemeRule in editScheme.rules"
+                                        class="clearfix"
+                                        ng-class="{highlight: schemeRule === rule}"
+                                        ng-click="editRule(schemeRule)">
                                         <div class="header">
-                                            <h6>{{rule.name}}</h6>
+                                            <h6>{{schemeRule.name}}</h6>
                                         </div>
                                     </li>
                                 </ul>
@@ -77,7 +80,9 @@
                                     </ul>
                                     <div class="content">
                                         <div sd-ingest-routing-general ng-if="tab === 'general'" data-rule="rule" data-remove-action="removeRule"></div>
-                                        <div sd-ingest-routing-filter ng-if="tab === 'filter'" data-rule="rule"></div>
+                                        <div sd-ingest-routing-filter
+                                            ng-if="tab === 'filter'" data-rule="rule"
+                                            data-content-filters="contentFilters"></div>
                                         <div sd-ingest-routing-action ng-if="tab === 'action'" data-rule="rule"></div>
                                         <div sd-ingest-routing-schedule ng-if="tab === 'schedule'" data-rule="rule"></div>
                                     </div>

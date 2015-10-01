@@ -11,8 +11,8 @@
  (function() {
     'use strict';
 
-    AggregateCtrl.$inject = ['$scope', 'api', 'session', 'desks', 'workspaces', 'preferencesService', 'storage', 'gettext'];
-    function AggregateCtrl($scope, api, session, desks, workspaces, preferencesService, storage, gettext) {
+    AggregateCtrl.$inject = ['$scope', 'api', 'desks', 'workspaces', 'preferencesService', 'storage', 'gettext', 'multi'];
+    function AggregateCtrl($scope, api, desks, workspaces, preferencesService, storage, gettext, multi) {
         var PREFERENCES_KEY = 'agg:view';
         var defaultMaxItems = 10;
         var self = this;
@@ -27,7 +27,7 @@
         this.fileTypes = ['all', 'text', 'picture', 'composite', 'video', 'audio'];
         this.selectedFileType = [];
         this.monitoringSearch = false;
-        this.user = session.identity;
+        this.searchQuery = null;
 
         desks.initialize()
         .then(angular.bind(this, function() {
@@ -62,30 +62,55 @@
         }));
 
         /**
+         * If view showed as widget set the current widget
+         *
+         *@param {object} widget
+         */
+        this.setWidget = function(widget) {
+            this.widget = widget;
+        };
+
+        /**
          * Read the setting for current selected workspace(desk or custom workspace)
+         * If the view is showed in a widget, read the settings from widget configuration
          * If the current selected workspace is a desk the settings are read from desk
          * If the current selected workspace is a custom workspace the settings are read from
          * user preferences
          * @returns {Object} promise - when resolved return the list of settings
          */
         this.readSettings = function() {
-            return workspaces.getActiveId()
-                .then(angular.bind(this, function(activeWorkspaceId) {
-                    if (activeWorkspaceId) {
-                        return preferencesService.get(PREFERENCES_KEY)
-                            .then(angular.bind(this, function(preference) {
-                                if (preference && preference[activeWorkspaceId] && preference[activeWorkspaceId].groups) {
-                                    return preference[activeWorkspaceId].groups;
-                                }
-                            }));
-                    } else {
-                        var desk = this.deskLookup[desks.getCurrentDeskId()];
-                        if (desk && desk.monitoring_settings) {
-                            return desk.monitoring_settings;
+            if (self.widget) {
+                return workspaces.readActive()
+                .then(function(workspace) {
+                    var groups = [];
+                    self.widget.configuration = self.widget.configuration || {groups: [], label: ''};
+                    _.each(workspace.widgets, function(widget) {
+                        if (widget.configuration && self.widget._id === widget._id && self.widget.multiple_id === widget.multiple_id) {
+                            groups = widget.configuration.groups || groups;
+                            self.widget.configuration.label = widget.configuration.label || '';
                         }
-                    }
-                    return [];
-                }));
+                    });
+                    return groups;
+                });
+            } else {
+                return workspaces.getActiveId()
+                    .then(function(activeWorkspace) {
+                        if (activeWorkspace.type === 'workspace') {
+                            return preferencesService.get(PREFERENCES_KEY)
+                                .then(function(preference) {
+                                    if (preference && preference[activeWorkspace.id] && preference[activeWorkspace.id].groups) {
+                                        return preference[activeWorkspace.id].groups;
+                                    }
+                                });
+                        } else if (activeWorkspace.type === 'desk') {
+                            var desk = self.deskLookup[activeWorkspace.id];
+                            if (desk && desk.monitoring_settings) {
+                                return desk.monitoring_settings;
+                            }
+                        }
+                        return [];
+                    });
+            }
         };
 
         /**
@@ -115,6 +140,8 @@
                 });
             }
             initSpikeGroups();
+            updateFileTypeCriteria();
+            self.search(self.searchQuery);
         }
 
         /**
@@ -132,10 +159,16 @@
                 if (item.type === 'stage') {
                     var stage = self.stageLookup[item._id];
                     spikeDesks[stage.desk] = self.deskLookup[stage.desk];
+                } else if (item.type === 'personal') {
+                    spikeDesks.personal = {_id: 'personal', name: 'personal'};
                 }
             });
             _.each(spikeDesks, function(item) {
-                self.spikeGroups.push({_id: item._id, type: 'spike', header: item.name});
+                if (item._id === 'personal') {
+                    self.spikeGroups.push({_id: item._id, type: 'spike-personal', header: item.name});
+                } else {
+                    self.spikeGroups.push({_id: item._id, type: 'spike', header: item.name});
+                }
             });
         }
 
@@ -184,10 +217,25 @@
         };
 
         /**
+         * Update the type filter criteria
+         */
+        function updateFileTypeCriteria() {
+            var value = (self.selectedFileType.length === 0) ? null: JSON.stringify(self.selectedFileType);
+
+            _.each(self.groups, function(item) {
+                item.fileType = value;
+            });
+            _.each(self.spikeGroups, function(item) {
+                item.fileType = value;
+            });
+        }
+
+        /**
          * Set the current 'fileType' filter
          * param {string} fileType
          */
         this.setFileType = function(fileType) {
+            multi.reset();
             if (fileType === 'all') {
                 this.selectedFileType = [];
             } else {
@@ -198,15 +246,7 @@
                     this.selectedFileType.push(fileType);
                 }
             }
-
-            var value = (this.selectedFileType.length === 0) ? null: JSON.stringify(this.selectedFileType);
-
-            _.each(this.groups, function(item) {
-                item.fileType = value;
-            });
-            _.each(this.spikeGroups, function(item) {
-                item.fileType = value;
-            });
+            updateFileTypeCriteria();
         };
 
         /**
@@ -273,6 +313,7 @@
          * Set the search set by user on all groups
          */
         this.search = function(query) {
+            this.searchQuery = query;
             _.each(this.groups, function(item) {
                 item.query = query;
             });
@@ -285,6 +326,7 @@
          * Reset on all groups the search set by user
          */
         this.resetSearch = function() {
+            this.searchQuery = null;
             _.each(this.groups, function(item) {
                 item.query = null;
             });
@@ -316,8 +358,8 @@
         };
     }
 
-    AggregateSettingsDirective.$inject = ['desks', 'workspaces', 'preferencesService', 'WizardHandler'];
-    function AggregateSettingsDirective(desks, workspaces, preferencesService, WizardHandler) {
+    AggregateSettingsDirective.$inject = ['desks', 'workspaces', 'session', 'preferencesService', 'WizardHandler'];
+    function AggregateSettingsDirective(desks, workspaces, session, preferencesService, WizardHandler) {
         return {
             templateUrl: 'scripts/superdesk-desks/views/aggregate-settings-configuration.html',
             scope: {
@@ -331,7 +373,7 @@
                 groups: '=',
                 editGroups: '=',
                 onclose: '&',
-                widget: '@'
+                widget: '='
             },
             link: function(scope, elem) {
 
@@ -342,9 +384,19 @@
                     current: 'desks'
                 };
 
+                scope.$watch('step.current', function(step) {
+                    if (step === 'searches') {
+                        scope.initSavedSearches(scope.showAllSavedSearches);
+                    }
+                });
+
+                scope.showAllSavedSearches = false;
+                scope.currentSavedSearches = [];
+
                 scope.closeModal = function() {
                     scope.step.current = 'desks';
                     scope.modalActive = false;
+                    scope.showAllSavedSearches = false;
                     scope.onclose();
                 };
 
@@ -398,6 +450,25 @@
                 };
 
                 /**
+                 * Init searches list with all searches if allSearches is true or
+                 * user saved searches and other user saved searches
+                 * if they are already selected
+                 */
+                scope.initSavedSearches = function(showAllSavedSearches) {
+                    var user = session.identity._id;
+                    scope.showAllSavedSearches = showAllSavedSearches;
+                    if (scope.currentSavedSearches.length > 0) {
+                        scope.currentSavedSearches.length = 0;
+                    }
+                    _.each(scope.searches, function(item) {
+                        var group = scope.editGroups[item._id];
+                        if (scope.showAllSavedSearches || item.user === user || group && group.selected) {
+                            scope.currentSavedSearches.push(item);
+                        }
+                    });
+                };
+
+                /**
                  * Return the list of selected groups (stages, personal or saved searches)
                  * @return {Array} list of groups
                  */
@@ -446,30 +517,51 @@
                         }
                     });
 
-                    var updates = {};
-                    workspaces.getActiveId()
-                    .then(function(activeWorkspaceId) {
-                        if (activeWorkspaceId) {
-                            preferencesService.get(PREFERENCES_KEY)
-                            .then(function(preferences) {
-                                if (preferences) {
-                                    updates[PREFERENCES_KEY] = preferences;
+                    if (scope.widget) {
+                        workspaces.getActive()
+                        .then(function(workspace) {
+                            var widgets =  angular.copy(workspace.widgets);
+                            _.each(widgets, function(widget) {
+                                if (scope.widget._id === widget._id && scope.widget.multiple_id === widget.multiple_id) {
+                                    widget.configuration = {};
+                                    widget.configuration.groups = groups;
+                                    if (scope.widget.configuration.label) {
+                                        widget.configuration.label = scope.widget.configuration.label;
+                                    }
                                 }
-                                updates[PREFERENCES_KEY][activeWorkspaceId] = {groups: groups};
-                                preferencesService.update(updates, PREFERENCES_KEY)
+                            });
+                            workspaces.save(workspace, {'widgets': widgets})
+                            .then(function() {
+                                scope.showAllSavedSearches = false;
+                                scope.onclose();
+                            });
+                        });
+                    } else {
+                        workspaces.getActiveId()
+                        .then(function(activeWorkspace) {
+                            if (activeWorkspace.type === 'workspace') {
+                                preferencesService.get(PREFERENCES_KEY)
+                                .then(function(preferences) {
+                                    var updates = {};
+                                    if (preferences) {
+                                        updates[PREFERENCES_KEY] = preferences;
+                                    }
+                                    updates[PREFERENCES_KEY][activeWorkspace.id] = {groups: groups};
+                                    preferencesService.update(updates, PREFERENCES_KEY)
+                                    .then(function() {
+                                        WizardHandler.wizard('aggregatesettings').finish();
+                                    });
+                                });
+                            } else if (activeWorkspace.type === 'desk'){
+                                desks.save(scope.deskLookup[activeWorkspace.id], {monitoring_settings: groups})
                                 .then(function() {
                                     WizardHandler.wizard('aggregatesettings').finish();
                                 });
-                            });
-                        } else {
-                            desks.save(scope.deskLookup[desks.getCurrentDeskId()], {monitoring_settings: groups})
-                            .then(function() {
-                                WizardHandler.wizard('aggregatesettings').finish();
-                            });
-                        }
-                    });
-
-                    scope.onclose();
+                            }
+                        });
+                        scope.showAllSavedSearches = false;
+                        scope.onclose();
+                    }
                 };
             }
         };

@@ -319,7 +319,7 @@ define([
                 })
                 .activity('spike', {
                     label: gettext('Spike Item'),
-                    icon: 'remove',
+                    icon: 'trash',
                     monitor: true,
                     controller: ['spike', 'data', '$rootScope', function spikeActivity(spike, data, $rootScope) {
                         return spike.spike(data.item).then(function(item) {
@@ -398,7 +398,7 @@ define([
                 })
                 .activity('newtake', {
                     label: gettext('New Take'),
-                    icon: 'plus-small',
+                    icon: 'new-doc',
                     filters: [{action: 'list', type: 'archive'}],
                     privileges: {archive: 1},
                     condition: function(item) {
@@ -407,13 +407,19 @@ define([
                     additionalCondition:['authoring', 'item', function(authoring, item) {
                         return authoring.itemActions(item).new_take;
                     }],
-                    controller: ['data', '$rootScope', 'desks', 'authoring', 'notify', 'superdesk',
-                        function(data, $rootScope, desks, authoring, notify, superdesk) {
-                            authoring.linkItem(data.item, null, desks.getCurrentDeskId())
+                    controller: ['data', '$rootScope', 'desks', 'authoring', 'authoringWorkspace', 'notify', 'superdesk',
+                        function(data, $rootScope, desks, authoring, authoringWorkspace, notify) {
+                            // get the desk of the item to create the new take.
+                            var deskId = null;
+                            if (data.item.task && data.item.task.desk) {
+                                deskId = data.item.task.desk;
+                            }
+
+                            authoring.linkItem(data.item, null, deskId)
                                 .then(function(item) {
                                     notify.success(gettext('New take created.'));
                                     $rootScope.$broadcast('item:take');
-                                    superdesk.intent('author', 'article', item);
+                                    authoringWorkspace.edit(item);
                                 }, function(response) {
                                     data.item.error = response;
                                     notify.error(gettext('Failed to generate new take.'));
@@ -432,15 +438,15 @@ define([
                     additionalCondition:['authoring', 'item', function(authoring, item) {
                         return authoring.itemActions(item).re_write;
                     }],
-                    controller: ['data', '$location', 'api', 'notify', 'session', 'desks', 'superdesk',
-                        function(data, $location, api, notify, session, desks, superdesk) {
+                    controller: ['data', '$location', 'api', 'notify', 'session', 'authoringWorkspace', 'desks', 'superdesk',
+                        function(data, $location, api, notify, session, authoringWorkspace, desks, superdesk) {
                             session.getIdentity()
                                 .then(function(user) {
                                     return api.save('archive_rewrite', {}, {}, data.item);
                                 })
                                 .then(function(new_item) {
                                     notify.success(gettext('Update Created.'));
-                                    superdesk.intent('author', 'article', new_item._id);
+                                    authoringWorkspace.edit(new_item._id);
                                 }, function(response) {
                                     if (angular.isDefined(response.data._message)) {
                                         notify.error(gettext('Failed to generate update: ' + response.data._message));

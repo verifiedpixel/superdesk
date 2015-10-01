@@ -101,7 +101,9 @@
                 };
 
                 scope.edit = function(item) {
-                    superdesk.intent('edit', 'item', item);
+                    superdesk.intent('edit', 'item', item).then(null, function() {
+                        superdesk.intent('view', 'item', item);
+                    });
                 };
 
                 function queryItems(queryString) {
@@ -122,6 +124,12 @@
                 scope.$watch('filter', queryItems);
                 scope.$on('task:stage', function(event, data) {
                     if (scope.stage && (data.new_stage === scope.stage || data.old_stage === scope.stage)) {
+                        queryItems();
+                    }
+                });
+
+                scope.$on('content:update', function($event, data) {
+                    if (cards.shouldUpdate(scope.stage, data)) {
                         queryItems();
                     }
                 });
@@ -368,6 +376,7 @@
         //expecting $scope.desks to be defined
 
         $scope.modalActive = false;
+        $scope.numberOfUsers = 3;
         $scope.step = {
             current: null
         };
@@ -406,6 +415,14 @@
                 }
             );
         };
+
+        $scope.getDeskStages = function(desk) {
+            return desks.deskStages[desk._id];
+        };
+
+        $scope.getDeskUsers = function (desk) {
+            return desks.deskMembers[desk._id];
+        };
     }
 
     var app = angular.module('superdesk.desks', [
@@ -429,6 +446,8 @@
                     templateUrl: 'scripts/superdesk-desks/views/main.html',
                     sideTemplateUrl: 'scripts/superdesk-workspace/views/workspace-sidenav.html',
                     controller: DeskListController,
+                    priority: -100,
+                    adminTools: false,
                     category: superdesk.MENU_MAIN,
                     privileges: {desks: 1}
                 })
@@ -459,8 +478,7 @@
                     page = page || 1;
                     items = items || [];
 
-                    return api(endpoint)
-                    .query({max_results: 200, page: page})
+                    return api.query(endpoint, {max_results: 200, page: page})
                     .then(function(result) {
                         items = items.concat(result._items);
                         if (result._links.next) {
@@ -532,6 +550,21 @@
                                 self.stageLookup[item._id] = item;
                             });
                         });
+                    },
+                    fetchDeskStages: function(desk) {
+                        var self = this;
+
+                        if (self.deskStages[desk]) {
+                            return $q.when().then(returnDeskStages);
+                        } else {
+                            return self.fetchStages()
+                                .then(angular.bind(self, self.generateDeskStages))
+                                .then(returnDeskStages);
+                        }
+
+                        function returnDeskStages() {
+                            return self.deskStages[desk];
+                        }
                     },
                     generateDeskMembers: function() {
                         var self = this;
