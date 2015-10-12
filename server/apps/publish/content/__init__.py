@@ -7,4 +7,7 @@
 # For the full copyright and license information, please see the
 # AUTHORS and LICENSE files distributed with this source code, or
 # at https://www.sourcefabric.org/superdesk/license
-from .commands import AppImportTextArchiveCommand  # noqa
+
+from .publish import ArchivePublishResource, ArchivePublishService  # NOQA
+from .kill import KillPublishResource, KillPublishService  # NOQA
+from .correct import CorrectPublishResource, CorrectPublishService  # NOQA

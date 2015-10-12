@@ -175,6 +175,8 @@ function MetadataDropdownDirective() {
             disabled: '=ngDisabled',
             item: '=',
             field: '@',
+            icon: '@',
+            label: '@',
             change: '&'
         },
         templateUrl: 'scripts/superdesk-authoring/metadata/views/metadata-dropdown.html',
@@ -429,8 +431,15 @@ function MetadataLocatorsDirective($timeout) {
                 var updates = {};
 
                 if (!locator && scope.selectedTerm) {
-                    locator = {'city': scope.selectedTerm, 'city_code': scope.selectedTerm, 'tz': 'UTC',
-                        'dateline': 'city', 'country': '', 'country_code': '', 'state_code': '', 'state': ''};
+                    var previousLocator = scope.fieldprefix ? scope.item[scope.fieldprefix][scope.field] :
+                                            scope.item[scope.field];
+
+                    if (scope.selectedTerm === previousLocator.city) {
+                        locator = previousLocator;
+                    } else {
+                        locator = {'city': scope.selectedTerm, 'city_code': scope.selectedTerm, 'tz': 'UTC',
+                            'dateline': 'city', 'country': '', 'country_code': '', 'state_code': '', 'state': ''};
+                    }
                 }
 
                 if (locator) {

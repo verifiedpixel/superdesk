@@ -122,8 +122,16 @@
                     query.post_filter({terms: {urgency: JSON.parse(params.urgency)}});
                 }
 
+                if (params.priority) {
+                    query.post_filter({terms: {priority: JSON.parse(params.priority)}});
+                }
+
                 if (params.source) {
                     query.post_filter({terms: {source: JSON.parse(params.source)}});
+                }
+
+                if (params.credit && params.creditqcode) {
+                    query.post_filter({terms: {credit: JSON.parse(params.creditqcode)}});
                 }
 
                 if (params.category) {
@@ -184,6 +192,13 @@
 
             this.post_filter = function addPostFilter(filter) {
                 post_filters.push(filter);
+                return this;
+            };
+
+            this.clear_filters = function clearFilters() {
+                filters = [];
+                post_filters = [];
+                buildFilters({}, this);
                 return this;
             };
 
@@ -249,7 +264,9 @@
             'type': 1,
             'category': 1,
             'urgency': 1,
+            'priority': 1,
             'source': 1,
+            'credit': 1,
             'day': 1,
             'week': 1,
             'month': 1,
@@ -295,6 +312,9 @@
                         $location.search(type, JSON.stringify(keys));
                     } else {
                         $location.search(type, null);
+                    }
+                    if (type === 'credit') {
+                        $location.search('creditqcode', null);
                     }
                 }
             }
@@ -413,8 +433,10 @@
                             'stage': {},
                             'date': {},
                             'source': {},
+                            'credit': {},
                             'category': {},
-                            'urgency': {}
+                            'urgency': {},
+                            'priority': {}
                         };
                     };
 
@@ -440,13 +462,33 @@
                                 }
                             });
 
-                            _.forEach(scope.items._aggregations.urgency.buckets, function(urgency) {
-                                scope.aggregations.urgency[urgency.key] = urgency.doc_count;
+                            if (angular.isDefined(scope.items._aggregations.urgency))
+                            {
+                                _.forEach(scope.items._aggregations.urgency.buckets, function(urgency) {
+                                    scope.aggregations.urgency[urgency.key] = urgency.doc_count;
+                                });
+                            }
+
+                            _.forEach(scope.items._aggregations.priority.buckets, function(priority) {
+                                scope.aggregations.priority[priority.key] = priority.doc_count;
                             });
 
                             _.forEach(scope.items._aggregations.source.buckets, function(source) {
                                 scope.aggregations.source[source.key] = source.doc_count;
                             });
+                            if (angular.isDefined(scope.items._aggregations.source))
+                            {
+                                _.forEach(scope.items._aggregations.source.buckets, function(source) {
+                                    scope.aggregations.source[source.key] = source.doc_count;
+                                });
+                            }
+
+                            if (angular.isDefined(scope.items._aggregations.credit))
+                            {
+                                _.forEach(scope.items._aggregations.credit.buckets, function(credit) {
+                                    scope.aggregations.credit[credit.key] = {'count': credit.doc_count, 'qcode': credit.qcode};
+                                });
+                            }
 
                             _.forEach(scope.items._aggregations.day.buckets, function(day) {
                                 scope.aggregations.date['Last Day'] = day.doc_count;
@@ -460,7 +502,7 @@
                                 scope.aggregations.date['Last Month'] = month.doc_count;
                             });
 
-                            if (!scope.desk) {
+                            if (!scope.desk && angular.isDefined(scope.items._aggregations.stage)) {
                                 _.forEach(scope.items._aggregations.desk.buckets, function(desk) {
                                     var lookedUpDesk = desks.deskLookup[desk.key];
 
@@ -480,7 +522,7 @@
                                 });
                             }
 
-                            if (scope.desk) {
+                            if (scope.desk && angular.isDefined(scope.items._aggregations.stage)) {
                                 _.forEach(scope.items._aggregations.stage.buckets, function(stage) {
                                     _.forEach(desks.deskStages[scope.desk._id], function(deskStage) {
                                         if (deskStage._id === stage.key) {
@@ -517,6 +559,10 @@
                                 currentKeys.push(key);
                                 $location.search(type, JSON.stringify(currentKeys));
                             } else {
+                                if (type === 'credit') {
+                                    $location.search('creditqcode',
+                                        JSON.stringify([scope.aggregations.credit[key].qcode]));
+                                }
                                 $location.search(type, JSON.stringify([key]));
                             }
                         } else {
@@ -1280,7 +1326,7 @@
         /**
          * Item sort component
          */
-        .directive('sdItemSortbar', ['search', 'asset', function sortBarDirective(search, asset) {
+        .directive('sdItemSortbar', ['search', 'asset', '$location', function sortBarDirective(search, asset, $location) {
             return {
                 scope: {},
                 templateUrl: asset.templateUrl('superdesk-search/views/item-sortbar.html'),
@@ -1290,6 +1336,11 @@
                     function getActive() {
                         scope.active = search.getSort();
                     }
+
+                    scope.canSort = function() {
+                        var criteria = search.query($location.search()).getCriteria(true);
+                        return !(angular.isDefined(criteria.repo) && criteria.repo === 'aapmm');
+                    };
 
                     scope.sort = function sort(field) {
                         search.setSort(field);
