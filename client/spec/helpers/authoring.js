@@ -11,6 +11,7 @@ function Authoring() {
     this.kill_button = element(by.buttonText('kill'));
     this.close_button = element(by.buttonText('CLOSE'));
     this.save_button = element(by.buttonText('SAVE'));
+    this.edit_button = element(by.id('Edit'));
     this.edit_correct_button = element(by.buttonText('Edit and Correct'));
     this.edit_kill_button = element(by.buttonText('Edit and Kill'));
 
@@ -22,6 +23,8 @@ function Authoring() {
     this.sendToButton = element(by.id('send-to-btn'));
     this.sendAndContinueBtn = element(by.buttonText('send and continue'));
     this.sendBtn = element(by.buttonText('send'));
+
+    this.multieditOption = element(by.css('.big-icon-multiedit'));
 
     this.setCategoryBtn = element(by.id('category-setting'))
         .element(by.tagName('button'));
@@ -92,7 +95,7 @@ function Authoring() {
     };
 
     this.save = function() {
-        element(by.css('[ng-click="save(item)"]')).click();
+        element(by.css('[ng-click="saveTopbar(item)"]')).click();
         return browser.wait(function() {
             return element(by.buttonText('SAVE')).getAttribute('disabled');
         });
@@ -117,6 +120,26 @@ function Authoring() {
     this.showHistory = function() {
         this.showVersions();
         return element(by.css('[ng-click="tab = \'history\'"]')).click();
+    };
+
+    this.showInfo = function() {
+        return element(by.id('Info')).click();
+    };
+
+    this.showPackages = function() {
+        return element(by.id('Packages')).click();
+    };
+
+    this.getGUID = function() {
+        return element(by.id('guid'));
+    };
+
+    this.getPackages = function() {
+        return element.all(by.repeater('pitem in contentItems'));
+    };
+
+    this.getPackage = function(index) {
+        return this.getPackages().get(index);
     };
 
     this.getHistoryItems = function() {
@@ -224,8 +247,10 @@ function Authoring() {
 
     this.checkMarkedForHighlight = function(highlight, item) {
         expect(element(by.className('icon-star-color')).isDisplayed()).toBeTruthy();
-        expect(element(by.className('icon-star-color')).getAttribute('tooltip-html-unsafe'))
-            .toContain(highlight);
+        browser.actions().mouseMove(element(by.className('icon-star-color'))).perform();
+        element.all(by.css('.dropdown-menu.open li')).then(function (items) {
+            expect(items[1].getText()).toContain(highlight);
+        });
     };
 
     var bodyHtml = element(by.model('item.body_html')).all(by.className('editor-type-html')).first();

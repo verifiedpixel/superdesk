@@ -160,9 +160,8 @@ describe('Content', function() {
         element(by.id('searchItemByNameBtn')).click();
         browser.sleep(500);
 
-        expect(element(by.className('info-icons')).all(by.className('filetype-icon-text'))
-            .first().isDisplayed()).toBe(true);
-        expect(element(by.className('navigation-tabs')).all(by.repeater('widget in widgets')).count()).toBe(7);
+        expect(content.getItemType('text').isDisplayed()).toBe(true);
+        expect(content.getWidgets().count()).toBe(7);
 
         element(by.id('closeAuthoringBtn')).click();
     });
@@ -182,9 +181,8 @@ describe('Content', function() {
         element(by.id('searchItemByNameBtn')).click();
         browser.sleep(500);
 
-        expect(element(by.className('info-icons')).all(by.className('filetype-icon-composite'))
-            .first().isDisplayed()).toBe(true);
-        expect(element(by.className('navigation-tabs')).all(by.repeater('widget in widgets')).count()).toBe(6);
+        expect(content.getItemType('composite').isDisplayed()).toBe(true);
+        expect(content.getWidgets().count()).toBe(6);
 
         element(by.id('closeAuthoringBtn')).click();
     });
@@ -195,7 +193,7 @@ describe('Content', function() {
 
         setEmbargo();
 
-        element(by.css('[ng-click="save(item)"]')).click();
+        element(by.css('[ng-click="saveTopbar(item)"]')).click();
         element(by.id('closeAuthoringBtn')).click();
 
         content.previewItem('item3');
@@ -209,7 +207,7 @@ describe('Content', function() {
 
         setEmbargo();
 
-        element(by.css('[ng-click="save(item)"]')).click();
+        element(by.css('[ng-click="saveTopbar(item)"]')).click();
         element(by.id('closeAuthoringBtn')).click();
 
         element(by.className('sd-create-btn')).click();

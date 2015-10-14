@@ -164,7 +164,7 @@ define([
                     momentizedTimestamp = momentizedTimestamp.tz(located.tz);
                 }
 
-                return {'month': momentizedTimestamp.month().toString(), 'day': momentizedTimestamp.date().toString()};
+                return {'month': momentizedTimestamp.month().toString(), 'day': momentizedTimestamp.format('DD')};
             };
         })
         .filter('formatDatelineToLocMMMDDSrc', function() {
@@ -184,7 +184,7 @@ define([
                     dateline.concat(', ', located.country_code);
                 }
 
-                return dateline.concat(', ', month, ' ', date, ' ', source, ' -');
+                return dateline.toUpperCase().concat(', ', month, ' ', date, ' ', source, ' -');
             };
         })
         .filter('relativeUTCTimestamp', function() {

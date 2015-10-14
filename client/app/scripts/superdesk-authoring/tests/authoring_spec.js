@@ -307,6 +307,36 @@ describe('authoring', function() {
             expect(api.save).toHaveBeenCalledWith('archive', {}, edit);
 
         }));
+
+        it('close the published dirty item without confirmation',
+        inject(function(authoring, api, confirm, lock, autosave, $q, $rootScope) {
+            var publishedItem = Object.create(ITEM);
+            publishedItem.state = 'published';
+            var edit = Object.create(publishedItem);
+            edit.headline = 'test';
+            spyOn(authoring, 'isEditable').and.returnValue(true);
+            spyOn(autosave, 'drop').and.returnValue($q.when({}));
+            authoring.close(edit, publishedItem, true, false);
+            $rootScope.$digest();
+            expect(confirm.confirm).not.toHaveBeenCalled();
+            expect(lock.unlock).toHaveBeenCalled();
+            expect(autosave.drop).toHaveBeenCalled();
+        }));
+
+        it('close the corrected dirty item without confirmation',
+        inject(function(authoring, api, confirm, lock, autosave, $q, $rootScope) {
+            var publishedItem = Object.create(ITEM);
+            publishedItem.state = 'corrected';
+            var edit = Object.create(publishedItem);
+            edit.headline = 'test';
+            spyOn(authoring, 'isEditable').and.returnValue(true);
+            spyOn(autosave, 'drop').and.returnValue($q.when({}));
+            authoring.close(edit, publishedItem, true, false);
+            $rootScope.$digest();
+            expect(confirm.confirm).not.toHaveBeenCalled();
+            expect(lock.unlock).toHaveBeenCalled();
+            expect(autosave.drop).toHaveBeenCalled();
+        }));
     });
 });
 
@@ -1311,15 +1341,15 @@ describe('authoring themes', function () {
     }));
 
     var normalTheme = {
-        cssClass: '',
-        label: 'Default Theme normal',
-        key: 'default-normal'
-    },
-    darkTheme = {
-        cssClass: 'dark-theme-mono',
-        label: 'Dark Theme monospace',
-        key: 'dark-mono'
-    };
+            cssClass: '',
+            label: 'Default',
+            key: 'default'
+        },
+        darkTheme = {
+            cssClass: 'dark-theme-mono',
+            label: 'Dark monospace',
+            key: 'dark-mono'
+        };
 
     it('can define normal theme', inject(function (authThemes) {
         spyOn(authThemes, 'save');
@@ -1333,7 +1363,7 @@ describe('authoring themes', function () {
         expect(authThemes.save).toHaveBeenCalledWith('proofreadTheme', darkTheme);
     }));
 
-    it('can get normal theme', inject(function (authThemes, preferencesService, $rootScope, $q) {
+    it('can get normal theme', inject(function (authThemes, $rootScope) {
         var theme = null;
         authThemes.get('theme').then(function (_theme) {
             theme = _theme;
@@ -1342,7 +1372,7 @@ describe('authoring themes', function () {
         expect(theme).not.toBe(null);
     }));
 
-    it('can get proofread theme', inject(function (authThemes, preferencesService, $rootScope, $q) {
+    it('can get proofread theme', inject(function (authThemes, $rootScope) {
         var proofreadTheme = null;
         authThemes.get('proofreadTheme').then(function (_theme) {
             proofreadTheme = _theme;

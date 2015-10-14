@@ -164,7 +164,7 @@ function Monitoring() {
     };
 
     this.selectGivenItem = function(item) {
-        var itemTypeIcon = item.element(by.css('.filetype-icon-text'));
+        var itemTypeIcon = item.element(by.css('.type-icon'));
         browser.actions().mouseMove(itemTypeIcon).perform();
         return item.element(by.model('item.selected')).click();
     };
@@ -382,5 +382,20 @@ function Monitoring() {
      */
     this.createPackageFromItems = function() {
         element(by.css('[ng-click="action.createPackage()"]')).click();
+    };
+
+    /**
+     * Check if on monitoring view an item from group is marked for highlight
+     * @param {string} highlight
+     * @param {number} group
+     * @param {number} item
+     */
+    this.checkMarkedForHighlight = function(highlight, group, item) {
+        var crtItem = this.getItem(group, item);
+        expect(crtItem.element(by.className('icon-star-color')).isDisplayed()).toBeTruthy();
+        browser.actions().mouseMove(crtItem.element(by.className('icon-star-color'))).perform();
+        element.all(by.css('.dropdown-menu.open li')).then(function (items) {
+            expect(items[1].getText()).toContain(highlight);
+        });
     };
 }

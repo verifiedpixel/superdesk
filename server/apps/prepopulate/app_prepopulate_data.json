@@ -294,6 +294,8 @@
     {
         "data": {
             "_id": "subscriber_types",
+            "display_name": "Subscriber Types",
+            "type": "unmanageable",
             "items": [
                 {"is_active": true, "name": "Digital/Internet", "value": "digital",
                     "formats": [{"name": "NINJS", "value": "ninjs"}, {"name": "AAP NewsML 1.2", "value": "newsml12"}, {"name": "NewsML G2", "value": "newsmlg2"},
@@ -313,6 +315,8 @@
     {
         "data": {
             "_id": "categories",
+            "display_name": "Categories",
+            "type": "manageable",
             "items": [
                 {"is_active": true, "name": "Australian General News", "qcode": "a"},
                 {"is_active": true, "name": "Australian Weather", "qcode": "b", "subject": "17000000"},
@@ -349,6 +353,8 @@
     {
         "data": {
             "_id": "default_categories",
+            "display_name": "Default Categories",
+            "type": "manageable",
             "items" : [
                 {"qcode" : "a", "is_active" : true},
                 {"qcode" : "e", "is_active" : true},
@@ -442,6 +448,7 @@
             "slugline": "item3 slugline",
             "type": "text",
             "guid": "item3",
+            "priority": 3,
             "versioncreated": "2015-01-01T10:10:10+0000",
             "_current_version" : 1,
             "original_creator": "-id user admin-",
@@ -454,7 +461,7 @@
         }
     },
 
-	    {
+    {
         "resource": "archive",
         "username": "admin",
         "data": {
@@ -636,21 +643,62 @@
         "resource": "archive",
         "username": "admin",
         "data": {
-            "headline": "package2",
-            "type": "composite",
             "guid": "package2",
-            "versioncreated": "NOW()",
-            "_current_version" : 1,
-            "original_creator": "-id user admin-",
             "unique_id": 2,
             "unique_name": "package1",
-            "groups": [{"id": "root", "refs": [{"idRef": "main"}]}, {"id": "main", "refs": []}],
-             "task" : {
+		    "firstcreated": "NOW()",
+            "original_creator": "-id user admin-",
+            "versioncreated": "NOW()",
+		    "version_creator": "-id user admin-",
+            "_current_version" : 1,
+		    "urgency": 2,
+		    "priority": 1,
+		    "version": 1,
+		    "state": "in_progress",
+            "type": "composite",
+		    "slugline": "PACKAGE2 SLUGLINE",
+            "headline": "package2",
+		    "operation": "create",
+		    "pubstatus": "usable",
+		    "subject": [{"name": "archaeology", "parent": "01000000", "qcode": "01001000"}],
+		    "language": "en",
+            "task" : {
                 "desk" : "-id desk Politic Desks-",
                 "user" : "-id user admin2-",
                 "status": "in_progress",
                 "stage": "-id stage two Politic Desks-"
-            }
+            },
+		    "groups": [{
+		            "id": "root",
+		            "refs": [{"idRef": "main"}, {"idRef": "story"}]
+		        },
+		        {
+		            "id": "main",
+		            "refs": [
+		                {
+		                    "guid": "item5",
+		                    "headline": "item5",
+		                    "location": "archive",
+		                    "residRef": "item5",
+		                    "slugline": "item5 slugline",
+		                    "type": "text"
+		                }
+		            ]
+		        },
+		        {
+		            "id": "story",
+		            "refs": [
+		                {
+		                    "guid": "item9",
+		                    "headline": "item9",
+		                    "location": "archive",
+		                    "residRef": "item9",
+		                    "slugline": "item9 slugline",
+		                    "type": "text"
+		                }
+		            ]
+		        }
+		    ]
         }
     },
     {
@@ -672,6 +720,98 @@
                 "status": "in_progress",
                 "stage": "-id stage two Politic Desks-"
             }
+        }
+    },
+    {
+        "resource": "legal_archive",
+        "username": "admin",
+        "data": {
+            "headline": "item1 in legal archive",
+            "slugline": "item1 slugline",
+            "type": "text",
+            "state": "published",
+            "operation": "publish",
+            "guid": "item1-in-legal-archive",
+            "versioncreated": "2015-01-01T10:10:100000",
+            "_current_version" : 2,
+            "original_creator": "admin",
+            "task" : {
+		        "desk" : "Sports Desk",
+		        "user" : "administrator",
+		        "status": "done",
+		        "stage": "one"
+		    }
+        }
+    },
+    {
+        "resource": "legal_archive",
+        "username": "admin",
+        "data": {
+            "headline": "item2 in legal archive",
+            "slugline": "item2 slugline",
+            "type": "text",
+            "state": "killed",
+            "operation": "kill",
+            "guid": "item2-in-legal-archive",
+            "versioncreated": "2015-01-01T10:10:100000",
+            "_current_version" : 3,
+            "original_creator": "admin",
+            "task" : {
+		        "desk" : "Sports Desk",
+		        "user" : "administrator",
+		        "status": "done",
+		        "stage": "one"
+		    }
+        }
+    },
+    {
+        "resource": "legal_archive",
+        "username": "admin",
+        "data": {
+            "headline": "item3 in legal archive",
+            "slugline": "item3 slugline",
+            "type": "text",
+            "state": "published",
+            "operation": "publish",
+            "guid": "item3-in-legal-archive",
+            "versioncreated": "2015-01-01T10:10:100000",
+            "_current_version" : 2,
+            "original_creator": "admin",
+            "task" : {
+		        "desk" : "Sports Desk",
+		        "user" : "administrator",
+		        "status": "todo",
+		        "stage": "one"
+		    }
+        }
+    },
+    {
+        "resource": "legal_archive",
+        "username": "admin",
+        "data": {
+            "headline": "package1 in legal archive",
+            "slugline": "package1 slugline",
+            "type": "composite",
+            "state": "published",
+            "operation": "publish",
+            "guid": "package1-in-legal-archive",
+            "versioncreated": "2015-01-01T10:10:100000",
+            "_current_version" : 2,
+            "original_creator": "admin",
+            "groups": [{"refs" : [{"idRef" : "main"}], "id" : "root", "role" : "grpRole:NEP"},
+                       {"refs" : [{"renditions" : {}, "type" : "text", "slugline" : "item1 slugline", "headline" : "item1 in legal archive",
+                                   "guid" : "item1-in-legal-archive", "residRef" : "item1-in-legal-archive",
+                                   "itemClass" : "icls:text", "_current_version" : 2, "location" : "legal_archive"},
+	   		                      {"renditions" : {}, "type" : "text", "slugline" : "item3 slugline", "headline" : "item3 in legal archive",
+                                   "guid" : "item3-in-legal-archive", "residRef" : "item3-in-legal-archive",
+                                   "itemClass" : "icls:text",  "_current_version" : 2, "location" : "archive"
+                                  }], "id" : "main", "role" : "grpRole:main"}],
+            "task" : {
+		        "desk" : "Sports Desk",
+		        "user" : "administrator",
+		        "status": "todo",
+		        "stage": "one"
+		    }
         }
     },
     {

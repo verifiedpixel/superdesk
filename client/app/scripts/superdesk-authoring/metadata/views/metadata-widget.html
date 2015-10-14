@@ -27,7 +27,7 @@
 			</li>
 			<li class="terms-box">
 				<label translate>Keywords</label>
-				<div sd-meta-words-list data-item="item" data-field="keywords" data-change="autosave(item)" data-list="item.keywords" data-disabled="!_editable"></div>
+				<div sd-meta-words-list data-item="item" data-field="keywords" data-change="autosave(item)" data-header="_editable" data-list="metadata.keywords" data-disabled="!_editable"></div>
 			</li>
 			<li>
 				<label translate>Language</label>
@@ -96,7 +96,7 @@
 			</li>
 			<li class="auto">
 				<label translate>GUID</label>
-				<div class="data">{{item.guid}}</div>
+				<div class="data" id="guid">{{item.guid}}</div>
 			</li>
 	        <li>
 				<label translate>Unique name</label>
@@ -126,11 +126,11 @@
 				</li>
 				<li ng-if="item.task.desk">
 					<label translate>Desk</label>
-					<div class="data">{{deskLookup[item.task.desk].name}}</div>
+					<div class="data">{{deskLookup[item.task.desk].name || item.task.desk}}</div>
 				</li>
 				<li ng-if="item.task.user">
 					<label translate>Assignee</label>
-					<div class="data">{{userLookup[item.task.user].display_name}}</div>
+					<div class="data">{{userLookup[item.task.user].display_name || item.task.user}}</div>
 				</li>
 			</ul>
     </div>
