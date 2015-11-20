@@ -10,6 +10,7 @@
 
 
 import os
+import time
 from datetime import datetime, timedelta
 from superdesk.io.commands.update_ingest import LAST_ITEM_UPDATE
 import superdesk
@@ -97,13 +98,14 @@ def json_match(context_data, response_data):
         return True
     elif not isinstance(context_data, dict):
         if context_data != response_data:
-            print(context_data, ' != ', response_data)
+            print('---' + str(context_data) + '---\n', ' != \n', '---' + str(response_data) + '---\n')
         return context_data == response_data
 
 
-def get_fixture_path(fixture):
-    abspath = os.path.abspath(os.path.dirname(__file__))
-    return os.path.join(abspath, 'fixtures', fixture)
+def get_fixture_path(context, fixture):
+    path = context.app.settings.get('BEHAVE_TESTS_FIXTURES_PATH',
+                                    os.path.join(os.path.abspath(os.path.dirname(__file__)), 'fixtures'))
+    return os.path.join(path, fixture)
 
 
 def get_macro_path(macro):
@@ -195,12 +197,16 @@ def apply_placeholders(context, text):
             value = value.strftime("%Y-%m-%dT%H:%M:%S%z")
         elif placeholder not in placeholders:
             try:
-                resource_name, field_name = placeholder.lower().split('.', maxsplit=1)
+                resource_name, field_name = placeholder.split('.', maxsplit=1)
             except:
                 continue
             resource = getattr(context, resource_name, None)
-            if resource and field_name in resource:
-                value = str(resource[field_name])
+            for name in field_name.split('.'):
+                if not resource:
+                    break
+                resource = resource.get(name, None)
+            if resource:
+                value = str(resource)
             else:
                 continue
         else:
@@ -302,7 +308,7 @@ def step_impl_when_auth(context):
 
 @given('we create a new macro "{macro_name}"')
 def step_create_new_macro(context, macro_name):
-    src = get_fixture_path(macro_name)
+    src = get_fixture_path(context, macro_name)
     dst = get_macro_path(macro_name)
     shutil.copyfile(src, dst)
 
@@ -357,7 +363,7 @@ def fetch_from_provider(context, provider_name, guid, routing_scheme=None, desk_
     provider_service = context.provider_services[provider.get('type')]
     provider_service.provider = provider
 
-    if provider.get('type') == 'aap' or provider.get('type') == 'teletype':
+    if provider.get('type') in ('aap', 'teletype', 'dpa'):
         items = provider_service.parse_file(guid, provider)
     else:
         items = provider_service.fetch_ingest(guid)
@@ -383,6 +389,12 @@ def fetch_from_provider(context, provider_name, guid, routing_scheme=None, desk_
 
 @when('we post to "{url}"')
 def step_impl_when_post_url(context, url):
+    post_data(context, url)
+
+
+@when('we post to "{url}" with delay')
+def step_impl_when_post_url(context, url):
+    time.sleep(1)
     post_data(context, url)
 
 
@@ -636,7 +648,7 @@ def when_upload_patch_dictionary(context):
 
 
 def upload_file(context, dest, filename, file_field, extra_data=None, method='post', user_headers=[]):
-    with open(get_fixture_path(filename), 'rb') as f:
+    with open(get_fixture_path(context, filename), 'rb') as f:
         data = {file_field: f}
         if extra_data:
             data.update(extra_data)
@@ -1389,14 +1401,14 @@ def we_change_user_status(context, status, url):
 @when('we get the default incoming stage')
 def we_get_default_incoming_stage(context):
     data = json.loads(context.response.get_data())
-    incoming_stage = data['_items'][0]['incoming_stage']
+    incoming_stage = data['_items'][0]['incoming_stage'] if '_items' in data else data['incoming_stage']
     assert incoming_stage
     url = 'stages/{0}'.format(incoming_stage)
     when_we_get_url(context, url)
     assert_200(context.response)
     data = json.loads(context.response.get_data())
     assert data['default_incoming'] is True
-    assert data['name'] == 'New'
+    assert data['name'] == 'Incoming Stage'
 
 
 @then('we get stage filled in to default_incoming')
@@ -1464,9 +1476,9 @@ def step_we_get_email(context):
         assert check_if_email_sent(context, email['body'])
 
 
-@then('we get no email')
-def step_we_get_no_email(context):
-    assert len(context.outbox) == 0
+@then('we get {count} emails')
+def step_we_get_no_email(context, count):
+    assert len(context.outbox) == int(count)
 
 
 def check_if_email_sent(context, body):
@@ -1676,13 +1688,13 @@ def when_we_schedule_the_routing_scheme(context, scheme_id):
         href = get_self_href(res, context)
         headers = if_match(context, res.get('_etag'))
         rule = res.get('rules')[0]
-
+        now = utcnow()
         from apps.rules.routing_rules import Weekdays
 
         rule['schedule'] = {
             'day_of_week': [
-                Weekdays.dayname(datetime.now() + timedelta(days=1)),
-                Weekdays.dayname(datetime.now() + timedelta(days=2))
+                Weekdays.dayname(now + timedelta(days=1)),
+                Weekdays.dayname(now + timedelta(days=2))
             ],
             'hour_of_day_from': '1600',
             'hour_of_day_to': '2000'
@@ -1691,7 +1703,7 @@ def when_we_schedule_the_routing_scheme(context, scheme_id):
         if len(res.get('rules')) > 1:
             rule = res.get('rules')[1]
             rule['schedule'] = {
-                'day_of_week': [Weekdays.dayname(datetime.now())]
+                'day_of_week': [Weekdays.dayname(now)]
             }
 
         context.response = context.client.patch(get_prefixed_url(context.app, href),
@@ -1749,6 +1761,22 @@ def we_get_and_match(context, url):
 def there_is_no_key_in_response(context, key):
     data = get_json_data(context.response)
     assert key not in data, 'key "%s" is in %s' % (key, data)
+
+
+@then('there is no "{key}" in task')
+def there_is_no_key_in_preferences(context, key):
+    data = get_json_data(context.response)['task']
+    assert key not in data, 'key "%s" is in task' % key
+
+
+@then('broadcast "{key}" has value "{value}"')
+def broadcast_key_has_value(context, key, value):
+    data = get_json_data(context.response).get('broadcast', {})
+    value = apply_placeholders(context, value)
+    if value.lower() == 'none':
+        assert data[key] is None, 'key "%s" is not none and has value "%s"' % (key, data[key])
+    else:
+        assert data[key] == value, 'key "%s" does not have valid value "%s"' % (key, data[key])
 
 
 @then('there is no "{key}" in "{namespace}" preferences')

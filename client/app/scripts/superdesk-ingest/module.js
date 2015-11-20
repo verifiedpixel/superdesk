@@ -361,8 +361,8 @@ define([
         };
     }
 
-    IngestSourcesContent.$inject = ['providerTypes', 'gettext', 'notify', 'api', '$location', 'modal'];
-    function IngestSourcesContent(providerTypes, gettext, notify, api, $location, modal) {
+    IngestSourcesContent.$inject = ['providerTypes', 'gettext', 'notify', 'api', '$location', 'modal', '$filter'];
+    function IngestSourcesContent(providerTypes, gettext, notify, api, $location, modal, $filter) {
         return {
             templateUrl: 'scripts/superdesk-ingest/views/settings/ingest-sources-content.html',
             link: function($scope) {
@@ -393,6 +393,7 @@ define([
                 function fetchProviders() {
                     return api.ingestProviders.query({max_results: 200})
                         .then(function(result) {
+                            result._items = $filter('sortByName')(result._items);
                             $scope.providers = result;
                         });
                 }
@@ -424,11 +425,11 @@ define([
                 });
 
                 api('rule_sets').query().then(function(result) {
-                    $scope.rulesets = result._items;
+                    $scope.rulesets = $filter('sortByName')(result._items);
                 });
 
                 api('routing_schemes').query().then(function(result) {
-                    $scope.routingScheme = result._items;
+                    $scope.routingScheme = $filter('sortByName')(result._items);
                 });
 
                 $scope.fetchSourceErrors = function() {
@@ -617,8 +618,8 @@ define([
         };
     }
 
-    IngestRulesContent.$inject = ['api', 'gettext', 'notify', 'modal'];
-    function IngestRulesContent(api, gettext, notify, modal) {
+    IngestRulesContent.$inject = ['api', 'gettext', 'notify', 'modal', '$filter'];
+    function IngestRulesContent(api, gettext, notify, modal, $filter) {
         return {
             templateUrl: 'scripts/superdesk-ingest/views/settings/ingest-rules-content.html',
             link: function(scope) {
@@ -627,7 +628,7 @@ define([
                 scope.editRuleset = null;
 
                 api('rule_sets').query().then(function(result) {
-                    scope.rulesets = result._items;
+                    scope.rulesets = $filter('sortByName')(result._items);
                 });
 
                 scope.edit = function(ruleset) {
@@ -643,6 +644,8 @@ define([
                         if (_new) {
                             scope.rulesets.push(_orig);
                         }
+
+                        scope.rulesets = $filter('sortByName')(scope.rulesets);
                         notify.success(gettext('Rule set saved.'));
                         scope.cancel();
                     }, function(response) {
@@ -699,10 +702,8 @@ define([
      *   Creates the main page for adding or editing routing rules (in the
      *   modal for editing ingest routing schemes).
      */
-    IngestRoutingContent.$inject = [
-        'api', 'gettext', 'notify', 'modal', 'contentFilters'
-    ];
-    function IngestRoutingContent(api, gettext, notify, modal, contentFilters) {
+    IngestRoutingContent.$inject = ['api', 'gettext', 'notify', 'modal', 'contentFilters', '$filter'];
+    function IngestRoutingContent(api, gettext, notify, modal, contentFilters, $filter) {
         return {
             templateUrl: 'scripts/superdesk-ingest/views/settings/ingest-routing-content.html',
             link: function(scope) {
@@ -714,10 +715,8 @@ define([
                 scope.ruleIndex = null;
                 scope.schemes = [];
 
-                api('routing_schemes')
-                .query()
-                .then(function(result) {
-                    scope.schemes = result._items;
+                api('routing_schemes').query().then(function(result) {
+                    scope.schemes = $filter('sortByName')(result._items);
                 });
 
                 scope.contentFilters = [];
@@ -762,6 +761,7 @@ define([
                         if (_new) {
                             scope.schemes.push(_orig);
                         }
+                        scope.schemes = $filter('sortByName')(scope.schemes);
                         notify.success(gettext('Routing scheme saved.'));
                         scope.cancel();
                     }, function(response) {
@@ -1031,11 +1031,82 @@ define([
         };
     }
 
-    IngestRoutingSchedule.$inject = [];
-    function IngestRoutingSchedule() {
+    /**
+     * @memberof superdesk.ingest
+     * @ngdoc directive
+     * @name sdIngestRoutingSchedule
+     * @description
+     *   Creates the Schedule section (tab) of the routing rule edit form.
+     */
+    IngestRoutingSchedule.$inject = ['tzdata'];
+    function IngestRoutingSchedule(tzdata) {
         return {
-            scope: {rule: '='},
-            templateUrl: 'scripts/superdesk-ingest/views/settings/ingest-routing-schedule.html'
+            scope: {
+                rule: '='  // the routing rule whose schedule is being edited
+            },
+            templateUrl: 'scripts/superdesk-ingest/views/settings/ingest-routing-schedule.html',
+            link: function (scope, element, attrs) {
+
+                scope.timeZones = [];     // all time zones to choose from
+                scope.tzSearchTerm = '';  // the current time zone search term
+
+                // filtered time zone list containing only those that match
+                // user-provided search term
+                scope.matchingTimeZones = [];
+
+                tzdata.$promise.then(function () {
+                    scope.timeZones = tzdata.getTzNames();
+                });
+
+                /**
+                 * Sets the list of time zones to select from to only those
+                 * that contain the given search term (case-insensitive).
+                 * If the search term is empty, it results in an empty list.
+                 *
+                 * @method searchTimeZones
+                 * @param {string} searchTerm
+                 */
+                scope.searchTimeZones = function (searchTerm) {
+                    var termLower;
+
+                    scope.tzSearchTerm = searchTerm;
+
+                    if (!searchTerm) {
+                        scope.matchingTimeZones = [];
+                        return;
+                    }
+
+                    termLower = searchTerm.toLowerCase();
+                    scope.matchingTimeZones = _.filter(
+                        scope.timeZones,
+                        function (item) {
+                            return (item.toLowerCase().indexOf(termLower) >= 0);
+                        }
+                    );
+                };
+
+                /**
+                 * Sets the time zone of the routing rule's schedule and resets
+                 * the current time zone search term.
+                 *
+                 * @method selectTimeZone
+                 * @param {string} timeZone - name of the time zone to select
+                 */
+                scope.selectTimeZone = function (timeZone) {
+                    scope.rule.schedule.time_zone = timeZone;
+                    scope.tzSearchTerm = '';
+                };
+
+                /**
+                 * Clears the currently selected time zone of the routing
+                 * rule's schedule.
+                 *
+                 * @method clearSelectedTimeZone
+                 */
+                scope.clearSelectedTimeZone = function () {
+                    scope.rule.schedule.time_zone = null;
+                };
+            }
         };
     }
 

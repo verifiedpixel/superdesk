@@ -29,6 +29,9 @@ function Authoring() {
     this.setCategoryBtn = element(by.id('category-setting'))
         .element(by.tagName('button'));
 
+    this.sendItemContainer = element(by.id('send-item-container'));
+    this.linkToMasterButton = element(by.id('preview-master'));
+
     /**
      * Find all file type icons in the item's info icons box matching the
      * given file type.
@@ -68,6 +71,15 @@ function Authoring() {
             sidebar.element(by.buttonText(stage)).click();
         }
         this.sendBtn.click();
+    };
+
+    this.selectDeskforSendTo = function(desk) {
+        var sidebar = element.all(by.css('.slide-pane')).last(),
+            dropdown = sidebar.element(by.css('.dropdown--dark .dropdown-toggle'));
+
+        dropdown.waitReady();
+        dropdown.click();
+        sidebar.element(by.buttonText(desk)).click();
     };
 
     this.markAction = function() {
@@ -241,13 +253,24 @@ function Authoring() {
         browser.actions().mouseMove(element(by.css('.highlights-toggle .dropdown-toggle'))).perform();
     };
 
+    this.toggleAutoSpellCheck = function() {
+        var toggle = element(by.id('authoring-extra-dropdown')).element(by.className('icon-dots-vertical'));
+
+        browser.wait(function() {
+            return toggle.isDisplayed();
+        });
+
+        toggle.click();
+        element(by.model('spellcheckMenu.isAuto')).click();
+    };
+
     this.getSubnav = function() {
         return element(by.id('subnav'));
     };
 
     this.checkMarkedForHighlight = function(highlight, item) {
-        expect(element(by.className('icon-star-color')).isDisplayed()).toBeTruthy();
-        browser.actions().mouseMove(element(by.className('icon-star-color'))).perform();
+        expect(element(by.className('icon-star')).isDisplayed()).toBeTruthy();
+        browser.actions().mouseMove(element(by.className('icon-star'))).perform();
         element.all(by.css('.dropdown-menu.open li')).then(function (items) {
             expect(items[1].getText()).toContain(highlight);
         });
@@ -256,6 +279,7 @@ function Authoring() {
     var bodyHtml = element(by.model('item.body_html')).all(by.className('editor-type-html')).first();
     var headline = element(by.model('item.headline')).all(by.className('editor-type-html')).first();
     var abstract = element(by.model('item.abstract')).all(by.className('editor-type-html')).first();
+    var bodyFooter = element(by.id('body_footer')).all(by.className('editor-type-html')).first();
     var packageSlugline = element.all(by.className('keyword')).last();
 
     this.writeText = function (text) {
@@ -305,4 +329,21 @@ function Authoring() {
         element(by.className('proofread-theme-list'))
                 .all(by.className(theme)).first().click();
     };
+
+    this.addPublicServiceAnnouncement = function (psaLabel) {
+        element(by.id('psa_options')).element(by.css('option[label="' + psaLabel + '"]')).click();
+    };
+
+    this.getBodyFooter = function () {
+        return bodyFooter.getText();
+    };
+
+    this.showTransmissionDetails = function (publishedHistoryItemIndex) {
+        this.getHistoryItem(publishedHistoryItemIndex).element(
+            by.css('[ng-click="showOrHideTransmissionDetails()"]')).click();
+        browser.sleep(700);
+
+        return element.all(by.repeater('queuedItem in queuedItems'));
+    };
+
 }

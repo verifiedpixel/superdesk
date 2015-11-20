@@ -5,6 +5,12 @@ var openUrl = require('./utils').open;
 module.exports = new GlobalSearch();
 
 function GlobalSearch() {
+    this.ingestRepo = element(by.id('ingest-collection'));
+    this.archiveRepo = element(by.id('archive-collection'));
+    this.publishedRepo = element(by.id('published-collection'));
+    this.archivedRepo = element(by.id('archived-collection'));
+    this.goButton = element(by.buttonText('Go'));
+    this.searchInput = element(by.id('search-input'));
 
     /**
      * Open dashboard for current selected desk/custom workspace.
@@ -24,6 +30,7 @@ function GlobalSearch() {
             .then(function(isVisible) {
                 if (isVisible) {
                     list.click();
+                    browser.sleep(1000);
                 }
             });
     };
@@ -38,6 +45,7 @@ function GlobalSearch() {
         return grid.then(function(isVisible) {
             if (isVisible) {
                 grid.click();
+                browser.sleep(1000);
             }
         });
     };
@@ -62,6 +70,21 @@ function GlobalSearch() {
         return this.getItems().get(index);
     };
 
+    this.itemClick = function(index) {
+        var itemElem = this.getItem(index);
+        itemElem.click();
+    };
+
+    /**
+     * Get the search element text at 'index' row
+     *
+     * @param {number} index
+     * @return {string}
+     */
+    this.getTextItem = function(index) {
+        return this.getItem(index).element(by.id('title')).getText();
+    };
+
     /**
      * Open the contextual menu for the 'index'
      * element from global search list
@@ -77,6 +100,15 @@ function GlobalSearch() {
     };
 
     /**
+     * Get the list of relatedItems from related tab
+     *
+     * @return {promise} list of elements
+     */
+    this.getRelatedItems = function() {
+        return element.all(by.repeater('relatedItem in relatedItems._items'));
+    };
+
+    /**
      * Perform the 'action' operation of the
      * 'index' element of the global search list
      *
@@ -85,7 +117,10 @@ function GlobalSearch() {
      */
     this.actionOnItem = function(action, index) {
         var menu = this.openItemMenu(index);
-        menu.element(by.partialLinkText(action)).click();
+        menu.element(by.partialLinkText(action)).waitReady()
+        .then(function(elem) {
+            elem.click();
+        });
     };
 
     /**
@@ -96,8 +131,111 @@ function GlobalSearch() {
      */
     this.checkMarkedForHighlight = function(highlight, item) {
         var crtItem = this.getItem(item);
-        expect(crtItem.element(by.className('icon-star-color')).isDisplayed()).toBeTruthy();
-        expect(crtItem.element(by.className('icon-star-color')).getAttribute('tooltip-html-unsafe'))
+        expect(crtItem.element(by.className('icon-star')).isDisplayed()).toBeTruthy();
+        expect(crtItem.element(by.className('icon-star')).getAttribute('tooltip-html-unsafe'))
             .toContain(highlight);
+    };
+
+    /**
+     * Show custom search right panel
+     */
+    this.showCustomSearch = function() {
+        browser.sleep(500);
+        element(by.className('filter-trigger'))
+        .element(by.className('icon-filter-large')).click();
+        browser.sleep(500);
+    };
+
+    /**
+     * Toggle search by item type combobox
+     *
+     * @param {string} type
+     */
+    this.toggleByType = function(type) {
+        browser.actions().mouseMove(element(by.className('filetype-icon-' + type))).perform();
+        element(by.id('filetype-icon-' + type)).click();
+    };
+
+    /**
+     * Open the filter panel
+     */
+    this.openFilterPanel = function() {
+        element(by.css('.filter-trigger')).click();
+    };
+
+    /**
+     * Open the saved search tab
+     */
+    this.openSavedSearchTab = function() {
+        element(by.id('saved_searches_tab')).click();
+    };
+
+    /**
+     * Open the search Parameters from
+     */
+    this.openParameters = function() {
+        element(by.id('search-parameters')).click();
+    };
+
+    /**
+     * Open the search Parameters from
+     * @param {string} selectId - Id of the <select> element
+     * @param {string} deskName - Name of the desk.
+     */
+    this.selectDesk = function(selectId, deskName) {
+        element(by.id(selectId)).element(by.css('option[label="' + deskName + '"]')).click();
+    };
+
+    /**
+     * Select the user passed user display name from the passed <select> element
+     * @param {string} selectId - Id of the <select> element
+     * @param {string} userName - Name of the desk.
+     */
+    this.selectCreator = function(selectId, userName) {
+        element(by.id(selectId)).element(by.css('option[label="' + userName + '"]')).click();
+    };
+
+    /**
+     * Get the Element Heading by index
+     * @param {number} index
+     * @return {promise} headline element
+     */
+    this.getHeadlineElement = function(index) {
+        element(by.id('search-parameters')).click();
+        return this.getItem(index).element(by.className('item-heading'));
+    };
+
+    /**
+     * Get the Priority Elements
+     * @return {promise} Priority elements
+     */
+    this.getPriorityElements = function() {
+        return element.all(by.repeater('(key,value) in aggregations.priority'));
+    };
+
+    /**
+     * Get the Genre Elements
+     * @return {promise} Genre elements
+     */
+    this.getGenreElements = function() {
+        return element.all(by.repeater('(key,value) in aggregations.genre'));
+    };
+
+    /**
+     * Get the Priority Element by Index
+     * @param {number} index
+     * @return {promise} Priority element
+     */
+    this.getPriorityElementByIndex = function(index) {
+        return this.getPriorityElements().get(index);
+    };
+
+    /**
+     * Get the Genre Element by Index
+     * @param {number} index
+     * @return {promise} Genre element
+     */
+    this.getGenreElementByIndex = function(index) {
+        return this.getGenreElements().get(index);
     };
 }

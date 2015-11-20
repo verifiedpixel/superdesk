@@ -18,7 +18,7 @@ Feature: Duplication of Content within Desk
           "task": {"desk": "#desks._id#", "stage": "#desks.incoming_stage#", "user": "#CONTEXT_USER_ID#"}}]
       """
 
-    @auth
+    @auth @notification
     Scenario: Duplicate a content with history
       When we patch given
       """
@@ -43,6 +43,12 @@ Feature: Duplication of Content within Desk
       Then we get existing resource
       """
       {"state": "submitted", "_current_version": 4, "task": {"desk": "#desks._id#", "stage": "#desks.incoming_stage#", "user": "#CONTEXT_USER_ID#"}}
+      """
+      Then there is no "last_production_desk" in task
+      And there is no "last_authoring_desk" in task
+      And we get notifications
+      """
+        [{"event": "content:update", "extra": {"items": {"123": 1}, "desks": {"#desks._id#": 1}, "stages": {"#desks.incoming_stage#": 1}}, "_created": "__any_value__"}]
       """
       When we get "/archive/#duplicate._id#?version=all"
       Then we get list with 4 items

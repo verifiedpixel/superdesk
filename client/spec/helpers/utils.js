@@ -8,6 +8,10 @@ module.exports.printLogs = printLogs;
 module.exports.waitForSuperdesk = waitForSuperdesk;
 module.exports.nav = nav;
 module.exports.getListOption = getListOption;
+module.exports.ctrlKey = ctrlKey;
+module.exports.ctrlShiftKey = ctrlShiftKey;
+module.exports.altKey = altKey;
+module.exports.assertToastMsg = assertToastMsg;
 
 // construct url from uri and base url
 exports.constructUrl = function(base, uri) {
@@ -166,4 +170,59 @@ function route(location) {
 function getListOption(dropdown, n) {
     var cssSelector = 'option:nth-child(' + n + ')';
     return dropdown.$(cssSelector);
+}
+
+/**
+ * Performs CTRL + key action
+ *
+ * @param {char} key
+ */
+function ctrlKey(key) {
+    var Key = protractor.Key;
+    browser.actions().sendKeys(Key.chord(Key.CONTROL, key)).perform();
+}
+
+/**
+ * Performs CTRL + SHIFT + key action
+ *
+ * @param {char} key
+ */
+function ctrlShiftKey(key) {
+    var Key = protractor.Key;
+    browser.actions().sendKeys(Key.chord(Key.CONTROL, Key.SHIFT, key)).perform();
+}
+
+/**
+ * Performs ALT + key action
+ *
+ * @param {char} key
+ */
+function altKey(key) {
+    var Key = protractor.Key;
+    browser.actions().sendKeys(Key.chord(Key.ALT, key)).perform();
+}
+
+/**
+ * Asserts that a toast message of a particular type has appeared with its
+ * message containing the given string.
+ *
+ * A workaround with setting the ignoreSyncronization flag is needed due to a
+ * protractor issue that does not find DOM elements dynamically displayed in a
+ * $timeout callback. More info here:
+ *    http://stackoverflow.com/questions/25062748/
+ *           testing-the-contents-of-a-temporary-element-with-protractor
+ *
+ * @param {string} type - type of the toast notificiation ("info", "success" or
+ *   "error")
+ * @param {string} msg - a string expected to be present in the toast message
+ */
+function assertToastMsg(type, msg) {
+    var cssSelector = '.notification-holder .alert-' + type,
+        toast = $(cssSelector);
+
+    browser.sleep(500);
+    browser.ignoreSynchronization = true;
+    expect(toast.getText()).toContain(msg);
+    browser.sleep(500);
+    browser.ignoreSynchronization = false;
 }

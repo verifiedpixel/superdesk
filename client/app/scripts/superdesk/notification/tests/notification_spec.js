@@ -1,7 +1,7 @@
 'use strict';
 describe('Reload Service', function() {
     beforeEach(module('superdesk.notification'));
-    beforeEach(module('templates'));
+    beforeEach(module('superdesk.templates-cache'));
 
     var USER_URL = '/users/1';
     var USER = {
@@ -19,8 +19,8 @@ describe('Reload Service', function() {
 
             spyOn(session, 'getIdentity').and.returnValue($q.when({_links: {self: {href: USER_URL}}}));
             spyOn(api, 'get').and.returnValue($q.when({_items: [
-                {_id: '5567ff31102454c7bac47644'},
-                {_id: '55394997102454b5ea111bd5'}
+                {_id: '5567ff31102454c7bac47644', name: 'Desk One'},
+                {_id: '55394997102454b5ea111bd5', name: 'Desk Two'}
             ]}));
             spyOn(preferencesService, 'get').and.returnValue($q.when([]));
             spyOn(preferencesService, 'update');
@@ -70,7 +70,7 @@ describe('Reload Service', function() {
 });
 describe('Notify Connection Service', function() {
     beforeEach(module('superdesk.notification'));
-    beforeEach(module('templates'));
+    beforeEach(module('superdesk.templates-cache'));
 
     var rootScope, msg;
     beforeEach(function() {

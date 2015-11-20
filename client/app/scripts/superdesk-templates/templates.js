@@ -49,7 +49,8 @@
 
         this.types = [
             {_id: 'kill', label: gettext('Kill')},
-            {_id: 'create', label: gettext('Create')}
+            {_id: 'create', label: gettext('Create')},
+            {_id: 'highlights', label: gettext('Highlights')}
         ];
 
         this.fetchTemplates = function fetchTemplates(page, pageSize, type, desk, keyword) {
@@ -135,8 +136,8 @@
         };
     }
 
-    TemplatesDirective.$inject = ['gettext', 'notify', 'api', 'templates', 'modal', 'desks', 'weekdays'];
-    function TemplatesDirective(gettext, notify, api, templates, modal, desks, weekdays) {
+    TemplatesDirective.$inject = ['gettext', 'notify', 'api', 'templates', 'modal', 'desks', 'weekdays', '$filter'];
+    function TemplatesDirective(gettext, notify, api, templates, modal, desks, weekdays, $filter) {
         return {
             templateUrl: 'scripts/superdesk-templates/views/templates.html',
             link: function ($scope) {
@@ -149,13 +150,13 @@
                 function fetchTemplates() {
                     templates.fetchTemplates(1, 50).then(
                         function(result) {
+                            result._items = $filter('sortByName')(result._items, 'template_name');
                             $scope.content_templates = result;
                         }
                     );
                 }
 
-                desks.initialize()
-                .then(function() {
+                desks.initialize().then(function() {
                     $scope.desks = desks.desks;
                 });
 
@@ -180,18 +181,21 @@
                  * @return {Object} d Returns time object
                  */
                 $scope.getTime = function getTime(time) {
-                    var d = new Date();
+                    if (time) {
+                        var d = new Date();
 
-                    d.setUTCHours(time.substr(0, 2));
-                    d.setUTCMinutes(time.substr(2, 2));
+                        d.setUTCHours(time.substr(0, 2));
+                        d.setUTCMinutes(time.substr(2, 2));
 
-                    return d;
+                        return d;
+                    }
                 };
 
                 $scope.types = templates.types;
 
                 $scope.save = function() {
                     delete $scope.template._datelinedate;
+                    delete $scope.template.hasCrops;
                     api.content_templates.save($scope.origTemplate, $scope.template)
                         .then(
                             function() {
@@ -240,10 +244,17 @@
                     $scope.origTemplate = null;
                     $scope.template = null;
                     $scope.vars = null;
+                    fetchTemplates();
                 };
 
                 $scope.updateStages = function(desk) {
                     $scope.stages = desk ? desks.deskStages[desk] : null;
+                };
+
+                $scope.validSchedule = function() {
+                    return $scope.template.schedule.is_active ?
+                        $scope.template.schedule.day_of_week && $scope.template.schedule.create_at :
+                        true;
                 };
 
                 fetchTemplates();

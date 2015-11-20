@@ -13,15 +13,26 @@ function Monitoring() {
         openUrl('/#/workspace/monitoring');
     };
 
-    this.openSpiked = function() {
+    this.showMonitoring = function() {
+        element(by.className('big-icon-view')).click();
+    };
+
+    this.showSpiked = function() {
         element(by.className('big-icon-spiked')).click();
     };
 
     /**
      * Open personal monitoring view
      */
-    this.openPersonal = function() {
+    this.showPersonal = function() {
         element(by.className('big-icon-personal')).click();
+    };
+
+    /**
+     * Open global search view
+     */
+    this.showSearch = function() {
+        element(by.className('big-icon-global-search')).click();
     };
 
     /**
@@ -80,8 +91,8 @@ function Monitoring() {
         return this.getSpikedItems().get(item);
     };
 
-    this.getItemText = function(item) {
-        return item.element(by.id('title')).getText();
+    this.getSpikedTextItem = function(index) {
+        return this.getSpikedItem(index).element(by.id('title')).getText();
     };
 
     this.getTextItem = function(group, item) {
@@ -107,6 +118,10 @@ function Monitoring() {
         this.getItem(group, item).click();
     };
 
+    this.closePreview = function() {
+        element(by.className('close-preview')).click();
+    };
+
     this.getPreviewTitle = function() {
         return element(by.css('.content-container'))
         .element(by.binding('selected.preview.headline'))
@@ -125,6 +140,15 @@ function Monitoring() {
         browser.actions().doubleClick(
                 this.getItem(group, item)
         ).perform();
+    };
+
+    this.tabAction = function(tab) {
+        element.all(by.css('[ng-click="tab = \'' + tab + '\'"]')).click();
+    };
+
+    this.openRelatedItem = function(index) {
+        var relatedItem = element.all(by.repeater('relatedItem in relatedItems._items')).get(index);
+        relatedItem.all(by.className('related-item')).get(index).click();
     };
 
     /**
@@ -215,32 +239,32 @@ function Monitoring() {
     };
 
     this.nextStages = function() {
-        element(by.id('nextStages')).click();
+        element(by.id('nextBtn')).click();
         browser.sleep(500);
     };
 
     this.nextSearches = function() {
-        element(by.id('nextSearches')).click();
+        element(by.id('nextBtn')).click();
         browser.sleep(500);
     };
 
     this.previousSearches = function() {
-        element(by.id('previousSearches')).click();
+        element(by.id('previousBtn')).click();
         browser.sleep(500);
     };
 
     this.nextReorder = function() {
-        element(by.id('nextReorder')).click();
+        element(by.id('nextBtn')).click();
         browser.sleep(500);
     };
 
     this.previousReorder = function() {
-        element(by.id('previousReorder')).click();
+        element(by.id('previousBtn')).click();
         browser.sleep(500);
     };
 
     this.previousMax = function() {
-        element(by.id('previousMax')).click();
+        element(by.id('previousBtn')).click();
         browser.sleep(500);
     };
 
@@ -272,12 +296,20 @@ function Monitoring() {
      *  @param {index} index
      *  @return {promise}
      */
-    this.getSearch = function(index) {
-        return this.config.all(by.repeater('search in currentSavedSearches')).get(index);
+    this.getGlobalSearch = function(index) {
+        return this.config.all(by.repeater('search in globalSavedSearches')).get(index);
     };
 
-    this.getSearchText = function(search) {
-        return this.getSearch(search).element(by.css('.desk-title')).getText();
+    this.getPrivateSearch = function(index) {
+        return this.config.all(by.repeater('search in privateSavedSearches')).get(index);
+    };
+
+    this.getGlobalSearchText = function(search) {
+        return this.getGlobalSearch(search).element(by.css('.desk-title')).getText();
+    };
+
+    this.getPrivateSearchText = function(search) {
+        return this.getPrivateSearch(search).element(by.css('.desk-title')).getText();
     };
 
     this.toggleDesk = function(desk) {
@@ -288,16 +320,32 @@ function Monitoring() {
         this.getStage(desk, stage).element(by.css('[ng-click="setStageInfo(stage._id)"]')).click();
     };
 
+    this.toggleDeskOutput = function(desk) {
+        this.getDesk(desk).element(by.model('editGroups[desk._id + \':output\'].selected')).click();
+    };
+
     this.togglePersonal = function() {
         element(by.css('[ng-click="setPersonalInfo()"]')).click();
     };
 
-    this.toggleSearch = function(search) {
-        this.getSearch(search).element(by.css('[ng-click="setSearchInfo(search._id)"]')).click();
+    this.switchGlobalSearchOn = function() {
+        element(by.model('showGlobalSavedSearches')).click();
+    };
+
+    this.toggleGlobalSearch = function(search) {
+        this.getGlobalSearch(search).element(by.css('[ng-click="setSearchInfo(search._id)"]')).click();
+    };
+
+    this.togglePrivateSearch = function(search) {
+        this.getPrivateSearch(search).element(by.css('[ng-click="setSearchInfo(search._id)"]')).click();
     };
 
     this.toggleAllSearches = function() {
         element(by.css('[ng-click="initSavedSearches(showAllSavedSearches)"]')).click();
+    };
+
+    this.toggleGlobalSearches = function() {
+        element(by.model('showGlobalSavedSearches')).click();
     };
 
     this.getOrderItem = function(item) {
@@ -367,9 +415,17 @@ function Monitoring() {
 
     this.uploadModal = element(by.className('upload-media'));
 
-    this.fetchAs = function(group, item) {
+    this.openFetchAsOptions = function(group, item) {
         this.actionOnItem('Fetch To', group, item);
+    };
+
+    this.clickOnFetchButton = function() {
         return element(by.css('[ng-click="send()"]')).click();
+    };
+
+    this.fetchAs = function(group, item) {
+        this.openFetchAsOptions(group, item);
+        return this.clickOnFetchButton();
     };
 
     this.fetchAndOpen = function(group, item) {
@@ -392,10 +448,87 @@ function Monitoring() {
      */
     this.checkMarkedForHighlight = function(highlight, group, item) {
         var crtItem = this.getItem(group, item);
-        expect(crtItem.element(by.className('icon-star-color')).isDisplayed()).toBeTruthy();
-        browser.actions().mouseMove(crtItem.element(by.className('icon-star-color'))).perform();
+        expect(crtItem.element(by.className('icon-star')).isDisplayed()).toBeTruthy();
+        browser.actions().mouseMove(crtItem.element(by.className('icon-star'))).perform();
         element.all(by.css('.dropdown-menu.open li')).then(function (items) {
             expect(items[1].getText()).toContain(highlight);
         });
     };
+
+    /**
+     * Open a workspace of given name, can be both desk or custom
+     *
+     * @param {string} desk Desk or workspace name.
+     */
+    this.selectDesk = function(desk) {
+        var dropdownBtn = element(by.id('selected-desk')),
+        dropdownMenu = element(by.id('select-desk-menu'));
+
+        // open dropdown
+        dropdownBtn.click();
+
+        function textFilter(elem) {
+            return elem.element(by.tagName('button')).getText()
+            .then(function(text) {
+                return text.toUpperCase().indexOf(desk.toUpperCase()) >= 0;
+            });
+        }
+
+        function clickFiltered(filtered) {
+            if (filtered.length) {
+                return filtered[0].click();
+            }
+        }
+
+        // try to open desk
+        dropdownMenu.all(by.repeater('desk in desks'))
+            .filter(textFilter)
+            .then(clickFiltered);
+
+        // then try to open custom workspace
+        dropdownMenu.all(by.repeater('workspace in wsList'))
+            .filter(textFilter)
+            .then(clickFiltered);
+
+        // close dropdown if opened
+        dropdownMenu.isDisplayed().then(function(shouldClose) {
+            if (shouldClose) {
+                dropdownBtn.click();
+            }
+        });
+    };
+
+    /**
+     * Open a workspace of given name, can be both desk or custom and then navigate
+     * to content view
+     *
+     * @param {string} desk Desk or workspace name.
+     * @return {Promise}
+     */
+    this.switchToDesk = function(desk) {
+        this.selectDesk(desk);
+
+        this.openMonitoring();
+
+        return browser.wait(function() {
+            return element(by.className('list-view')).isPresent();
+        }, 300);
+    };
+
+    this.turnOffWorkingStage = function(deskIndex, canCloseSettingsModal) {
+        this.showMonitoringSettings();
+        this.toggleStage(deskIndex, 0);
+
+        if (typeof canCloseSettingsModal !== 'boolean') {
+            canCloseSettingsModal = true;
+        }
+
+        if (canCloseSettingsModal) {
+            this.nextStages();
+            this.nextSearches();
+            this.nextReorder();
+            this.saveSettings();
+        }
+    };
+
 }

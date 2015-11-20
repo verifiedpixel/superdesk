@@ -1,7 +1,8 @@
-from .common import BasePublishService, BasePublishResource, ITEM_KILL, WIRE
+from .common import BasePublishService, BasePublishResource, ITEM_KILL
 from eve.utils import config
-from superdesk.metadata.item import CONTENT_STATE, GUID_FIELD
+from superdesk.metadata.item import CONTENT_STATE, GUID_FIELD, PUB_STATUS
 from superdesk import get_resource_service
+from superdesk.publish import SUBSCRIBER_TYPES
 from superdesk.utc import utcnow
 import logging
 from copy import copy
@@ -29,9 +30,11 @@ class KillPublishService(BasePublishService):
         if is_item_in_package(original):
             raise SuperdeskApiError.badRequestError(message='This item is in a package' +
                                                             ' it needs to be removed before the item can be killed')
+        updates['pubstatus'] = PUB_STATUS.CANCELED
         super().on_update(updates, original)
         updates[ITEM_OPERATION] = ITEM_KILL
         self.takes_package_service.process_killed_takes_package(original)
+        get_resource_service('archive_broadcast').spike_item(original)
 
     def update(self, id, updates, original):
         """
@@ -41,6 +44,7 @@ class KillPublishService(BasePublishService):
         self._broadcast_kill_email(original)
         super().update(id, updates, original)
         self._publish_kill_for_takes(updates, original)
+        get_resource_service('archive_broadcast').kill_broadcast(updates, original)
 
     def _broadcast_kill_email(self, original):
         """
@@ -67,7 +71,9 @@ class KillPublishService(BasePublishService):
                 if ref[GUID_FIELD] != original[config.ID_FIELD]:
                     original_data = super().find_one(req=None, _id=ref[GUID_FIELD])
                     updates_data = copy(updates)
-                    queued = self.publish(doc=original_data, updates=updates_data, target_media_type=WIRE)
+                    queued = self.publish(doc=original_data,
+                                          updates=updates_data,
+                                          target_media_type=SUBSCRIBER_TYPES.WIRE)
                     # we need to update the archive item and not worry about queued as we could have
                     # a takes only going to digital client.
                     self._set_updates(original_data, updates_data, last_updated)

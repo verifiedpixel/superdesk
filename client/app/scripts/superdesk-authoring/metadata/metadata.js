@@ -18,13 +18,6 @@ function MetadataCtrl(
 
     metadata.initialize().then(function() {
         $scope.metadata = metadata.values;
-        if ($scope.item.related_to != null) {
-            metadata.fetchAssociated($scope.item.related_to)
-            .then(function(item) {
-                $scope.associatedItem = item;
-            });
-        }
-
         return preferencesService.get();
     })
     .then(setAvailableCategories);
@@ -185,7 +178,7 @@ function MetadataDropdownDirective($timeout) {
                 var o = {};
 
                 if (angular.isDefined(item)) {
-                    o[scope.field] = (scope.field === 'place') ? [item] : item.name;
+                    o[scope.field] = (scope.field === 'place' || scope.field === 'genre') ? [item] : item.value;
                 } else {
                     o[scope.field] = null;
                 }
@@ -524,13 +517,6 @@ function MetadataService(api, $q) {
             return api.get('/subjectcodes').then(function(result) {
                 self.values.subjectcodes = result._items;
             });
-        },
-        fetchAssociated: function(_id) {
-            if (_id != null) {
-                return api('archive').getById(_id).then(function(_item) {
-                    return _item;
-                });
-            }
         },
         removeSubjectTerm: function(term) {
             var self = this,

@@ -45,7 +45,7 @@ Feature: Ingest Provider
         When we get "/activity/"
         Then we get existing resource
         """
-        {"_items": [{"data": {"name": "reuters 4"}, "message": "created Ingest Channel {{name}}"}]}
+        {"_items": [{"data": {"name": "reuters 4"}, "message": "Created Ingest Channel {{name}}"}]}
         """
         Then we get notifications
         """
@@ -57,7 +57,7 @@ Feature: Ingest Provider
         Then we get emails
         """
         [
-          {"body": "created Ingest Channel reuters 4"}
+          {"body": "Created Ingest Channel reuters 4"}
         ]
 
         """
@@ -229,7 +229,7 @@ Feature: Ingest Provider
         """
          {"_items": [{"data": {"name": "the test of the test ingest_provider modified"}, "message": "updated Ingest Channel {{name}}"}]}
         """
-        Then we get no email
+        Then we get 0 emails
         When we patch "/ingest_providers/#ingest_providers._id#"
         """
         {"is_closed": true}
@@ -243,7 +243,7 @@ Feature: Ingest Provider
         """
          {"_items": [{"data": {"name": "the test of the test ingest_provider modified", "status": "closed"}, "message": "{{status}} Ingest Channel {{name}}"}]}
         """
-        Then we get no email
+        Then we get 0 emails
         When we patch "/ingest_providers/#ingest_providers._id#"
         """
         {"is_closed": false}
@@ -257,7 +257,7 @@ Feature: Ingest Provider
         """
          {"_items": [{"data": {"name": "the test of the test ingest_provider modified", "status": "opened"}, "message": "{{status}} Ingest Channel {{name}}"}]}
         """
-        Then we get no email
+        Then we get 0 emails
 
     @auth
     @notification
@@ -273,3 +273,28 @@ Feature: Ingest Provider
         Then we get list with 1 items
         When we delete "/ingest_providers/#ingest_providers._id#"
         Then we get deleted response
+        When we get "/activity/"
+        Then we get existing resource
+        """
+        {"_items": [{"data": {"name": "reuters 4"}, "message": "Deleted Ingest Channel {{name}}"}]}
+        """
+        And we get notifications
+        """
+        [
+          {"event": "activity", "extra": {"_dest": {"#CONTEXT_USER_ID#": 0}}},
+          {"event": "ingest_provider:delete", "extra": {"provider_id": "#ingest_providers._id#"}}
+        ]
+        """
+
+    @auth @notification
+    Scenario: Disabled/Inactive Administrators don't receive emails when an Ingest Provider is created
+        Given empty "ingest_providers"
+        When we post to "/users"
+        """
+        {"username": "foo", "email": "foo@bar.com", "sign_off": "fb", "user_type": "administrator", "is_active": false, "is_enabled": false}
+        """
+        And we post to "ingest_providers"
+	    """
+        [{"type": "reuters", "name": "reuters 4", "source": "reuters", "is_closed": false, "content_expiry": 0, "config": {"username": "foo", "password": "bar"}}]
+	    """
+        Then we get 1 emails

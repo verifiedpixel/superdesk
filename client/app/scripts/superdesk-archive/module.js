@@ -1,12 +1,13 @@
 define([
     'angular',
     'require',
+    'moment',
     './controllers/list',
     './controllers/upload',
     './archive-widget/archive',
     './related-item-widget/relatedItem',
     './directives'
-], function(angular, require) {
+], function(angular, require, moment) {
     'use strict';
 
     MultiService.$inject = ['$rootScope'];
@@ -130,22 +131,23 @@ define([
         };
     }
 
-    ArchiveService.$inject = ['desks', 'session', 'api', '$q'];
-    function ArchiveService(desks, session, api, $q) {
+    ArchiveService.$inject = ['desks', 'session', 'api', '$q', 'search'];
+    function ArchiveService(desks, session, api, $q, search) {
         /**
          * Adds 'task' property to the article represented by item.
          *
          * @param {Object} item
+         * @param {Object} desk when passed the item will be assigned to this desk instead of user's activeDesk.
          */
-        this.addTaskToArticle = function (item) {
-            if ((!item.task || !item.task.desk) && desks.activeDeskId && desks.userDesks) {
-                var currentDesk = _.find(desks.userDesks._items, {_id: desks.activeDeskId});
-                item.task = {'desk': desks.activeDeskId, 'stage': currentDesk.incoming_stage, 'user': session.identity._id};
+        this.addTaskToArticle = function (item, desk) {
+            if ((!item.task || !item.task.desk) && (desk || desks.activeDeskId && desks.userDesks)) {
+                var currentDesk = desk || _.find(desks.userDesks._items, {_id: desks.activeDeskId});
+                item.task = {'desk': currentDesk._id, 'stage': currentDesk.working_stage, 'user': session.identity._id};
             }
         };
 
         /**
-         * Returns the type of the item.
+         * Returns the _type aka repository of the item.
          *
          * @param {Object} item
          * @return String
@@ -188,11 +190,34 @@ define([
         };
 
         /**
+         *  Returns the list of items having the same slugline in the last day
+         *  @param {String} slugline
+         *  @return {Object} the list of archive items
+         */
+        this.getRelatedItems = function(slugline) {
+            var before24HrDateTime = moment().subtract(1, 'days').format();
+            var params = {};
+            params.q = 'slugline:(' + slugline + ')';
+            params.ignoreKilled = true;
+            params.ignoreDigital = true;
+            params.afterversioncreated = before24HrDateTime;
+
+            var query = search.query(params);
+            query.size(200);
+            var criteria = query.getCriteria(true);
+            criteria.repo = 'archive,published';
+
+            return api.query('search', criteria).then(function(result) {
+                return result;
+            });
+        };
+
+        /**
          * Returns true if the state of the item is in one of the published states - Scheduled, Published, Corrected
          * and Killed.
          *
          * @param {Object} item
-         * @return true if the state of the item is in one of the published states, false otherwise.
+         * @return boolean if the state of the item is in one of the published states, false otherwise.
          */
         this.isPublished = function(item) {
             return _.contains(['published', 'killed', 'scheduled', 'corrected'], item.state);
@@ -215,7 +240,7 @@ define([
                             version.stage = version.task.stage;
                             version.creator = version.version_creator || version.original_creator;
 
-                            if (version.type === 'text' || version.type === 'preformatted') {
+                            if (version.type === 'text') {
                                 version.typeName = 'Story';
                             } else {
                                 version.typeName = _.capitalize(item.type);
@@ -247,7 +272,7 @@ define([
                                 version.creator = versioncreator && versioncreator.display_name;
                             }
 
-                            if (version.type === 'text' || version.type === 'preformatted') {
+                            if (version.type === 'text') {
                                 version.typeName = 'Story';
                             } else {
                                 version.typeName = _.capitalize(item.type);
@@ -298,8 +323,8 @@ define([
                     label: gettext('Workspace'),
                     priority: 100,
                     controller: require('./controllers/list'),
-                    templateUrl: require.toUrl('./views/list.html'),
-                    topTemplateUrl: require.toUrl('../superdesk-dashboard/views/workspace-topnav.html'),
+                    templateUrl: 'scripts/superdesk-archive/views/list.html',
+                    topTemplateUrl: 'scripts/superdesk-dashboard/views/workspace-topnav.html',
                     sideTemplateUrl: 'scripts/superdesk-workspace/views/workspace-sidenav.html',
                     filters: [
                         {action: 'view', type: 'content'}
@@ -311,7 +336,7 @@ define([
                     modal: true,
                     cssClass: 'upload-media modal-responsive',
                     controller: require('./controllers/upload'),
-                    templateUrl: require.toUrl('./views/upload.html'),
+                    templateUrl: 'scripts/superdesk-archive/views/upload.html',
                     filters: [
                         {action: 'upload', type: 'media'}
                     ],
@@ -329,6 +354,7 @@ define([
                     }],
                     filters: [{action: 'list', type: 'archive'}],
                     action: 'spike',
+                    keyboardShortcut: 'ctrl+x',
                     condition: function(item) {
                         return (item.lock_user === null || angular.isUndefined(item.lock_user));
                     },
@@ -355,19 +381,44 @@ define([
                 .activity('duplicate', {
                     label: gettext('Duplicate'),
                     icon: 'copy',
+                    monitor: true,
                     controller: ['api', 'notify', '$rootScope', 'data', function(api, notify, $rootScope, data) {
                         api.save('duplicate', {}, {desk: data.item.task.desk}, data.item)
                             .then(function() {
+                                $rootScope.$broadcast('item:duplicate');
                                 notify.success(gettext('Item Duplicated'));
                             });
                     }],
                     filters: [{action: 'list', type: 'archive'}],
+                    keyboardShortcut: 'ctrl+d',
                     privileges: {duplicate: 1},
                     condition: function(item) {
                         return (item.lock_user === null || angular.isUndefined(item.lock_user));
                     },
                     additionalCondition:['authoring', 'item', function(authoring, item) {
                         return authoring.itemActions(item).duplicate;
+                    }]
+                })
+                .activity('createBroadcast', {
+                    label: gettext('Create Broadcast'),
+                    icon: 'broadcast',
+                    monitor: true,
+                    controller: ['api', 'notify', '$rootScope', 'data', 'desks', 'authoringWorkspace',
+                    function(api, notify, $rootScope, data, desks, authoringWorkspace) {
+                        api.save('archive_broadcast', {}, {desk: desks.getCurrentDeskId()}, data.item)
+                            .then(function(broadcastItem) {
+                                authoringWorkspace.edit(broadcastItem);
+                                $rootScope.$broadcast('broadcast:created', {'item': data.item});
+                            });
+                    }],
+                    filters: [{action: 'list', type: 'archive'}],
+                    keyboardShortcut: 'ctrl+b',
+                    privileges: {archive: 1},
+                    condition: function(item) {
+                        return (item.lock_user === null || angular.isUndefined(item.lock_user));
+                    },
+                    additionalCondition:['authoring', 'item', function(authoring, item) {
+                        return authoring.itemActions(item).create_broadcast;
                     }]
                 })
                 .activity('copy', {
@@ -400,6 +451,7 @@ define([
                     label: gettext('New Take'),
                     icon: 'new-doc',
                     filters: [{action: 'list', type: 'archive'}],
+                    keyboardShortcut: 'ctrl+t',
                     privileges: {archive: 1},
                     condition: function(item) {
                         return (item.lock_user === null || angular.isUndefined(item.lock_user));
@@ -428,7 +480,7 @@ define([
                 })
                 .activity('rewrite', {
                     label: gettext('Update'),
-                    icon: 'multi-star-color',
+                    icon: 'edit-line',
                     filters: [{action: 'list', type: 'archive'}],
                     group: 'corrections',
                     privileges: {archive: 1},

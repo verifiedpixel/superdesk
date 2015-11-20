@@ -114,7 +114,7 @@ describe('mentio directive', function() {
 
     beforeEach(module('superdesk.users'));
     beforeEach(module('superdesk.mocks'));
-    beforeEach(module('templates'));
+    beforeEach(module('superdesk.templates-cache'));
 
     beforeEach(module(function($provide) {
         $provide.service('api', function($q) {
@@ -146,7 +146,7 @@ describe('user edit form', function() {
     beforeEach(module('superdesk.desks'));
     beforeEach(module('superdesk.users'));
     beforeEach(module('superdesk.mocks'));
-    beforeEach(module('templates'));
+    beforeEach(module('superdesk.templates-cache'));
 
     beforeEach(module(function($provide) {
         $provide.service('session', function() {
@@ -156,18 +156,23 @@ describe('user edit form', function() {
         });
     }));
 
-    it('check if first_name, last_name, phone and email are readonly', inject(function($rootScope, $compile) {
+    it('check if first_name, last_name, phone and email are readonly',
+        inject(function($rootScope, $compile, $q, userList) {
         var scope = $rootScope.$new(true);
 
-        scope.user = {
+        var user = {
             _id: 1,
             _readonly: {'first_name': true, 'last_name': true, 'phone': true, 'email': true},
             is_active: true,
             need_activation: false
         };
 
+        scope.user = user;
+
+        spyOn(userList, 'getUser').and.returnValue($q.when(user));
         var elm = $compile('<div sd-user-edit data-user="user"></div>')(scope);
         scope.$digest();
+
         expect($(elm.find('input[name=first_name]')[0]).attr('readonly')).toBeDefined();
         expect($(elm.find('input[name=last_name]')[0]).attr('readonly')).toBeDefined();
         expect($(elm.find('input[name=phone]')[0]).attr('readonly')).toBeDefined();

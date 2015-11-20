@@ -5,7 +5,7 @@ var authoring = require('./helpers/authoring'),
     userPrefs = require('./helpers/user_prefs'),
     workspace = require('./helpers/workspace');
 
-describe('Users', function() {
+describe('users', function() {
     'use strict';
 
     beforeEach(function(done) {
@@ -227,6 +227,56 @@ describe('Users', function() {
                 expect(catListItems.count()).toEqual(2);
                 expect(catListItems.get(0).getText()).toEqual('Entertainment');
                 expect(catListItems.get(1).getText()).toEqual('Finance');
+            }
+        );
+    });
+
+    describe('editing user privileges:', function () {
+        beforeEach(function (done) {
+            userPrefs.navigateTo().then(function () {
+                return userPrefs.privlTab.click();
+            }).then(done);
+        });
+
+        it('should reset the form to the last saved state when the Cancel ' +
+            'button is clicked',
+            function () {
+                var checkboxes = userPrefs.privlCheckboxes;
+
+                // Initially all checboxes are unchecked. Now let's select
+                // a few of them, click the Cancel button and see if they have
+                // been reset.
+                checkboxes.get(0).click();  // archive
+                checkboxes.get(2).click();  // content filters
+                expect(checkboxes.get(0).isSelected()).toBeTruthy();
+                expect(checkboxes.get(2).isSelected()).toBeTruthy();
+
+                userPrefs.btnCancel.click();
+
+                expect(checkboxes.get(0).isSelected()).toBeFalsy();
+                expect(checkboxes.get(2).isSelected()).toBeFalsy();
+
+                // Check the checkboxes again, save the changes, then check a
+                // few more. After clicking the Cancel button, only the
+                // checkboxes checked after the save should be reset.
+                checkboxes.get(0).click();
+                checkboxes.get(2).click();
+                expect(checkboxes.get(0).isSelected()).toBeTruthy();
+                expect(checkboxes.get(2).isSelected()).toBeTruthy();
+
+                userPrefs.btnSave.click();
+
+                checkboxes.get(1).click();  // archived management
+                checkboxes.get(4).click();  // desk management
+                expect(checkboxes.get(1).isSelected()).toBeTruthy();
+                expect(checkboxes.get(4).isSelected()).toBeTruthy();
+
+                userPrefs.btnCancel.click();
+
+                expect(checkboxes.get(0).isSelected()).toBeTruthy();
+                expect(checkboxes.get(2).isSelected()).toBeTruthy();
+                expect(checkboxes.get(1).isSelected()).toBeFalsy();
+                expect(checkboxes.get(4).isSelected()).toBeFalsy();
             }
         );
     });

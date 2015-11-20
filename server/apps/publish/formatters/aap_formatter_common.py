@@ -9,6 +9,7 @@
 # at https://www.sourcefabric.org/superdesk/license
 
 import superdesk
+from superdesk.metadata.item import Priority
 
 
 def map_priority(priority):
@@ -18,15 +19,12 @@ def map_priority(priority):
     :return: one character legacy priority
     """
     mapping = {
-        1: 'f',
-        2: 'u',
-        3: 'b',
-        4: 'r',
-        5: 'z',
-        6: 'd'
+        Priority.Flash.value: 'f',
+        Priority.Urgent.value: 'u',
+        Priority.Three_Paragraph.value: 'b'
     }
 
-    return mapping.get(priority, mapping[5])
+    return mapping.get(priority, 'r')
 
 
 def set_subject(category, article):
@@ -38,11 +36,11 @@ def set_subject(category, article):
     """
     subject_reference = None
     # Ensure that there is a subject in the article
-    if 'subject' in article and 'qcode' in article['subject'][0]:
+    if article.get('subject') and 'qcode' in article['subject'][0]:
         # set the subject reference with the first value, in case we can't do better
         subject_reference = article['subject'][0].get('qcode')
         # we have multiple categories and multiple subjects
-        if len(article['subject']) > 1 and len(article['anpa_category']) > 1:
+        if len(article['subject']) > 1 and len(article.get('anpa_category') or []) > 1:
             # we need to find a more relevant subject reference if possible
             all_categories = superdesk.get_resource_service('vocabularies').find_one(req=None, _id='categories')
             ref_cat = [cat for cat in all_categories['items'] if

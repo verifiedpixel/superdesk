@@ -16,7 +16,7 @@ describe('authoring', function() {
     beforeEach(module('superdesk.mocks'));
     beforeEach(module('superdesk.privileges'));
     beforeEach(module('superdesk.desks'));
-    beforeEach(module('templates'));
+    beforeEach(module('superdesk.templates-cache'));
 
     beforeEach(inject(function($window) {
         $window.onbeforeunload = angular.noop;
@@ -343,7 +343,7 @@ describe('authoring', function() {
 describe('cropImage', function() {
     beforeEach(module('superdesk.authoring'));
     beforeEach(module('superdesk.mocks'));
-    beforeEach(module('templates'));
+    beforeEach(module('superdesk.templates-cache'));
 
     function startCropping() {
         var $scope;
@@ -386,12 +386,55 @@ describe('cropImage', function() {
         expect($scope.data.cropData['4-3']).toEqual(toMatch);
     }));
 
+    it('can change button label for apply/edit crop',
+    inject(function($rootScope, $compile, $q, metadata) {
+        var metaInit = $q.defer();
+
+        metadata.values = {
+            crop_sizes: [
+                {name: '4-3'}, {name: '16-9'}
+            ]
+        };
+
+        spyOn(metadata, 'initialize').and.returnValue(metaInit.promise);
+
+        var elem = $compile('<div sd-article-edit></div>')($rootScope.$new());
+        var scope = elem.scope();
+
+        scope.item = {
+            type: 'picture',
+            renditions: {
+            }
+        };
+
+        metaInit.resolve();
+        scope.$digest();
+
+        expect(scope.item.hasCrops).toBe(false);
+
+        elem = $compile('<div sd-article-edit></div>')($rootScope.$new());
+        scope = elem.scope();
+
+        scope.item = {
+            type: 'picture',
+            renditions: {
+                '4-3': {
+                }
+            }
+        };
+
+        metaInit.resolve();
+        scope.$digest();
+
+        expect(scope.item.hasCrops).toBe(true);
+    }));
+
 });
 
 describe('autosave', function() {
     beforeEach(module('superdesk.authoring'));
     beforeEach(module('superdesk.mocks'));
-    beforeEach(module('templates'));
+    beforeEach(module('superdesk.templates-cache'));
 
     it('can fetch an autosave for item locked by user and is editable',
         inject(function(autosave, api, $q, $rootScope) {
@@ -454,7 +497,7 @@ describe('autosave', function() {
 describe('lock service', function() {
     beforeEach(module('superdesk.authoring'));
     beforeEach(module('superdesk.mocks'));
-    beforeEach(module('templates'));
+    beforeEach(module('superdesk.templates-cache'));
 
     var user = {_id: 'user'};
     var sess = {_id: 'sess'};
@@ -518,7 +561,7 @@ describe('authoring actions', function() {
     beforeEach(module('superdesk.authoring'));
     beforeEach(module('superdesk.mocks'));
     beforeEach(module('superdesk.desks'));
-    beforeEach(module('templates'));
+    beforeEach(module('superdesk.templates-cache'));
 
     beforeEach(inject(function(desks, $q) {
         spyOn(desks, 'fetchCurrentUserDesks').and.returnValue($q.when({_items: userDesks}));
@@ -630,7 +673,7 @@ describe('authoring actions', function() {
             privileges.setUserPrivileges(userPrivileges);
             $rootScope.$digest();
             var itemActions = authoring.itemActions(item);
-            allowedActions(itemActions, ['view', 'duplicate']);
+            allowedActions(itemActions, ['view']);
         }));
 
     it('can only view the item if the item is killed',
@@ -658,6 +701,30 @@ describe('authoring actions', function() {
             $rootScope.$digest();
             var itemActions = authoring.itemActions(item);
             allowedActions(itemActions, ['view']);
+        }));
+
+    it('cannot create an update for a rewritten story ',
+        inject(function(privileges, desks, authoring, $q, $rootScope) {
+            var item = {
+                '_id': 'test',
+                'state': 'published',
+                'type': 'text',
+                'rewritten_by': 1,
+                'task': {
+                    'desk': 'desk1'
+                }
+            };
+
+            var userPrivileges = {
+                'archive': true,
+                'rewrite': true,
+                'unlock': true
+            };
+
+            privileges.setUserPrivileges(userPrivileges);
+            $rootScope.$digest();
+            var itemActions = authoring.itemActions(item);
+            allowedActions(itemActions, ['view', 'package_item', 'multi_edit', 'create_broadcast']);
         }));
 
     it('can only view item if the item is spiked',
@@ -789,7 +856,7 @@ describe('authoring actions', function() {
 
             itemActions = authoring.itemActions(item);
             allowedActions(itemActions, ['new_take', 'duplicate', 'view',
-                'mark_item', 'package_item', 'multi_edit', 'correct', 'kill', 're_write']);
+                'mark_item', 'package_item', 'multi_edit', 'correct', 'kill', 're_write', 'create_broadcast']);
         }));
 
     it('Can perform correction or kill on published item',
@@ -833,7 +900,7 @@ describe('authoring actions', function() {
             $rootScope.$digest();
             var itemActions = authoring.itemActions(item);
             allowedActions(itemActions, ['new_take', 'duplicate', 'view',
-                'mark_item', 'package_item', 'multi_edit', 'correct', 'kill', 're_write']);
+                'mark_item', 'package_item', 'multi_edit', 'correct', 'kill', 're_write', 'create_broadcast']);
         }));
 
     it('Cannot perform correction or kill on published item without privileges',
@@ -877,7 +944,7 @@ describe('authoring actions', function() {
             $rootScope.$digest();
             var itemActions = authoring.itemActions(item);
             allowedActions(itemActions, ['new_take', 'duplicate', 'view',
-                'mark_item', 'package_item', 'multi_edit', 're_write']);
+                'mark_item', 'package_item', 'multi_edit', 're_write', 'create_broadcast']);
         }));
 
     it('Can only view if the item is not the current version',
@@ -1008,7 +1075,7 @@ describe('authoring actions', function() {
             $rootScope.$digest();
             var itemActions = authoring.itemActions(item);
             allowedActions(itemActions, ['correct', 'kill', 'new_take', 're_write',
-                'mark_item', 'duplicate', 'view', 'package_item', 'multi_edit']);
+                'mark_item', 'duplicate', 'view', 'package_item', 'multi_edit', 'create_broadcast']);
         }));
 
     it('Cannot send item if the version is zero',
@@ -1187,6 +1254,206 @@ describe('authoring actions', function() {
             allowedActions(itemActions, ['save', 'edit', 'duplicate', 'spike',
                     'mark_item', 'multi_edit', 'publish', 'send']);
         }));
+
+    it('Create broadcast icon is available for text item.',
+        inject(function(privileges, desks, authoring, $q, $rootScope) {
+            var item = {
+                '_id': 'test',
+                'state': 'published',
+                'marked_for_not_publication': false,
+                'type': 'text',
+                'task': {
+                    'desk': 'desk1'
+                },
+                'more_coming': false,
+                '_current_version': 10,
+                'genre': [],
+                'archive_item': {
+                    '_id': 'test',
+                    'state': 'published',
+                    'marked_for_not_publication': false,
+                    'type': 'text',
+                    'task': {
+                        'desk': 'desk1'
+                    },
+                    'more_coming': false,
+                    '_current_version': 10,
+                    'genre': []
+                }
+            };
+
+            var userPrivileges = {
+                'duplicate': true,
+                'mark_item': false,
+                'spike': true,
+                'unspike': true,
+                'mark_for_highlights': true,
+                'unlock': true,
+                'publish': true,
+                'correct': true,
+                'kill': true,
+                'create_broadcast': true
+            };
+
+            privileges.setUserPrivileges(userPrivileges);
+            $rootScope.$digest();
+            var itemActions = authoring.itemActions(item);
+            allowedActions(itemActions, ['duplicate', 'new_take', 're_write', 'mark_item', 'multi_edit',
+                    'correct', 'kill', 'package_item', 'view', 'create_broadcast']);
+        }));
+
+    it('Create broadcast icon is available for text item with genre Article.',
+        inject(function(privileges, desks, authoring, $q, $rootScope) {
+            var item = {
+                '_id': 'test',
+                'state': 'published',
+                'marked_for_not_publication': false,
+                'type': 'text',
+                'task': {
+                    'desk': 'desk1'
+                },
+                'more_coming': false,
+                '_current_version': 10,
+                'genre': [{'name': 'Article', 'value': 'Article'}],
+                'archive_item': {
+                    '_id': 'test',
+                    'state': 'published',
+                    'marked_for_not_publication': false,
+                    'type': 'text',
+                    'task': {
+                        'desk': 'desk1'
+                    },
+                    'more_coming': false,
+                    '_current_version': 10,
+                    'genre': [{'name': 'Article', 'value': 'Article'}]
+                }
+            };
+
+            var userPrivileges = {
+                'duplicate': true,
+                'mark_item': false,
+                'spike': true,
+                'unspike': true,
+                'mark_for_highlights': true,
+                'unlock': true,
+                'publish': true,
+                'correct': true,
+                'kill': true,
+                'create_broadcast': true
+            };
+
+            privileges.setUserPrivileges(userPrivileges);
+            $rootScope.$digest();
+            var itemActions = authoring.itemActions(item);
+            allowedActions(itemActions, ['duplicate', 'new_take', 're_write', 'mark_item', 'multi_edit',
+                    'correct', 'kill', 'package_item', 'view', 'create_broadcast']);
+        }));
+
+    it('Create broadcast icon is not available for broadcast item',
+        inject(function(privileges, desks, authoring, $q, $rootScope) {
+            var item = {
+                '_id': 'test',
+                'state': 'published',
+                'marked_for_not_publication': false,
+                'type': 'text',
+                'task': {
+                    'desk': 'desk1'
+                },
+                'more_coming': false,
+                '_current_version': 10,
+                'genre': [
+                    {'name': 'Interview', 'value': 'Interview'},
+                    {'name': 'Broadcast Script', 'value': 'Broadcast Script'}
+                ],
+                'archive_item': {
+                    '_id': 'test',
+                    'state': 'published',
+                    'marked_for_not_publication': false,
+                    'type': 'text',
+                    'task': {
+                        'desk': 'desk1'
+                    },
+                    'more_coming': false,
+                    '_current_version': 10,
+                    'genre': [
+                        {'name': 'Interview', 'value': 'Interview'},
+                        {'name': 'Broadcast Script', 'value': 'Broadcast Script'}
+                    ]
+                }
+            };
+
+            var userPrivileges = {
+                'duplicate': true,
+                'mark_item': false,
+                'spike': true,
+                'unspike': true,
+                'mark_for_highlights': true,
+                'unlock': true,
+                'publish': true,
+                'correct': true,
+                'kill': true,
+                'create_broadcast': true
+            };
+
+            privileges.setUserPrivileges(userPrivileges);
+            $rootScope.$digest();
+            var itemActions = authoring.itemActions(item);
+            allowedActions(itemActions, ['duplicate', 'mark_item', 'multi_edit',
+                    'correct', 'kill', 'package_item', 'view']);
+        }));
+
+    it('rewrite is not allowed if re-written item exists.',
+        inject(function(privileges, desks, authoring, $q, $rootScope) {
+            var item = {
+                '_id': 'test',
+                'state': 'published',
+                'marked_for_not_publication': false,
+                'type': 'text',
+                'task': {
+                    'desk': 'desk1'
+                },
+                'more_coming': false,
+                '_current_version': 10,
+                'rewritten_by': '123',
+                'genre': [
+                    {'name': 'Interview', 'value': 'Interview'}
+                ],
+                'archive_item': {
+                    '_id': 'test',
+                    'state': 'published',
+                    'marked_for_not_publication': false,
+                    'type': 'text',
+                    'task': {
+                        'desk': 'desk1'
+                    },
+                    'more_coming': false,
+                    '_current_version': 10,
+                    'rewritten_by': '123',
+                    'genre': [
+                        {'name': 'Interview', 'value': 'Interview'}
+                    ]
+                }
+            };
+
+            var userPrivileges = {
+                'duplicate': true,
+                'mark_item': false,
+                'spike': true,
+                'unspike': true,
+                'mark_for_highlights': true,
+                'unlock': true,
+                'publish': true,
+                'correct': true,
+                'kill': true,
+                'create_broadcast': true
+            };
+
+            privileges.setUserPrivileges(userPrivileges);
+            $rootScope.$digest();
+            var itemActions = authoring.itemActions(item);
+            allowedActions(itemActions, ['duplicate', 'mark_item', 'multi_edit', 'create_broadcast',
+                    'correct', 'kill', 'package_item', 'view']);
+        }));
 });
 
 describe('authoring workspace', function() {
@@ -1212,7 +1479,7 @@ describe('authoring workspace', function() {
         expect(authoringWorkspace.getAction()).toBe('edit');
         expect(superdeskFlags.flags.authoring).toBeTruthy();
 
-        authoringWorkspace.close();
+        authoringWorkspace.close(true);
         expect(authoringWorkspace.item).toBe(null);
         expect(authoringWorkspace.getItem()).toBe(null);
         expect(superdeskFlags.flags.authoring).toBeFalsy();
@@ -1268,7 +1535,7 @@ describe('authoring workspace', function() {
 describe('authoring container directive', function() {
 
     beforeEach(module('superdesk.authoring'));
-    beforeEach(module('templates'));
+    beforeEach(module('superdesk.templates-cache'));
 
     beforeEach(inject(function($templateCache) {
         // avoid loading of authoring
@@ -1300,7 +1567,7 @@ describe('authoring container directive', function() {
         expect(iscope.authoring.action).toBe('edit');
         expect(iscope.authoring.state.opened).toBe(true);
 
-        authoringWorkspace.close();
+        authoringWorkspace.close(true);
         $rootScope.$digest();
         expect(iscope.authoring.item).toBe(null);
         expect(iscope.authoring.state.opened).toBe(false);
@@ -1384,7 +1651,7 @@ describe('authoring themes', function () {
 
 describe('send item directive', function() {
     beforeEach(module('superdesk.authoring'));
-    beforeEach(module('templates'));
+    beforeEach(module('superdesk.templates-cache'));
 
     beforeEach(inject(function($templateCache) {
         $templateCache.put('scripts/superdesk-authoring/views/send-item.html', '');

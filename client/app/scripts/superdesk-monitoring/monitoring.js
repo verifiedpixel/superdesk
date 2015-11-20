@@ -52,8 +52,8 @@
             });
     }
 
-    CardsService.$inject = ['api', 'search', 'session'];
-    function CardsService(api, search, session) {
+    CardsService.$inject = ['api', 'search', 'session', 'desks'];
+    function CardsService(api, search, session, desks) {
         this.criteria = getCriteria;
         this.shouldUpdate = shouldUpdate;
 
@@ -108,6 +108,27 @@
                 ]});
                 break;
 
+            case 'deskOutput':
+                var desk_id = card._id.substring(0, card._id.indexOf(':'));
+                var desk = desks.deskLookup ? desks.deskLookup[desk_id] : null;
+                if (desk) {
+                    if (desk.desk_type === 'authoring') {
+                        query.filter({or: [
+                            {term: {'task.last_authoring_desk': desk_id}},
+                            {and: [
+                                {term: {'task.desk': desk_id}},
+                                {terms: {state: ['scheduled', 'published', 'corrected', 'killed']}}
+                            ]}
+                        ]});
+                    } else if (desk.desk_type === 'production') {
+                        query.filter({and: [
+                            {term: {'task.desk': desk_id}},
+                            {terms: {state: ['scheduled', 'published', 'corrected', 'killed']}}
+                        ]});
+                    }
+                }
+                break;
+
             default:
                 query.filter({term: {'task.stage': card._id}});
                 break;
@@ -124,9 +145,12 @@
             var criteria = {source: query.getCriteria()};
             if (card.type === 'search' && card.search && card.search.filter.query.repo) {
                 criteria.repo = card.search.filter.query.repo;
+            } else if (card.type === 'deskOutput') {
+                criteria.repo = 'archive,published';
             }
+
             criteria.source.from = 0;
-            criteria.source.size = 25;
+            criteria.source.size = card.max_items || 25;
             return criteria;
         }
 
@@ -146,13 +170,16 @@
         }
     }
 
-    MonitoringController.$inject = ['$location'];
-    function MonitoringController($location) {
+    MonitoringController.$inject = ['$location', 'desks'];
+    function MonitoringController($location, desks) {
         this.state = {};
 
         this.preview = preview;
         this.closePreview = closePreview;
         this.previewItem = null;
+
+        this.selectedGroup = null;
+        this.bindedItems = [];
 
         this.singleGroup = null;
         this.viewSingleGroup = viewSingleGroup;
@@ -161,6 +188,16 @@
 
         this.edit = edit;
         this.editItem = null;
+
+        this.isDeskChanged = function () {
+            return desks.changeDesk;
+        };
+
+        this.highlightsDeskChanged = function () {
+            if (desks.changeDesk) {
+                $location.url('/workspace/monitoring');
+            }
+        };
 
         var vm = this;
 
@@ -207,8 +244,11 @@
         };
     }
 
-    MonitoringGroupDirective.$inject = ['cards', 'api', 'desks', 'authoringWorkspace', '$timeout', 'superdesk', 'activityService'];
-    function MonitoringGroupDirective(cards, api, desks, authoringWorkspace, $timeout, superdesk, activityService) {
+    MonitoringGroupDirective.$inject = ['cards', 'api', 'authoringWorkspace', '$timeout', 'superdesk',
+        'activityService', 'workflowService', 'keyboardManager', 'desks'];
+    function MonitoringGroupDirective(cards, api, authoringWorkspace, $timeout, superdesk, activityService,
+            workflowService, keyboardManager, desks) {
+
         var ITEM_HEIGHT = 57,
             ITEMS_COUNT = 5,
             BUFFER = 8,
@@ -235,6 +275,7 @@
                 scope.view = 'compact';
                 scope.page = 1;
                 scope.fetching = false;
+                scope.previewingBroadcast = false;
                 scope.cacheNextItems = [];
                 scope.cachePreviousItems = [];
                 scope.limited = (monitoring.singleGroup || scope.group.type === 'highlights') ? false : true;
@@ -250,14 +291,108 @@
                 scope.$on('task:stage', queryItems);
                 scope.$on('ingest:update', queryItems);
                 scope.$on('item:spike', queryItems);
+                scope.$on('item:duplicate', queryItems);
+                scope.$on('broadcast:created', function(event, args) {
+                    scope.previewingBroadcast = true;
+                    queryItems();
+                    preview(args.item);
+                });
                 scope.$on('item:unspike', queryItems);
                 scope.$on('$routeUpdate', queryItems);
+                scope.$on('broadcast:preview', function(event, args) {
+                    scope.previewingBroadcast = true;
+                    preview(args.item);
+                });
+
+                scope.$on('item:highlight', function(event, data) {
+                    if (scope.group.type === 'highlights') {
+                        queryItems();
+                    }
+                });
 
                 scope.$on('content:update', function(event, data) {
                     if (cards.shouldUpdate(scope.group, data)) {
                         scheduleQuery();
                     }
                 });
+
+                scope.$on('$destroy', unbindActionKeyShortcuts);
+
+                scope.$watch('selected', function(newVal, oldVal) {
+                    if (!newVal && scope.previewingBroadcast) {
+                        scope.previewingBroadcast = false;
+                    }
+                });
+
+                /*
+                 * Change between simple and group by keyboard
+                 * Keyboard shortcut: Ctrl + g
+                 */
+                keyboardManager.bind('ctrl+g', function () {
+                    if (scope.selected) {
+                        monitoring.viewSingleGroup(monitoring.singleGroup ? null : monitoring.selectedGroup);
+                    }
+                }, {inputDisabled: false});
+
+                /*
+                 * Bind item actions on keyboard shortcuts
+                 * Keyboard shortcuts are defined with actions
+                 *
+                 * @param {Object} item
+                 */
+                function bindActionKeyShortcuts(item) {
+                    // First unbind all binded shortcuts
+                    if (monitoring.bindedItems) {
+                        unbindActionKeyShortcuts();
+                    }
+
+                    var intent = {action: 'list'};
+                    superdesk.findActivities(intent, item).forEach(function (activity) {
+                        if (activity.keyboardShortcut && workflowService.isActionAllowed(item, activity.action)) {
+                            monitoring.bindedItems.push(activity.keyboardShortcut);
+                            keyboardManager.bind(activity.keyboardShortcut, function () {
+                                if (activity._id === 'mark.item') {
+                                    bindMarkItemShortcut();
+                                } else {
+                                    activityService.start(activity, {data: {item: scope.selected}});
+                                }
+                            }, {inputDisabled: true});
+                        }
+                    });
+                }
+
+                /*
+                 * Bind highlight dropdown action
+                 * Keyboard shortcut is defined with action
+                 *
+                 * @param {Object} item
+                 */
+                function bindMarkItemShortcut() {
+                    elem.find('.active .more-activity-toggle').click();
+                    var highlightDropdown = angular.element('.more-activity-menu.open .dropdown-noarrow');
+
+                    highlightDropdown.addClass('open');
+                    if (highlightDropdown.find('button').length > 0) {
+                        highlightDropdown.find('button:not([disabled])')[0].focus();
+
+                        keyboardManager.push('up', function () {
+                            highlightDropdown.find('button:focus').parent('li').prev().children('button').focus();
+                        });
+                        keyboardManager.push('down', function () {
+                            highlightDropdown.find('button:focus').parent('li').next().children('button').focus();
+                        });
+                    }
+                }
+
+                /*
+                 * Unbind all item actions
+                 */
+                function unbindActionKeyShortcuts() {
+                    monitoring.bindedItems.forEach(function (item) {
+                        keyboardManager.unbind(item);
+                    });
+                    monitoring.bindedItems = [];
+                }
 
                 var queryTimeout;
 
@@ -295,6 +430,9 @@
                                     authoringWorkspace.edit(item, !lock);
                                     monitoring.preview(null);
                                 });
+                        } else if (item.type === 'composite' && item.package_type === 'takes') {
+                            authoringWorkspace.view(item);
+                            monitoring.preview(null);
                         } else {
                             authoringWorkspace.edit(item, !lock);
                             monitoring.preview(null);
@@ -304,7 +442,10 @@
 
                 function select(item) {
                     scope.selected = item;
+                    monitoring.selectedGroup = scope.group;
                     monitoring.preview(item);
+
+                    bindActionKeyShortcuts(item);
                 }
 
                 function preview(item) {
@@ -316,6 +457,16 @@
                     criteria.source.size = 0; // we only need to get total num of items
                     scope.loading = true;
                     scope.total = null;
+
+                    if (!scope.previewingBroadcast) {
+                        monitoring.preview(null);
+                    }
+
+                    if (desks.changeDesk) {
+                        desks.changeDesk = false;
+                        monitoring.singleGroup = null;
+                    }
+
                     return apiquery().then(function(items) {
                         scope.total = items._meta.total;
                         scope.$applyAsync(render);
@@ -331,8 +482,8 @@
                         itemsCount = scope.numItems || ITEMS_COUNT,
                         to = Math.min(scope.total, start + itemsCount + BUFFER);
 
-                    if (parseInt(list.style.height, 10) !== scope.total * ITEM_HEIGHT) {
-                        list.style.height = (scope.total * ITEM_HEIGHT) + 'px';
+                    if (parseInt(list.style.height, 10) !== Math.min(itemsCount, scope.total) * ITEM_HEIGHT) {
+                        list.style.height = (Math.min(itemsCount, scope.total) * ITEM_HEIGHT) + 'px';
                     }
 
                     criteria.source.from = from;
@@ -357,10 +508,10 @@
                 function apiquery() {
 
                     var provider = 'search';
-                    if (scope.group.type === 'search') {
+                    if (scope.group.type === 'search' || scope.group.type === 'deskOutput') {
                         if (criteria.repo && criteria.repo.indexOf(',') === -1) {
                             provider = criteria.repo;
-                            if (!criteria.source.size) {
+                            if (!angular.isDefined(criteria.source.size)) {
                                 criteria.source.size = 25;
                             }
                         }
@@ -478,6 +629,12 @@
                 scope.toggleActions = function(isOpen) {
                     scope.actions = isOpen ? getActions(scope.item) : scope.actions;
                     scope.open = isOpen;
+
+                    if (!isOpen) {
+                        // After close, return focus to parent of selected element
+                        angular.element('.media-text.selected').parents('li').focus();
+                        angular.element('.dropdown-noarrow.open').removeClass('open');
+                    }
                 };
 
                 /**

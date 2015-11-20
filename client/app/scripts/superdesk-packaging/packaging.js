@@ -196,6 +196,7 @@
             params.ignoreKilled = true;
             params.ignoreDigital = true;
             params.ignoreScheduled = true;
+            params.onlyLastPublished = true;
 
             var query = search.query(params);
 
@@ -695,6 +696,7 @@
                 label: gettext('Create package'),
                 priority: 50,
                 icon: 'package-create',
+                keyboardShortcut: 'ctrl+p',
                 controller: ['data', 'packages', 'authoringWorkspace', 'notify', 'gettext',
                 function(data, packages, authoringWorkspace, notify, gettext) {
                     packages.createPackageFromItems([data.item])
@@ -736,6 +738,7 @@
                 label: gettext('Combine with current'),
                 priority: 49,
                 icon: 'package-plus',
+                keyboardShortcut: 'ctrl+alt+p',
                 controller: ['data', 'packages', 'authoringWorkspace', 'notify', 'gettext',
                 function(data, packages, authoringWorkspace, notify, gettext) {
                     var openItem = authoringWorkspace.getItem();

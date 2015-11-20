@@ -2,7 +2,7 @@
 
 describe('itemListService', function() {
     beforeEach(module('superdesk.mocks'));
-    beforeEach(module('templates'));
+    beforeEach(module('superdesk.templates-cache'));
     beforeEach(module('superdesk.itemList'));
     beforeEach(module(function($provide) {
         $provide.service('api', function($q) {
@@ -239,6 +239,24 @@ describe('itemListService', function() {
 
         expect(params.source.post_filter.and).toContain({
             terms: {type: ['text']}
+        });
+    }));
+
+    it('query using the related items', inject(function($rootScope, itemListService, api) {
+        var queryParams = null;
+
+        itemListService.fetch({
+            keyword: 'k',
+            related: true
+        })
+        .then(function(params) {
+            queryParams = params;
+        });
+        $rootScope.$digest();
+        expect(queryParams.source.query.filtered.query).toEqual({
+            match_phrase_prefix: {
+                'slugline.phrase': 'k'
+            }
         });
     }));
 });

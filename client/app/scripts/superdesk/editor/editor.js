@@ -125,8 +125,8 @@ function HistoryStack(initialValue) {
     };
 }
 
-EditorService.$inject = ['spellcheck', '$rootScope'];
-function EditorService(spellcheck, $rootScope) {
+EditorService.$inject = ['spellcheck', '$rootScope', '$timeout'];
+function EditorService(spellcheck, $rootScope, $timeout) {
     this.settings = {spellcheck: true};
 
     this.KEY_CODES = Object.freeze({
@@ -223,12 +223,12 @@ function EditorService(spellcheck, $rootScope) {
      * @param {Scope} scope
      * @param {Scope} force force rendering manually - eg. via keyboard
      */
-    this.renderScope = function(scope, force) {
+    this.renderScope = function(scope, force, preventStore) {
         self.cleanScope(scope);
         if (self.settings.findreplace) {
             renderFindreplace(scope.node);
         } else if (self.settings.spellcheck || force) {
-            renderSpellcheck(scope.node);
+            renderSpellcheck(scope.node, preventStore);
         }
     };
 
@@ -303,9 +303,9 @@ function EditorService(spellcheck, $rootScope) {
      *
      * @param {Node} node
      */
-    function renderSpellcheck(node) {
+    function renderSpellcheck(node, preventStore) {
         spellcheck.errors(node).then(function(tokens) {
-            hilite(node, tokens, ERROR_CLASS);
+            hilite(node, tokens, ERROR_CLASS, preventStore);
         });
     }
 
@@ -317,15 +317,22 @@ function EditorService(spellcheck, $rootScope) {
      * @param {Node} node
      * @param {Array} tokens
      * @param {string} className
+     * @param {Boolean} preventStore
      */
-    function hilite(node, tokens, className) {
-        self.storeSelection(node);
+    function hilite(node, tokens, className, preventStore) {
+        if (!tokens.length) {
+            self.resetSelection(node);
+            return;
+        }
 
-        angular.forEach(tokens, function(token) {
-            hiliteToken(node, token, className);
-        });
-
-        self.resetSelection(node);
+        if (!preventStore) {
+            self.storeSelection(node);
+        }
+        var token = tokens.shift();
+        hiliteToken(node, token, className);
+        $timeout(function() {
+            hilite(node, tokens, className, true);
+        }, 0, false);
     }
 
     /**
@@ -462,7 +469,9 @@ function EditorService(spellcheck, $rootScope) {
         while (spans.length) {
             var span = spans.item(0);
             span.parentNode.removeChild(span);
-            span.parentNode.normalize();
+            if (span.parentNode.normalize) {
+                span.parentNode.normalize();
+            }
         }
 
         return node;
@@ -554,61 +563,6 @@ angular.module('superdesk.editor', ['superdesk.editor.spellcheck'])
             spellcheck: false
         };
 
-        /**
-         * Get number of lines for all p nodes before given node withing same parent.
-         */
-        function getLinesBeforeNode(p) {
-
-            function getLineCount(text) {
-                return text.split('\n').length;
-            }
-
-            var lines = 0;
-            while (p) {
-                if (p.childNodes.length && p.childNodes[0].nodeType === Node.TEXT_NODE) {
-                    lines += getLineCount(p.childNodes[0].wholeText);
-                } else if (p.childNodes.length) {
-                    lines += 1; // empty paragraph
-                }
-                p = p.previousSibling;
-            }
-
-            return lines;
-        }
-
-        /**
-         * Get line/column coordinates for given cursor position.
-         */
-        function getLineColumn() {
-            var column, lines,
-                selection = window.getSelection();
-            if (selection.anchorNode.nodeType === Node.TEXT_NODE) {
-                var text = selection.anchorNode.wholeText.substring(0, selection.anchorOffset);
-                var node = selection.anchorNode;
-                column = text.length + 1;
-                while (node.nodeName !== 'P') {
-                    if (node.previousSibling) {
-                        column += node.previousSibling.wholeText ?
-                            node.previousSibling.wholeText.length :
-                            node.previousSibling.textContent.length;
-                        node = node.previousSibling;
-                    } else {
-                        node = node.parentNode;
-                    }
-                }
-
-                lines = 0 + getLinesBeforeNode(node);
-            } else {
-                lines = 0 + getLinesBeforeNode(selection.anchorNode);
-                column = 1;
-            }
-
-            return {
-                line: lines,
-                column: column
-            };
-        }
-
         return {
             scope: {type: '=', config: '=', language: '='},
             require: 'ngModel',
@@ -632,7 +586,7 @@ angular.module('superdesk.editor', ['superdesk.editor.spellcheck'])
 
                     spellcheck.setLanguage(scope.language);
 
-                    editorElem = elem.find(scope.type === 'preformatted' ?  '.editor-type-text' : '.editor-type-html');
+                    editorElem = elem.find('.editor-type-html');
                     editorElem.empty();
                     editorElem.html(ngModel.$viewValue || '');
 
@@ -642,7 +596,7 @@ angular.module('superdesk.editor', ['superdesk.editor.spellcheck'])
                     scope.medium = new window.MediumEditor(scope.node, editorConfig);
 
                     scope.$on('spellcheck:run', render);
-                    scope.$on('key:ctrl:shift:s', render);
+                    scope.$on('key:ctrl:shift:d', render);
 
                     function cancelTimeout(event) {
                         $timeout.cancel(updateTimeout);
@@ -701,25 +655,17 @@ angular.module('superdesk.editor', ['superdesk.editor.spellcheck'])
                         }
                     });
 
-                    if (scope.type === 'preformatted') {
-                        editorElem.on('keydown keyup click', function() {
-                            scope.$apply(function() {
-                                angular.extend(scope.cursor, getLineColumn());
-                            });
-                        });
-                    }
-
                     scope.$on('$destroy', function() {
                         editorElem.off();
                         spellcheck.setLanguage(null);
                     });
 
                     scope.cursor = {};
-                    render();
+                    render(null, null, true);
                 };
 
-                function render($event, event) {
-                    editor.renderScope(scope, $event);
+                function render($event, event, preventStore) {
+                    editor.renderScope(scope, $event, preventStore);
                     scope.node.classList.remove(TYPING_CLASS);
                     if (event) {
                         event.preventDefault();

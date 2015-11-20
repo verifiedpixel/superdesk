@@ -6,7 +6,7 @@ var openUrl = require('./helpers/utils').open,
     content = require('./helpers/content'),
     authoring = require('./helpers/authoring');
 
-describe('Content', function() {
+describe('content', function() {
 
     var body = element(by.tagName('body'));
 
@@ -199,6 +199,7 @@ describe('Content', function() {
         content.previewItem('item3');
         element(by.css('[ng-click="tab = \'metadata\'"]')).click();
         expect(element(by.model('item.embargo')).isDisplayed()).toBe(true);
+        content.closePreview();
     });
 
     it('cannot display embargo items in search widget of the package', function() {

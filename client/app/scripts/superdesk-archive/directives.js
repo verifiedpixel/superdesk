@@ -74,9 +74,16 @@
                 }
             };
         })
-        .directive('sdMediaPreview', [function() {
+        .directive('sdMediaPreview', ['api', '$rootScope', function(api, $rootScope) {
             return {
-                templateUrl: 'scripts/superdesk-archive/views/preview.html'
+                templateUrl: 'scripts/superdesk-archive/views/preview.html',
+                link: function(scope) {
+                    scope.previewRewriteStory = function () {
+                        return api.find('archive', scope.item.rewrite_id).then(function(item) {
+                            $rootScope.$broadcast('broadcast:preview', {'item': item});
+                        });
+                    };
+                }
             };
         }])
         .directive('sdMediaPreviewWidget', [function() {
@@ -238,37 +245,56 @@
                 },
                 templateUrl: 'scripts/superdesk-archive/views/related-view.html',
                 link: function(scope, elem) {
-                    scope.$watch('item', function() {
+                    scope.$on('item:duplicate', fetchRelatedItems);
+
+                    scope.$watch('item', function(newVal, oldVal) {
+                        if (newVal !== oldVal) {
+                            fetchRelatedItems();
+                        }
+                    });
+                    scope.open = function(item) {
+                        superdesk.intent('view', 'item', item).then(null, function() {
+                            superdesk.intent('edit', 'item', item);
+                        });
+                    };
+
+                    function fetchRelatedItems() {
                         familyService.fetchItems(scope.item.family_id || scope.item._id, scope.item)
                         .then(function(items) {
                             scope.relatedItems = items;
                         });
-                    });
-                    scope.open = function(item) {
-                        superdesk.intent('read_only', 'content_article', item);
-                    };
+                    }
+
+                    fetchRelatedItems();
                 }
             };
         }])
-        .directive('sdFetchedDesks', ['desks', 'familyService', '$location', function(desks, familyService, $location) {
+        .directive('sdFetchedDesks', ['desks', 'familyService', '$location', 'superdesk',
+            function(desks, familyService, $location, superdesk) {
             return {
                 scope: {
                     item: '='
                 },
                 templateUrl: 'scripts/superdesk-archive/views/fetched-desks.html',
                 link: function(scope, elem) {
+
                     scope.$watchGroup(['item', 'item.archived'], function() {
                         if (scope.item) {
                             familyService.fetchDesks(scope.item, false)
-                                .then(function(desks) {
-                                    scope.desks = desks;
+                                .then(function(fetchedDesks) {
+                                    scope.desks = fetchedDesks;
                                 });
                         }
                     });
 
                     scope.selectFetched = function (desk) {
-                        desks.setCurrentDeskId(desk.desk._id);
-                        $location.path('/workspace/content').search('_id=' + desk.itemId);
+                        if (desk.isUserDeskMember) {
+                            desks.setCurrentDeskId(desk.desk._id);
+                            $location.url('/workspace/monitoring');
+                            if (desk.count === 1) {
+                                superdesk.intent('edit', 'item', desk.item);
+                            }
+                        }
                     };
                 }
             };
@@ -357,6 +383,18 @@
                                 scope._progress = Math.min(100, Math.round(100.0 * data.progress.current / data.progress.total));
                             }
                             scope.$digest();
+                        }
+                    });
+
+                    scope.$on('item:highlight', function(_e, data) {
+                        if (scope.item && scope.item._id === data.item_id) {
+                            if (!scope.item.highlights) {
+                                scope.item.highlights = [data.highlight_id];
+                            } else if (scope.item.highlights.indexOf(data.highlight_id) === -1){
+                                scope.item.highlights = [data.highlight_id].concat(scope.item.highlights);
+                            } else if (!scope.item.multiSelect){
+                                scope.item.highlights = _.without(scope.item.highlights, data.highlight_id);
+                            }
                         }
                     });
 
@@ -615,6 +653,7 @@
             }])
 
         .service('familyService', ['api', 'desks', function(api, desks) {
+
             this.fetchItems = function(familyId, excludeItem) {
                 var repo = 'archive';
 
@@ -650,7 +689,15 @@
                     _.each(items._items, function(i) {
                         if (i.task && i.task.desk && desks.deskLookup[i.task.desk]) {
                             if (deskIdList.indexOf(i.task.desk) < 0) {
-                                deskList.push({'desk': desks.deskLookup[i.task.desk], 'count': 1, 'itemId': i._id});
+                                var _isMember = !_.isEmpty(_.find(desks.userDesks._items, {_id: i.task.desk}));
+                                deskList.push(
+                                    {
+                                        'desk': desks.deskLookup[i.task.desk],
+                                        'count': 1,
+                                        'itemId': i._id,
+                                        'isUserDeskMember': _isMember,
+                                        'item': i
+                                    });
                                 deskIdList.push(i.task.desk);
                             } else {
                                 deskList[deskIdList.indexOf(i.task.desk)].count += 1;

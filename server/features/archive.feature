@@ -340,7 +340,35 @@ Feature: News Items Archive
       And we delete "/desks/#desks._id#"
       Then we get error 412
       """
-      {"_message": "Cannot delete desk as it has article(s)."}
+      {"_message": "Cannot delete desk as it has article(s) or referenced by versions of the article(s)."}
+      """
+
+    @auth
+    Scenario: Cannot delete desk when it is still referenced in archive version
+      Given empty "desks"
+      And empty "archive"
+      When we post to "/desks" with "SPORTS_DESK_ID" and success
+      """
+      {"name": "Sports", "desk_type": "authoring"}
+      """
+      And we post to "/archive"
+      """
+      [{"guid": "123", "type": "text", "body_html": "<p>content</p>", "task": {"desk": "#desks._id#", "stage": "#desks.incoming_stage#"}}]
+      """
+      Then we get OK response
+      When we post to "/desks"
+      """
+      {"name": "National", "desk_type": "authoring"}
+      """
+      And we post to "/archive/123/move"
+      """
+      [{"task": {"desk": "#desks._id#", "stage": "#desks.incoming_stage#"}}]
+      """
+      Then we get OK response
+      When we delete "/desks/#SPORTS_DESK_ID#"
+      Then we get error 412
+      """
+      {"_message": "Cannot delete desk as it has article(s) or referenced by versions of the article(s)."}
       """
 
     @auth
@@ -372,28 +400,37 @@ Feature: News Items Archive
         """
 
     @auth
-    Scenario: Assign a default Source to user created content Items
+    Scenario: Assign a default values to user created content Items
         When we post to "/archive"
         """
         [{"type": "text", "body_html": "<p>content</p>"}]
         """
         Then we get new resource
         """
-        {"type": "text", "source":"AAP"}
+        {"type": "text", "source":"AAP", "priority":6, "urgency":3}
         """
 
     @auth
-    Scenario: Dateline is populated from user preferences for new articles
+    Scenario: Default Metadata is copied from user preferences for new articles
       Given empty "archive"
       And we have sessions "/sessions"
       When we get "/preferences/#SESSION_ID#"
       And we patch latest
       """
-      {"user_preferences": {"dateline:located": {
-          "located" : {
-              "dateline" : "city", "city" : "Sydney", "city_code" : "Sydney", "country" : "Australia", "country_code" : "AU",
-              "state" : "New South Wales", "state_code" : "NSW", "tz" : "Australia/Sydney", "alt_name": ""
-          }}}}
+      {"user_preferences": {
+          "dateline:located": {
+              "located" : {
+                  "dateline" : "city", "city" : "Sydney", "city_code" : "Sydney", "country" : "Australia",
+                  "country_code" : "AU", "state" : "New South Wales", "state_code" : "NSW", "tz" : "Australia/Sydney"
+              }
+          },
+          "article:default:place": {"place" : [{"qcode" : "ACT", "name" : "ACT"}]}
+          }
+      }
+      """
+      And we patch "/users/#CONTEXT_USER_ID#"
+      """
+      {"byline": "by Context User"}
       """
       And we post to "/archive"
       """
@@ -402,38 +439,7 @@ Feature: News Items Archive
       And we get "/archive/123"
       Then we get existing resource
       """
-      {"dateline": {"located": {"city": "Sydney"}}}
-      """
-
-    @auth
-    Scenario: Byline is populated from user profile for new articles
-      Given empty "archive"
-      When we post to "/archive"
-      """
-      [{"guid": "123", "type": "text"}]
-      """
-      And we get "/archive/123"
-      Then we get latest
-      """
-      {"guid": "123", "type": "text", "byline": ""}
-      """
-      When we patch "/users/#CONTEXT_USER_ID#"
-      """
-      {"byline": "by Context User"}
-      """
-      When we get "/users/#CONTEXT_USER_ID#"
-      Then we get latest
-      """
-      {"byline": "by Context User"}
-      """
-      When we post to "/archive"
-      """
-      [{"guid": "321", "type": "text"}]
-      """
-      And we get "/archive/321"
-      Then we get existing resource
-      """
-      {"guid": "321", "type": "text", "byline": "by Context User"}
+      {"byline": "by Context User", "dateline": {"located": {"city": "Sydney"}}, "place" : [{"qcode" : "ACT", "name" : "ACT"}]}
       """
 
     @auth

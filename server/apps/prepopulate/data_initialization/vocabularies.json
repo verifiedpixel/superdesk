@@ -96,9 +96,9 @@
             {"is_active": true, "name": "1", "value": 1},
             {"is_active": true, "name": "2", "value": 2},
             {"is_active": true, "name": "3", "value": 3},
-            {"is_active": false, "name": "4", "value": 4},
+            {"is_active": true, "name": "4", "value": 4},
             {"is_active": true, "name": "5", "value": 5},
-            {"is_active": false, "name": "6", "value": 6},
+            {"is_active": true, "name": "6", "value": 6},
             {"is_active": false, "name": "7", "value": 7},
             {"is_active": false, "name": "8", "value": 8},
             {"is_active": false, "name": "9", "value": 9}
@@ -178,9 +178,6 @@
                             {"name": "AAP Bulletin Builder", "value": "AAP BULLETIN BUILDER"}]},
             {"is_active": true, "name": "Wire/Paper", "value": "wire",
                 "formats": [{"name": "AAP ANPA", "value": "AAP ANPA"}, {"name": "NITF", "value": "nitf"}, {"name": "AAP IPNEWS", "value": "AAP IPNEWS"},
-                            {"name": "AAP SMS", "value": "AAP SMS"}]},
-            {"is_active": true, "name": "Broadcast", "value": "broadcast",
-                "formats": [{"name": "AAP ANPA", "value": "AAP ANPA"}, {"name": "NITF", "value": "nitf"}, {"name": "AAP IPNEWS", "value": "AAP IPNEWS"},
                             {"name": "AAP SMS", "value": "AAP SMS"}]}
         ]
     },
@@ -229,12 +226,79 @@
         "display_name": "Keywords for Articles",
         "type": "manageable",
         "items": [
-            {"is_active": true, "name": "Science and Technology",       "value": "SciTech"},
-            {"is_active": true, "name": "International Health Stories", "value": "Medicine"},
-            {"is_active": true, "name": "Health",                       "value": "Health"},
-            {"is_active": true, "name": "Motoring",                     "value": "Motoring"},
-            {"is_active": true, "name": "Soccer",                       "value": "Soccer"},
-            {"is_active": true, "name": "Property",                     "value": "Property"}
+            {
+                "is_active": true,
+                "name": "Science and Technology",
+                "value": "SciTech"
+            },
+            {
+                "is_active": true,
+                "name": "International Health Stories",
+                "value": "Medicine"
+            },
+            {
+                "is_active": true,
+                "name": "Health",
+                "value": "Health"
+            },
+            {
+                "is_active": true,
+                "name": "Motoring",
+                "value": "Motoring"
+            },
+            {
+                "is_active": true,
+                "name": "Soccer",
+                "value": "Soccer"
+            },
+            {
+                "is_active": true,
+                "name": "Property",
+                "value": "Property"
+            }
+        ]
+    },
+    {
+        "_id": "desk_types",
+        "display_name": "Desk Types",
+        "type": "unmanageable",
+        "items": [
+            {"is_active": true, "name": "authoring", "value": "authoring"},
+            {"is_active": true, "name": "production", "value": "production"}
+        ]
+    },
+    {
+        "_id": "iptc_category_map",
+        "display_name": "Ingest map between IPTC codes and ANPA Categories",
+        "type": "manageable",
+        "items": [
+            {"name" : "Sport", "category" : "s", "subject" : "15000000", "is_active" : true},
+            {"name" : "Finance", "category" : "f", "subject" : "04000000", "is_active" : true},
+            {"name" : "Entertainment", "category" : "e", "subject" : "01000000", "is_active" : true},
+            {"name" : "News", "category" : "i", "subject" : "02000000", "is_active" : true},
+            {"name" : "News 2", "category" : "i", "subject" : "03000000", "is_active" : true},
+            {"name" : "News 3", "category" : "i", "subject" : "05000000", "is_active" : true},
+            {"name" : "News 4", "category" : "i", "subject" : "06000000", "is_active" : true},
+            {"name" : "Features", "category" : "c", "subject" : "07000000", "is_active" : true},
+            {"name" : "Features 2", "category" : "c", "subject" : "08000000", "is_active" : true},
+            {"name" : "News 5", "category" : "i", "subject" : "09000000", "is_active" : true},
+            {"name" : "Features 3", "category" : "c", "subject" : "10000000", "is_active" : true},
+            {"name" : "News 5", "category" : "i", "subject" : "11000000", "is_active" : true},
+            {"name" : "News 6", "category" : "i", "subject" : "12000000", "is_active" : true},
+            {"name" : "News 7", "category" : "i", "subject" : "13000000", "is_active" : true},
+            {"name" : "News 8", "category" : "i", "subject" : "14000000", "is_active" : true},
+            {"name" : "News 9", "category" : "i", "subject" : "16000000", "is_active" : true},
+            {"name" : "Weather", "category" : "b", "subject" : "17000000", "is_active" : true}
+        ]
+    },
+    {
+        "_id": "footers",
+        "display_name": "Public Service Announcements",
+        "type": "manageable",
+        "items": [
+            {"is_active": true, "name": "Suicide", "value": "Readers seeking support and information about suicide prevention can contact Lifeline on 13 11 14.<br>Suicide Call Back Service 1300 659 467<br>MensLine Australia 1300 78 99 78<br>Multicultural Mental Health Australia www.mmha.org.au<br>Local Aboriginal Medical Service available from www.vibe.com.au"},
+            {"is_active": true, "name": "Children", "value": "Kids Helpline 1800 55 1800 (for young people aged 5 to 25)"},
+            {"is_active": true, "name": "Domestic Violence", "value": "National domestic violence helpline: 1800 737 732  or 1800RESPECT. In an emergency call triple-zero."}
         ]
     }
 ]

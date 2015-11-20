@@ -63,7 +63,7 @@
                 <label for="search-storyname">
                     {{:: 'Story Name' | translate}}
                 </label>
-                <input type="text" id="search-storyname" ng-model="meta.unique_name">
+                <input type="text" id="search-storyname" ng-model="fields.unique_name">
             </div>
             <div class="field">
                 <label for="search-storytext">
@@ -72,22 +72,59 @@
                 <input type="text" id="search-storytext" ng-model="meta.body_html">
             </div>
         </div>
-
+        <div class="field">
+            <label for="search-byline">
+                {{:: 'Byline' | translate}}
+            </label>
+            <input type="text" id="search-byline" ng-model="meta.byline">
+        </div>
         <div class="field" ng-if="repo.archive">
             <label for="search-creator">
                 {{:: 'Creator' | translate}}
             </label>
-            <input type="text" id="search-creator" ng-model="meta.original_creator">
+            <select id="search-creator"
+                    ng-model="fields.original_creator"
+                    ng-options="user._id  as user.display_name for user in userList">
+            <option value="" label=""></option>
+            </select>
         </div>
-
         <div class="field">
             <label for="search-subject">
                 {{:: 'Subject' | translate}}
             </label>
             <div class="control" id="search-subject">
-                <div sd-meta-terms data-item="subjectitems" data-field="subject" data-unique="qcode" data-list="subjectcodes" data-change="subjectSearch(subjectitems)"></div>
+                <div sd-meta-terms
+                     data-item="subjectitems"
+                     data-field="subject"
+                     data-unique="qcode"
+                     data-list="subjectcodes"
+                     data-change="subjectSearch(subjectitems)"></div>
             </div>
         </div>
+        <div class="field">
+            <label for="from-desk">
+                {{:: 'From Desk' | translate}}
+            </label>
+            <select
+                id="from-desk" name="from-desk"
+                ng-options="d._id as d.name for d in desks._items"
+                ng-model="fields.from_desk">
+                <option value="" label=""></option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label for="to-desk">
+                {{:: 'To Desk' | translate}}
+            </label>
+            <select
+                id="to-desk" name="to-desk"
+                ng-options="d._id as d.name for d in desks._items"
+                ng-model="fields.to_desk">
+                <option value="" label=""></option>
+            </select>
+        </div>
+
     </fieldset>
     <fieldset ng-show="repo.search === 'aapmm'">      
         <div class="field">
@@ -117,6 +154,6 @@
     </fieldset>    
 </form>
 <div class="actions">
-    <button class="btn btn-info pull-right" ng-click="search()" translate>Go</button>
+    <button class="btn btn-info pull-right" ng-click="search()" ng-disabled="!isSearchEnabled()" translate>Go</button>
     <button class="btn pull-right" ng-click="focusOnSearch();" translate>Cancel</button>
 </div>

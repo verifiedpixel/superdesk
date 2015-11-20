@@ -6,7 +6,7 @@ var route = require('./helpers/utils').route,
     workspace = require('./helpers/workspace'),
     highlights = require('./helpers/highlights');
 
-describe('HIGHLIGHTS', function() {
+describe('highlights', function() {
     'use strict';
 
     describe('add highlights configuration:', function() {
@@ -16,10 +16,12 @@ describe('HIGHLIGHTS', function() {
             //add highlights configuration with one desk
             highlights.add();
             highlights.setName('highlight new');
+            highlights.setTemplate('custom_highlight');
             highlights.toggleDesk('Sports Desk');
             highlights.save();
             expect(highlights.getRow('highlight new').count()).toBe(1);
             highlights.edit('highlight new');
+            expect(highlights.getTemplate()).toMatch('custom_highlight');
             highlights.expectDeskSelection('Sports Desk', true);
             highlights.cancel();
 
@@ -53,6 +55,14 @@ describe('HIGHLIGHTS', function() {
             highlights.edit('highlight first group');
             expect(highlights.groups.count()).toBe(1);
             expect(highlights.getGroup('first').count()).toBe(1);
+            highlights.cancel();
+
+            //set default template for highlight configuration
+            highlights.edit('highlight one');
+            highlights.setTemplate('default');
+            highlights.save();
+            highlights.edit('highlight one');
+            expect(highlights.getTemplate()).toMatch('');
             highlights.cancel();
 
             //change the name of highlight configuration
@@ -137,6 +147,8 @@ describe('HIGHLIGHTS', function() {
         beforeEach(route('/workspace/monitoring'));
 
         it('create highlight package', function() {
+            monitoring.turnOffWorkingStage(0);
+
             //mark for highlight in monitoring
             monitoring.actionOnItemSubmenu('Mark for highlight', 'Highlight two', 1, 0);
             monitoring.actionOnItemSubmenu('Mark for highlight', 'Highlight three', 1, 2);
@@ -177,7 +189,13 @@ describe('HIGHLIGHTS', function() {
             monitoring.actionOnItemSubmenu('Add to current', 'story', 2, 2);
             expect(authoring.getGroupItems('story').count()).toBe(1);
 
+            //change desk on highlights
+            workspace.showHighlightList('Highlight one');
+            workspace.selectDesk('SPORTS DESK');
+            expect(browser.getLocationAbsUrl()).toMatch('/monitoring');
+
             //show highlist three and add an item to highlight package
+            workspace.selectDesk('POLITIC DESK');
             workspace.showHighlightList('Highlight three');
             workspace.actionOnItemSubmenu('Add to current', 'sidebars', 0);
             expect(authoring.getGroupItems('sidebars').count()).toBe(1);

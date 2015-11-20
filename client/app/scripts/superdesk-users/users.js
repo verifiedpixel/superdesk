@@ -2,6 +2,20 @@
     'use strict';
 
     /**
+    * Common error handler code for privilege errors
+    */
+    function privilegesErrorHandler(response) {
+        if (angular.isDefined(response.data._issues) &&
+            angular.isDefined(response.data._issues['validator exception'])) {
+            return 'Error: ' + response.data._issues['validator exception'];
+        } else if (angular.isDefined(response.data._message)) {
+            return 'Error: ' + response.data._message;
+        } else {
+            return 'Error. Privileges not updated.';
+        }
+    }
+
+    /**
      * Bussiness logic layer, should be used instead of resource
      */
     UsersService.$inject = ['api', '$q', 'notify'];
@@ -174,10 +188,11 @@
          * Fetch single user from default cache, or make new api call
          *
          * @param {String} id of user
+         * @param {boolean} forced to bypass the cache
          * @returns {Promise}
          */
-        userservice.getUser = function(id) {
-            return api('users').getById(id, undefined, true);
+        userservice.getUser = function(id, forced) {
+            return api('users').getById(id, undefined, !forced);
         };
 
         /**
@@ -329,8 +344,8 @@
         $scope.profile = $scope.user._id === session.identity._id;
     }
 
-    ChangeAvatarController.$inject = ['$scope', 'upload', 'session', 'urls', 'betaService'];
-    function ChangeAvatarController($scope, upload, session, urls, beta) {
+    ChangeAvatarController.$inject = ['$scope', 'upload', 'session', 'urls', 'betaService', 'gettext', 'notify'];
+    function ChangeAvatarController($scope, upload, session, urls, beta, gettext, notify) {
 
         $scope.methods = [
             {id: 'upload', label: gettext('Upload from computer')},
@@ -375,6 +390,7 @@
                 }).then(function(response) {
 
                     if (response.data._status === 'ERR'){
+                        notify.error(gettext('There was a problem with your upload'));
                         return;
                     }
 
@@ -383,7 +399,11 @@
                     $scope.locals.data.avatar = response.data._id;
 
                     return $scope.resolve(picture_url);
-                }, null, function(update) {
+                },  function(error) {
+                    notify.error((error.statusText !== '') ?
+                                    error.statusText :
+                                    gettext('There was a problem with your upload'));
+                }, function(update) {
                     $scope.progress.width = Math.round(update.loaded / update.total * 100.0);
                 });
             });
@@ -458,8 +478,8 @@
             });
     }
 
-    UserRolesDirective.$inject = ['api', 'gettext', 'notify', 'modal'];
-    function UserRolesDirective(api, gettext, notify, modal) {
+    UserRolesDirective.$inject = ['api', 'gettext', 'notify', 'modal', '$filter'];
+    function UserRolesDirective(api, gettext, notify, modal, $filter) {
         return {
             scope: true,
             templateUrl: 'scripts/superdesk-users/views/settings-roles.html',
@@ -469,7 +489,7 @@
 
                 api('roles').query()
                 .then(function(result) {
-                    scope.roles = result._items;
+                    scope.roles = $filter('sortByName')(result._items);
                 });
 
                 scope.edit = function(role) {
@@ -547,16 +567,15 @@
         };
     }
 
-    RolesPrivilegesDirective.$inject = ['api', 'gettext', 'notify', '$q'];
-    function RolesPrivilegesDirective(api, gettext, notify, $q) {
+    RolesPrivilegesDirective.$inject = ['api', 'gettext', 'notify', '$q', '$filter'];
+    function RolesPrivilegesDirective(api, gettext, notify, $q, $filter) {
         return {
             scope: true,
             templateUrl: 'scripts/superdesk-users/views/settings-privileges.html',
             link: function(scope) {
 
-                api('roles').query()
-                .then(function(result) {
-                    scope.roles = result._items;
+                api('roles').query().then(function(result) {
+                    scope.roles = $filter('sortByName')(result._items);
                 });
 
                 api('privileges').query().
@@ -578,8 +597,8 @@
                     $q.all(promises).then(function() {
                         notify.success(gettext('Privileges updated.'));
                         rolesForm.$setPristine();
-                    }, function() {
-                        notify.success(gettext('Error. Privileges not updated.'));
+                    }, function(response) {
+                        notify.error(gettext(privilegesErrorHandler(response)));
                     });
                 };
             }
@@ -896,7 +915,11 @@
                     scope.dirty = false;
                     scope.errorMessage = null;
 
-                    scope.$watch('origUser', resetUser);
+                    scope.$watch('origUser', function() {
+                        scope.user = _.create(scope.origUser);
+                    });
+
+                    resetUser(scope.origUser);
 
                     scope.$watchCollection('user', function(user) {
                         _.each(user, function(value, key) {
@@ -931,6 +954,7 @@
                             scope.user.picture_url = avatar; // prevent replacing Avatar which would get into diff
                         });
                     };
+
                     scope.save = function() {
                         scope.error = null;
                         notify.info(gettext('saving..'));
@@ -998,17 +1022,23 @@
                     };
 
                     function resetUser(user) {
-                        scope.error = null;
-                        scope.user = _.create(user);
-                        scope.confirm = {password: null};
-                        scope.show = {password: false};
-                        scope._active = usersService.isActive(user);
-                        scope._pending = usersService.isPending(user);
-                        scope.profile = scope.user._id === session.identity._id;
-                        scope.userDesks = [];
-                        if (angular.isDefined(user) && angular.isDefined(user._links)) {
-                            desks.fetchUserDesks(user).then(function(response) {
-                                scope.userDesks = response._items;
+                        scope.dirty = false;
+                        if (angular.isDefined(user._id)) {
+                            return userList.getUser(user._id, true).then(function(u) {
+                                scope.error = null;
+                                scope.origUser = u;
+                                scope.user = _.create(u);
+                                scope.confirm = {password: null};
+                                scope.show = {password: false};
+                                scope._active = usersService.isActive(u);
+                                scope._pending = usersService.isPending(u);
+                                scope.profile = scope.user._id === session.identity._id;
+                                scope.userDesks = [];
+                                if (angular.isDefined(u) && angular.isDefined(u._links)) {
+                                    desks.fetchUserDesks(u).then(function(response) {
+                                        scope.userDesks = response._items;
+                                    });
+                                }
                             });
                         }
                     }
@@ -1031,17 +1061,22 @@
          */
         .directive('sdUserPreferences', [
             'api', 'session', 'preferencesService', 'notify', 'asset',
-            'metadata', 'modal', '$timeout', '$q',
+            'metadata', 'modal', '$timeout', '$q', 'userList',
         function (
             api, session, preferencesService, notify, asset, metadata, modal,
-            $timeout, $q
+            $timeout, $q, userList
         ) {
             return {
                 templateUrl: asset.templateUrl('superdesk-users/views/user-preferences.html'),
                 link: function(scope, element, attrs) {
+                    /*
+                     * Set this to true after adding all the preferences to the scope. If done before, then the
+                     * directives which depend on scope variables might fail to load properly.
+                     */
+                    scope.preferencesLoaded = false;
                     var orig;  // original preferences, before any changes
 
-                    preferencesService.get().then(function(result) {
+                    preferencesService.get(null, true).then(function(result) {
                         orig = result;
                         buildPreferences(orig);
 
@@ -1056,6 +1091,10 @@
                         scope.datelinePreview = scope.preferences['dateline:located'].located;
                     };
 
+                    userList.getUser(scope.user._id, true).then(function(u) {
+                        scope.user = u;
+                    });
+
                     /**
                     * Saves the preferences changes on the server. It also
                     * invokes additional checks beforehand, namely the
@@ -1067,7 +1106,11 @@
                         preSaveCategoriesCheck()
                         .then(function () {
                             var update = createPatchObject();
-                            return preferencesService.update(update);
+                            return preferencesService.update(update).then(function() {
+                                userList.getUser(scope.user._id, true).then(function(u) {
+                                    scope.user = u;
+                                });
+                            });
                         }, function () {
                             return $q.reject('canceledByModal');
                         })
@@ -1138,6 +1181,16 @@
                     };
 
                     /**
+                     * Sets the form as dirty when value is changed. This function should be used when one wants to set
+                     * form dirty for input controls created without using <input>.
+                     *
+                     * @method articleDefaultsChanged
+                     */
+                    scope.articleDefaultsChanged = function(item) {
+                        scope.userPrefs.$setDirty();
+                    };
+
+                    /**
                     * Builds a user preferences object in scope from the given
                     * data.
                     *
@@ -1162,8 +1215,9 @@
                         // values object is undefined or any of the needed
                         // data buckets are missing in it
                         buckets = [
-                            'cities', 'categories', 'default_categories'
+                            'cities', 'categories', 'default_categories', 'locators'
                         ];
+
                         initNeeded = buckets.some(function (bucketName) {
                             var values = metadata.values || {};
                             return angular.isUndefined(values[bucketName]);
@@ -1210,6 +1264,9 @@
                             newObj.selected = !!selectedCats[cat.qcode];
                             scope.categories.push(newObj);
                         });
+
+                        scope.locators = helperData.locators;
+                        scope.preferencesLoaded = true;
                     }
 
                     /**
@@ -1284,13 +1341,27 @@
                 }
             };
         }])
-        .directive('sdUserPrivileges', ['api', 'gettext', 'notify', function(api, gettext, notify) {
+
+		/**
+         * @memberof superdesk.users
+         * @ngdoc directive
+         * @name sdUserPrivileges
+         * @description
+         *   This directive creates the Privileges tab on the user profile
+         *   panel, allowing users to set various system preferences for
+         *   themselves.
+         */
+        .directive('sdUserPrivileges', ['api', 'gettext', 'notify', 'userList', function(api, gettext, notify, userList) {
             return {
                 scope: {
                     user: '='
                 },
                 templateUrl: 'scripts/superdesk-users/views/user-privileges.html',
                 link: function(scope) {
+                    userList.getUser(scope.user._id, true).then(function(u) {
+                        scope.user = u;
+                    });
+
                     api('privileges').query().
                     then(function(result) {
                         scope.privileges = result._items;
@@ -1302,15 +1373,44 @@
                         console.log(error);
                     });
 
-                    scope.save = function(userPrivileges) {
-                        api.save('users', scope.user, _.pick(scope.user, 'privileges'))
-                        .then(function(result) {
+                    // the last user privileges that were saved on the server
+                    scope.origPrivileges = angular.copy(scope.user.privileges);
+
+                    /**
+                    * Saves selected user privileges on the server and marks
+                    * the corresponding HTML form as $pristine.
+                    *
+                    * @method save
+                    */
+                    scope.save = function () {
+                        api.save(
+                            'users',
+                            scope.user,
+                            _.pick(scope.user, 'privileges')
+                        )
+                        .then(function () {
+                            scope.origPrivileges = angular.copy(
+                                scope.user.privileges);
+                            scope.userPrivileges.$setPristine();
                             notify.success(gettext('Privileges updated.'));
-                        }, function(error) {
-                            notify.error(gettext('Privileges not updated.'));
-                            console.log(error);
+                        }, function (response) {
+                            notify.error(
+                                gettext(privilegesErrorHandler(response)));
                         });
-                        userPrivileges.$setPristine();
+                    };
+
+                    /**
+                    * Reverts all changes to user privileges settings since the
+                    * time they were last saved, and marks the corresponding
+                    * HTML form as $pristine.
+                    *
+                    * @method cancel
+                    */
+                    scope.cancel = function () {
+                        scope.user.privileges = angular.copy(
+                            scope.origPrivileges);
+
+                        scope.userPrivileges.$setPristine();
                     };
                 }
             };

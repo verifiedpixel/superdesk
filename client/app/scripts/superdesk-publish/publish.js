@@ -187,7 +187,7 @@
 
             var orTerms = null;
             if (!_.isEmpty($scope.searchQuery)) {
-                orTerms = {'$or': [{'headline': $scope.searchQuery}, {'unique_name': $scope.searchQuery}]};
+                orTerms = {'$or': [{'headline':{'$regex': $scope.searchQuery, '$options':'-i'}}, {'unique_name': $scope.searchQuery}]};
             }
 
             var filterTerms = [];
@@ -212,7 +212,6 @@
                     '$and': andTerms
                 });
             }
-
             return api.publish_queue.query(criteria);
         }
 
@@ -354,11 +353,11 @@
 
     SubscribersDirective.$inject = [
         'gettext', 'notify', 'api', 'adminPublishSettingsService', 'modal',
-        'metadata', 'contentFilters', '$q'
+        'metadata', 'contentFilters', '$q', '$filter'
     ];
     function SubscribersDirective(
         gettext, notify, api, adminPublishSettingsService,
-        modal, metadata, contentFilters, $q) {
+        modal, metadata, contentFilters, $q, $filter) {
 
         return {
             templateUrl: 'scripts/superdesk-publish/views/subscribers.html',
@@ -387,6 +386,7 @@
                 function fetchSubscribers() {
                     adminPublishSettingsService.fetchSubscribers().then(
                         function(result) {
+                            result._items = $filter('sortByName')(result._items);
                             $scope.subscribers = result;
                         }
                     );

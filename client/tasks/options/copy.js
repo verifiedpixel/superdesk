@@ -6,6 +6,7 @@ module.exports = {
             cwd: '<%= appDir %>',
             dest: '<%= distDir %>',
             src: [
+                'fonts/*',
                 'images/**/*',
                 'styles/css/*.css',
                 'scripts/**/*.{html,css,jpg,jpeg,png,gif,svg,json}',
@@ -55,10 +56,12 @@ module.exports = {
                 'images/**',
                 'styles/css/bootstrap.css',
                 'styles/css/app.css',
+                'fonts/sd_icons.woff',
+                'fonts/sd_icons.ttf',
                 'scripts/vendor.js',
                 'scripts/superdesk-core.js',
-                'scripts/superdesk-templates.js',
-                'scripts/superdesk.js',
+                'scripts/templates-cache.js',
+                'scripts/superdesk-apps.js',
                 'scripts/vendor-docs.js',
                 'scripts/superdesk-docs-core.js',
                 'scripts/superdesk-docs-main.js'

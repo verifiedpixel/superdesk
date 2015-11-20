@@ -2,7 +2,7 @@ describe('templates', function() {
     'use strict';
 
     beforeEach(module('superdesk.templates'));
-    beforeEach(module('templates'));
+    beforeEach(module('superdesk.templates-cache'));
 
     describe('templates widget', function() {
         it('should create a template', inject(function($controller, api, desks, $q, $rootScope) {
@@ -15,6 +15,7 @@ describe('templates', function() {
             expect(ctrl.type).toBe('create');
             ctrl.name = 'test';
             ctrl.desk = 'news';
+            ctrl.hasCrops = true;
             ctrl.save();
             expect(api.save).toHaveBeenCalledWith('content_templates', {
                 template_name: 'test',

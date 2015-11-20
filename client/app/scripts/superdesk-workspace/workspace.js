@@ -266,6 +266,7 @@
                 };
 
                 function reset() {
+                    desks.changeDesk = true;
                     $location.search('_id', null);
                 }
 
@@ -303,11 +304,11 @@
         };
     }
 
-    WorkspaceSidenavDirective.$inject = [];
-    function WorkspaceSidenavDirective() {
+    WorkspaceSidenavDirective.$inject = ['superdeskFlags', '$location', 'keyboardManager'];
+    function WorkspaceSidenavDirective(superdeskFlags, $location, keyboardManager) {
         return {
             templateUrl: 'scripts/superdesk-workspace/views/workspace-sidenav-items.html',
-            link: function(scope) {
+            link: function(scope, elem) {
 
                 /*
                  * Function for showing and hiding monitoring list
@@ -317,15 +318,54 @@
                  * @param {object} e Gets $event from the element
                  */
                 scope.hideMonitoring = function (state, e) {
-                    var flags = scope.$parent.flags;
-
-                    if (flags.authoring && state) {
+                    if (superdeskFlags.flags.authoring && state) {
                         e.preventDefault();
-                        flags.hideMonitoring = !flags.hideMonitoring;
+                        superdeskFlags.flags.hideMonitoring = !superdeskFlags.flags.hideMonitoring;
                     } else {
-                        flags.hideMonitoring = false;
+                        superdeskFlags.flags.hideMonitoring = false;
                     }
                 };
+
+                /*
+                 * By using keyboard shortcuts, change the current showed view
+                 *
+                 */
+                var opt = {global: true, inputDisabled: false};
+                keyboardManager.bind('alt+h', function (e) {
+                    e.preventDefault();
+                    $location.url('/workspace');
+                }, opt);
+                keyboardManager.bind('alt+m', function (e) {
+                    e.preventDefault();
+                    $location.url('/workspace/monitoring');
+                }, opt);
+                keyboardManager.bind('alt+d', function (e) {
+                    e.preventDefault();
+                    elem.find('.highlights-dropdown .dropdown-toggle').click();
+                    elem.find('.dropdown-menu button')[0].focus();
+                    keyboardManager.push('up', function() {
+                        elem.find('.dropdown-menu button:focus').parent('li').prev().children('button').focus();
+                    });
+                    keyboardManager.push('down', function() {
+                        elem.find('.dropdown-menu button:focus').parent('li').next().children('button').focus();
+                    });
+                }, opt);
+                keyboardManager.bind('alt+t', function (e) {
+                    e.preventDefault();
+                    $location.url('/workspace/tasks');
+                }, opt);
+                keyboardManager.bind('alt+x', function (e) {
+                    e.preventDefault();
+                    $location.url('/workspace/spike-monitoring');
+                }, opt);
+                keyboardManager.bind('alt+p', function (e) {
+                    e.preventDefault();
+                    $location.url('/workspace/personal');
+                }, opt);
+                keyboardManager.bind('alt+f', function (e) {
+                    e.preventDefault();
+                    $location.url('search');
+                }, opt);
             }
         };
     }

@@ -3,7 +3,7 @@
 describe('content', function() {
     var item = {_id: 1};
 
-    beforeEach(module('templates'));
+    beforeEach(module('superdesk.templates-cache'));
     beforeEach(module('superdesk.mocks'));
     beforeEach(module('superdesk.archive'));
 
@@ -23,18 +23,25 @@ describe('content', function() {
         beforeEach(inject(function (desks, session) {
             session.identity = {_id: 'user:1'};
 
-            desks.userDesks = {_items: [{_id: '1', name: 'sport', incoming_stage: '2'},
-                                        {_id: '2', name: 'news', incoming_stage: '1'}]};
+            desks.userDesks = {_items: [{_id: '1', name: 'sport', working_stage: '2', incoming_stage: '3'},
+                                        {_id: '2', name: 'news', working_stage: '4', incoming_stage: '5'}]};
             desks.setCurrentDeskId('2');
 
             item = {'_id': '123'};
         }));
 
-        it('can add an item to a desk', inject(function(archiveService) {
+        it('can add an item to user\'s active desk', inject(function(archiveService) {
             archiveService.addTaskToArticle(item);
 
             expect(item.task.desk).toBe('2');
-            expect(item.task.stage).toBe('1');
+            expect(item.task.stage).toBe('4');
+        }));
+
+        it('can add an item to a desk', inject(function(archiveService, desks) {
+            archiveService.addTaskToArticle(item, desks.userDesks._items[0]);
+
+            expect(item.task.desk).toBe('1');
+            expect(item.task.stage).toBe('2');
         }));
 
         it('verifies if item is from Legal Archive or not', inject(function(archiveService) {
@@ -42,6 +49,14 @@ describe('content', function() {
 
             item._type = 'legal_archive';
             expect(archiveService.isLegal(item)).toBe(true);
+        }));
+
+        it('returns the related items', inject(function(archiveService, api, $q, search) {
+            spyOn(api, 'query').and.returnValue($q.when());
+            archiveService.getRelatedItems('test');
+            expect(api.query).toHaveBeenCalled();
+            var criteria = api.query.calls.mostRecent().args[1];
+            expect(criteria.source.query.filtered.query.query_string.query).toBe('slugline:(test)');
         }));
 
         it('can verify if the item is published or not', inject(function(archiveService) {
@@ -127,6 +142,43 @@ describe('content', function() {
             multi.reset();
             $rootScope.$digest();
             expect(multi.getItems().length).toBe(0);
+        }));
+    });
+    describe('media-related directive', function() {
+        it('can view item', inject(function(familyService, $rootScope, $compile, superdesk, $q) {
+            var scope = $rootScope.$new();
+            scope.item = {_id: 1, family_id: 1};
+
+            var elem = $compile('<div sd-media-related data-item=\'item\'></div>')(scope);
+            scope.$digest();
+
+            var iscope = elem.isolateScope();
+            expect(iscope.item).toBe(scope.item);
+
+            scope.relatedItems = {_items: [{_id: 2, family_id: 1}]};
+
+            spyOn(superdesk, 'intent').and.returnValue($q.when());
+            iscope.open(scope.relatedItems._items[0]);
+            scope.$apply();
+
+            expect(superdesk.intent).toHaveBeenCalledWith('view', 'item', scope.relatedItems._items[0]);
+        }));
+        it('can fetch related items when item duplicated',
+            inject(function(familyService, $rootScope, $compile, superdesk, $q) {
+            var scope = $rootScope.$new();
+            scope.item = {_id: 1, family_id: 1};
+
+            var elem = $compile('<div sd-media-related data-item=\'item\'></div>')(scope);
+            scope.$digest();
+
+            var iscope = elem.isolateScope();
+            expect(iscope.item).toBe(scope.item);
+
+            spyOn(familyService, 'fetchItems').and.returnValue($q.when());
+            scope.$broadcast('item:duplicate');
+            scope.$apply();
+
+            expect(familyService.fetchItems).toHaveBeenCalledWith(scope.item.family_id, scope.item);
         }));
     });
 

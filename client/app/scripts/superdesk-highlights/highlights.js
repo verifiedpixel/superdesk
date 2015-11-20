@@ -101,19 +101,15 @@
         return service;
     }
 
-    MarkHighlightsDropdownDirective.$inject = ['desks', 'highlightsService'];
-    function MarkHighlightsDropdownDirective(desks, highlightsService) {
+    MarkHighlightsDropdownDirective.$inject = ['desks', 'highlightsService', '$timeout'];
+    function MarkHighlightsDropdownDirective(desks, highlightsService, $timeout) {
         return {
             templateUrl: 'scripts/superdesk-highlights/views/mark_highlights_dropdown_directive.html',
             link: function(scope) {
 
                 scope.markItem = function(highlight) {
+                    scope.item.multiSelect = false;
                     highlightsService.markItem(highlight._id, scope.item._id);
-                    if (!scope.item.highlights) {
-                        scope.item.highlights = [highlight._id];
-                    } else {
-                        scope.item.highlights = [highlight._id].concat(scope.item.highlights);
-                    }
                 };
 
                 scope.isMarked = function(highlight) {
@@ -122,6 +118,10 @@
 
                 highlightsService.get(desks.getCurrentDeskId()).then(function(result) {
                     scope.highlights = result._items;
+                    $timeout(function () {
+                        angular.element('.more-activity-menu.open .dropdown-noarrow')
+                                .find('button:not([disabled])')[0].focus();
+                    });
                 });
             }
         };
@@ -135,13 +135,7 @@
 
                 scope.markItem = function(highlight) {
                     angular.forEach(multi.getItems(), function(item) {
-                        if (!item.highlights) {
-                            item.highlights = [highlight._id];
-                        } else if (item.highlights.indexOf(highlight._id) === -1) {
-                            item.highlights = [highlight._id].concat(item.highlights);
-                        } else {
-                            return;
-                        }
+                        item.multiSelect = true;
                         highlightsService.markItem(highlight._id, item._id);
                     });
                     multi.reset();
@@ -195,7 +189,7 @@
                         e.stopPropagation();
                     },
                     mouseenter: function () {
-                        $(this).find('.dropdown-toggle').click();
+                        $(this).find('.highlights-list').not('.open').children('.dropdown-toggle').click();
                     }
                 });
 
@@ -291,10 +285,14 @@
         };
     }
 
-    HighlightsSettingsController.$inject = ['$scope', 'desks'];
-    function HighlightsSettingsController($scope, desks) {
+    HighlightsSettingsController.$inject = ['$scope', 'api', 'desks'];
+    function HighlightsSettingsController($scope, api, desks) {
         desks.initialize().then(function() {
             $scope.desks = desks.deskLookup;
+        });
+
+        api.query('content_templates', {'template_type': 'highlights'}).then(function(result) {
+            $scope.templates = result._items || [];
         });
 
         $scope.hours = _.range(1, 25);
@@ -476,6 +474,7 @@
             priority: 30,
             icon: 'list-plus',
             dropdown: true,
+            keyboardShortcut: 'ctrl+shift+d',
             templateUrl: 'scripts/superdesk-highlights/views/mark_highlights_dropdown.html',
             filters: [
                 {action: 'list', type: 'archive'}

@@ -70,8 +70,8 @@ function TasksService(desks, $rootScope, api, datetimeHelper) {
     };
 }
 
-TasksController.$inject = ['$scope', '$timeout', 'api', 'notify', 'desks', 'tasks', '$filter', 'moment'];
-function TasksController($scope, $timeout, api, notify, desks, tasks, $filter, moment) {
+TasksController.$inject = ['$scope', '$timeout', 'api', 'notify', 'desks', 'tasks', '$filter', 'moment', 'archiveService'];
+function TasksController($scope, $timeout, api, notify, desks, tasks, $filter, moment, archiveService) {
 
     var KANBAN_VIEW = 'kanban',
         timeout;
@@ -184,14 +184,12 @@ function TasksController($scope, $timeout, api, notify, desks, tasks, $filter, m
     };
 
     $scope.create = function() {
+        $scope.newTask = {};
+        archiveService.addTaskToArticle($scope.newTask, desks.getCurrentDesk());
+
         var task_date = new Date();
-        $scope.newTask = {
-            task: {
-                desk: desks.getCurrentDeskId(),
-                due_date: $filter('formatDateTimeString')(task_date),
-                due_time: $filter('formatDateTimeString')(task_date, 'HH:mm:ss')
-            }
-        };
+        $scope.newTask.task.due_date = $filter('formatDateTimeString')(task_date);
+        $scope.newTask.task.due_time = $filter('formatDateTimeString')(task_date, 'HH:mm:ss');
     };
 
     $scope.save = function() {
@@ -392,8 +390,15 @@ angular.module('superdesk.workspace.tasks', [])
         label: gettext('Pick task'),
         icon: 'pick',
         controller: ['data', 'superdesk',
+            /**
+             * Open given item using sidebar authoring
+             *
+             * @param {Object} data
+             * @param {Object} superdesk service
+             * @return {Promise}
+             */
             function pickTask(data, superdesk) {
-                return superdesk.intent('author', 'article', data.item);
+                return superdesk.intent('edit', 'item', data.item);
             }
         ],
         filters: [{action: superdesk.ACTION_EDIT, type: 'task'}]

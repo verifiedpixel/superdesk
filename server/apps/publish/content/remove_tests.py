@@ -15,10 +15,9 @@ import json
 from eve.utils import config
 from eve.versioning import versioned_id_field
 
-from apps.archive.common import insert_into_versions, is_takes_package, ITEM_OPERATION
+from apps.archive.common import insert_into_versions, ITEM_OPERATION
 from apps.packages.package_service import PackageService
 from apps.packages.takes_package_service import TakesPackageService
-from .common import WIRE
 from superdesk.publish.subscribers import SUBSCRIBER_TYPES
 from apps.validators import ValidatorsPopulateCommand
 from superdesk.metadata.packages import RESIDREF, GROUPS
@@ -29,6 +28,7 @@ from superdesk.utc import utcnow
 from superdesk import get_resource_service
 from apps.archive.archive import SOURCE as ARCHIVE
 from superdesk.metadata.item import ITEM_STATE, CONTENT_STATE, ITEM_TYPE, CONTENT_TYPE
+from superdesk.metadata.utils import is_takes_package
 
 from .tests import ARCHIVE_PUBLISH, ARCHIVE_KILL, PUBLISHED
 
@@ -167,7 +167,7 @@ class RemoveExpiredFromPublishedCollection(SuperdeskTestCase):
         published_service = get_resource_service(PUBLISHED)
         archive_publish = get_resource_service(ARCHIVE_PUBLISH)
 
-        subscribers, subscribers_yet_to_receive = archive_publish.get_subscribers(original, WIRE)
+        subscribers, subscribers_yet_to_receive = archive_publish.get_subscribers(original, SUBSCRIBER_TYPES.WIRE)
         archive_publish.queue_transmission(original, subscribers)
         published_service.post([original])
 

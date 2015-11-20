@@ -45,7 +45,7 @@
 
         $scope.privileges = privileges.privileges;
 
-        $scope.views = ['content', 'tasks', 'users'];
+        $scope.views = ['content', 'tasks', 'users', 'sluglines'];
 
         $scope.view = $scope.views[0];
 
@@ -110,7 +110,13 @@
                     criteria = cards.criteria(scope.stage, queryString);
                     scope.loading = true;
                     scope.items = scope.total = null;
-                    api('archive').query(criteria).then(function(items) {
+                    var provider = 'archive';
+
+                    if (scope.stage.type && scope.stage.type === 'deskOutput') {
+                        provider = 'search';
+                    }
+
+                    api(provider).query(criteria).then(function(items) {
                         scope.items = items._items;
                         scope.total = items._meta.total;
 
@@ -362,6 +368,25 @@
         };
     }
 
+    SluglinesItemListDirective.$inject = ['api'];
+    function SluglinesItemListDirective(api) {
+        return {
+            templateUrl: 'scripts/superdesk-desks/views/slugline-items.html',
+            scope: {
+                desk: '='
+            },
+            link: function(scope, elem) {
+                scope.items = [];
+                scope.loading = true;
+                api.get('desks/' + scope.desk + '/sluglines').then(function(items) {
+                    scope.items = items._items;
+                })['finally'](function() {
+                    scope.loading = false;
+                });
+            }
+        };
+    }
+
     DeskSettingsController.$inject = ['$scope', 'desks'];
     function DeskSettingsController($scope, desks) {
         desks.initialize()
@@ -401,7 +426,9 @@
                 function runConfirmed() {
                     desks.remove(desk).then(
                         function(response) {
-                            _.remove($scope.desks._items, desk);
+                            _.remove($scope.desks._items, function(deskToBeRemoved) {
+                                return deskToBeRemoved.name.toLowerCase() === desk.name.toLowerCase();
+                            });
                             notify.success(gettext('Desk deleted.'), 3000);
                         },
                         function(response) {
@@ -416,6 +443,10 @@
             );
         };
 
+        $scope.$on('desks:refresh:stages', function() {
+            desks.refreshStages();
+        });
+
         $scope.getDeskStages = function(desk) {
             return desks.deskStages[desk._id];
         };
@@ -426,6 +457,7 @@
     }
 
     var app = angular.module('superdesk.desks', [
+        'superdesk.ui',
         'superdesk.users',
         'superdesk.authoring.widgets',
         'superdesk.aggregate.widgets',
@@ -469,8 +501,8 @@
                 }
             });
         }])
-        .factory('desks', ['$q', 'api', 'preferencesService', 'userList', 'notify', 'session',
-            function($q, api, preferencesService, userList, notify, session) {
+        .factory('desks', ['$q', 'api', 'preferencesService', 'userList', 'notify', 'session', '$filter',
+            function($q, api, preferencesService, userList, notify, session, $filter) {
 
                 var userDesks, userDesksPromise;
 
@@ -523,6 +555,8 @@
 
                         return _fetchAll('desks')
                         .then(function(items) {
+                            items = $filter('sortByName')(items);
+
                             self.desks = {_items: items};
                             _.each(items, function(item) {
                                 self.deskLookup[item._id] = item;
@@ -591,7 +625,13 @@
                         return $q.when();
                     },
                     fetchUserDesks: function(user) {
-                        return api.get(user._links.self.href + '/desks');
+                        return api.get(user._links.self.href + '/desks').then(function(response) {
+                            if (response && response._items) {
+                                response._items = $filter('sortByName')(response._items);
+                            }
+
+                            return $q.when(response);
+                        });
                     },
 
                     /**
@@ -750,6 +790,7 @@
         .directive('sdStageItems', StageItemListDirective)
         .directive('sdTaskStatusItems', TaskStatusItemsDirective)
         .directive('sdUserRoleItems', UserRoleItemListDirective)
+        .directive('sdSluglinesItems', SluglinesItemListDirective)
         .directive('sdDeskConfig', function() {
             return {
                 controller: DeskConfigController
@@ -767,7 +808,6 @@
                 require: '^sdDeskConfig',
                 templateUrl: 'scripts/superdesk-desks/views/desk-config-modal.html',
                 link: function(scope, elem, attrs, ctrl) {
-
                 }
             };
         })
@@ -835,12 +875,14 @@
                 }
             };
         }])
-        .directive('sdDeskeditBasic', ['gettext', 'desks', 'WizardHandler', function(gettext, desks, WizardHandler) {
+        .directive('sdDeskeditBasic', ['gettext', 'desks', 'WizardHandler', 'metadata', '$filter', '$interpolate', '$rootScope',
+            function(gettext, desks, WizardHandler, metadata, $filter, $interpolate, $rootScope) {
             return {
 
                 link: function(scope, elem, attrs) {
 
                     scope.limits = limits;
+                    scope.deskTypes = [];
 
                     scope.$watch('step.current', function(step) {
                         if (step === 'general') {
@@ -855,7 +897,15 @@
                         scope.desk.edit = _.create(desk);
                     };
 
-                    scope.save = function(desk) {
+                    /**
+                     * Save desk for adding or editing
+                     *
+                     * @param {object} desk
+                     * @param {boolean} done
+                     *      when true it exits after saving otherwise
+                     *      continues to next step in wizard handler.
+                     */
+                    scope.save = function(desk, done) {
                         scope.message = gettext('Saving...');
 
                         var _new = desk._id ? false : true;
@@ -863,28 +913,41 @@
                             if (_new) {
                                 scope.edit(scope.desk.edit);
                                 scope.desks._items.unshift(scope.desk.edit);
+                                $rootScope.$broadcast('desks:refresh:stages');
                             } else {
                                 var origDesk = _.find(scope.desks._items, {_id: scope.desk.edit._id});
                                 _.extend(origDesk, scope.desk.edit);
                             }
 
+                            scope.desks._items = $filter('sortByName')(scope.desks._items);
                             desks.deskLookup[scope.desk.edit._id] = scope.desk.edit;
-                            WizardHandler.wizard('desks').next();
+
+                            if (!done) {
+                                WizardHandler.wizard('desks').next();
+                            } else {
+                                WizardHandler.wizard('desks').finish();
+                            }
                         }, errorMessage);
                     };
 
                     function errorMessage(response) {
-                        if (response.data && response.data._issues && response.data._issues.name && response.data._issues.name.unique) {
-                            scope._errorUniqueness = true;
-                        } else {
-                            scope._error = true;
+                        scope._error = true;
+                        scope._errorMessage = gettext('There was a problem, desk not created/updated.');
+
+                        if (response.data && response.data._issues) {
+                            if (response.data._issues.name && response.data._issues.name.unique) {
+                                scope._errorMessage = $interpolate(gettext(
+                                    'Desk with name {{ name }} already exists.'))({name: scope.desk.edit.name});
+                            } else if (response.data._issues['validator exception']) {
+                                scope._errorMessage = gettext(response.data._issues['validator exception']);
+                            }
                         }
                         scope.message = null;
                     }
 
                     function clearErrorMessages() {
-                        if (scope._errorUniqueness || scope._error || scope._errorLimits) {
-                            scope._errorUniqueness = null;
+                        if (scope._error || scope._errorLimits) {
+                            scope._errorMessage = '';
                             scope._error = null;
                             scope._errorLimits = null;
                         }
@@ -896,6 +959,15 @@
                             scope._errorLimits = scope.desk.edit.name.length > scope.limits.desk ? true : null;
                         }
                     };
+
+                    if (metadata.values.desk_types) {
+                        scope.deskTypes = metadata.values.desk_types;
+                    } else {
+                        metadata.fetchMetadataValues()
+                            .then(function() {
+                                scope.deskTypes = metadata.values.desk_types;
+                            });
+                    }
 
                 }
             };
@@ -942,12 +1014,19 @@
                         }
                     };
 
-                    scope.previous = function() {
-                        WizardHandler.wizard('desks').previous();
-                    };
-
-                    scope.next = function() {
-                        WizardHandler.wizard('desks').next();
+                    /**
+                     * Save desk for adding or editing
+                     *
+                     * @param {boolean} done
+                     *      when true it exits otherwise continues
+                     *      to next step in wizard handler.
+                     */
+                    scope.next = function(done) {
+                        if (!done) {
+                            WizardHandler.wizard('desks').next();
+                        } else {
+                            WizardHandler.wizard('desks').finish();
+                        }
                     };
 
                     scope.edit = function(stage) {
@@ -1034,6 +1113,10 @@
                         if (scope.editStage.name != null) {
                             scope._errorLimits = scope.editStage.name.length > scope.limits.stage ? true : null;
                         }
+                    };
+
+                    scope.enableSave = function() {
+                        return scope.editStage.name && scope.editStage.name.length > 0 && !scope._errorLimits;
                     };
 
                     function clearErrorMessages() {
@@ -1196,11 +1279,14 @@
                         _.remove(scope.deskMembers, user);
                     };
 
-                    scope.previous = function() {
-                        WizardHandler.wizard('desks').previous();
-                    };
-
-                    scope.save = function() {
+                    /**
+                     * Save members for editing desk
+                     *
+                     * @param {boolean} done
+                     *      when true it exits after saving otherwise
+                     *      continues to next step in wizard handler.
+                     */
+                    scope.save = function(done) {
                         var members = _.map(scope.deskMembers, function(obj) {
                             return {user: obj._id};
                         });
@@ -1210,7 +1296,11 @@
                             desks.deskMembers[scope.desk.edit._id] = scope.deskMembers;
                             var origDesk = desks.deskLookup[scope.desk.edit._id];
                             _.extend(origDesk, scope.desk.edit);
-                            WizardHandler.wizard('desks').next();
+                            if (!done) {
+                                WizardHandler.wizard('desks').next();
+                            } else {
+                                WizardHandler.wizard('desks').finish();
+                            }
                         }, function(response) {
                             scope.message = gettext('There was a problem, members not saved.');
                         });
@@ -1218,19 +1308,29 @@
                 }
             };
         }])
-        .directive('sdDeskeditMacros', ['macros', 'WizardHandler', 'desks',  '$rootScope',
-            function (macros, WizardHandler, desks, $rootScope) {
+
+        /**
+         * @memberof superdesk.desks
+         * @ngdoc directive
+         * @name sdDeskeditMacros
+         * @description
+         *   Fetches and stores a list of macros for the current desk (if set,
+         *   otherwise all macros), and defines the "previous" and "next"
+         *   methods in the element's scope used by the Wizard handler.
+         */
+        .directive('sdDeskeditMacros', ['macros', 'WizardHandler',
+            function (macros, WizardHandler) {
             return {
                 link: function(scope) {
                     if (scope.desk && scope.desk.edit) {
                         macros.getByDesk(scope.desk.edit.name).then(function(macros) {
                             scope.macros = macros;
                         });
+                    } else {
+                        macros.get().then(function (macroList) {
+                            scope.macros = macroList;
+                        });
                     }
-
-                    scope.previous = function () {
-                        WizardHandler.wizard('desks').previous();
-                    };
 
                     scope.save = function () {
                         WizardHandler.wizard('desks').finish();

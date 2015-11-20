@@ -58,6 +58,7 @@
          */
         this.createItemFromTemplate = function(template) {
             var item = _.pick(template, templates.TEMPLATE_METADATA);
+            archiveService.addTaskToArticle(item);
             return save(item).then(function(newItem) {
                 templates.addRecentTemplate(desks.activeDeskId, template._id);
                 return newItem;
@@ -124,6 +125,13 @@
                         scope.contentTemplates = result;
                     });
                 });
+
+                scope.$on('key:ctrl:m', function($event, event) {
+                    if (event) {
+                        event.preventDefault();
+                    }
+                    scope.create();
+                });
             }
         };
     }
@@ -152,6 +160,7 @@
 
                 scope.select = function(template) {
                     scope.selectAction(template);
+                    scope.close();
                 };
 
                 var fetchTemplates = function() {

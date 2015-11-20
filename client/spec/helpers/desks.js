@@ -15,6 +15,12 @@ function Desks() {
     /** The list of stages from stages tab on desks settings wizard **/
     this.stages = element.all(by.repeater('stage in stages'));
 
+    /** a button for creating a new desk **/
+    this.newDeskBtn = element(by.buttonText('Add New Desk'));
+
+    /** the list of macros listed in a desk settings modal **/
+    this.listedMacros = element.all(by.repeater('macro in macros'));
+
     /**
      * Open the desk settings wizard
      **/
@@ -42,6 +48,19 @@ function Desks() {
      **/
     this.getCount = function() {
         return this.list.count();
+    };
+
+    /**
+     * Returns the stage count for named desk on desks settings list
+     * @param {string} name of desk
+     * @return {Promise.<string>} a promise which is resolved with the stage count
+     **/
+    this.getStageCount = function(name) {
+        return this.getRow(name).then(function(rows) {
+            return rows[0].element(by.binding('getDeskStages(desk).length')).getText().then(function(count) {
+                return count;
+            });
+        });
     };
 
     /**
@@ -136,5 +155,81 @@ function Desks() {
      **/
     this.save = function() {
         element(by.id('save')).click();
+    };
+
+    /**
+     * Get the desk name element
+     * @returns {ElementFinder} desk name element
+     **/
+    this.deskNameElement = function() {
+        return element(by.model('desk.edit.name'));
+    };
+
+    /**
+     * Get the desk description element
+     * @returns {ElementFinder} desk description element
+     **/
+    this.deskDescriptionElement = function() {
+        return element(by.model('desk.edit.description'));
+    };
+
+    /**
+     * Get the desk source element
+     * @returns {ElementFinder} desk source element
+     **/
+    this.deskSourceElement = function() {
+        return element(by.model('desk.edit.source'));
+    };
+
+    /**
+     * Get the desk type element
+     * @returns {ElementFinder} desk type element
+     **/
+    this.getDeskType = function() {
+        return element(by.model('desk.edit.desk_type'));
+    };
+
+    /**
+     * Set desk type
+     * @param {string} deskType name
+     **/
+    this.setDeskType = function(deskType) {
+        element(by.model('desk.edit.desk_type')).$('[value="string:' + deskType + '"]').click();
+    };
+
+    /**
+     * Save & Continue action on general tab
+     **/
+    this.actionSaveAndContinueOnGeneralTab = function() {
+        element(by.id('next-general')).click();
+    };
+
+    /**
+     * Done action on general tab
+     **/
+    this.actionDoneOnGeneralTab = function() {
+        element(by.id('done-general')).click();
+    };
+
+    /**
+     * Save & Continue action on stages tab
+     **/
+    this.actionSaveAndContinueOnStagesTab = function() {
+        element(by.id('next-stages')).click();
+    };
+
+    /**
+     * Save & Continue action on people tab
+     **/
+    this.actionSaveAndContinueOnPeopleTab = function() {
+        element(by.id('next-people')).click();
+    };
+
+    /**
+     * new desk button
+     * @returns {ElementFinder} button
+     **/
+    this.getNewDeskButton = function() {
+        return element(by.id('add-new-desk'));
     };
 }

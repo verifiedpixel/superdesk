@@ -111,7 +111,7 @@ describe('publish queue', function() {
     beforeEach(module('superdesk.content_filters'));
     beforeEach(module('superdesk.publish'));
     beforeEach(module('superdesk.mocks'));
-    beforeEach(module('templates'));
+    beforeEach(module('superdesk.templates-cache'));
 
     beforeEach(inject(function($rootScope, $controller, adminPublishSettingsService, $q, api) {
         spyOn(adminPublishSettingsService, 'fetchSubscribers').and.returnValue($q.when(subscribers));
@@ -208,6 +208,13 @@ describe('publish queue', function() {
         $scope.search(publishQueue._items[0].headline);
         $scope.$digest();
         expect($scope.publish_queue[0].headline).toEqual(publishQueue._items[0].headline);
+    }));
+
+    it('can perform word(s) search on headline', inject(function($rootScope) {
+        $scope.search('dugan stars');
+        $scope.$digest();
+        var reQuery = new RegExp($scope.searchQuery, 'i');
+        expect($scope.publish_queue[0].headline).toMatch(reQuery);
     }));
 
     it('can search by unique name', inject(function($rootScope) {

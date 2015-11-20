@@ -17,6 +17,7 @@ from superdesk.utc import utc
 from superdesk.utils import get_sorted_files, FileSortAttributes
 from superdesk.errors import ParserError, ProviderError
 from superdesk.io.iptc7901 import Iptc7901FileParser
+from macros.dpa_derive_dateline import dpa_derive_dateline
 
 logger = logging.getLogger(__name__)
 
@@ -46,18 +47,33 @@ class DPAIngestService(FileIngestService):
                     stat = os.lstat(filepath)
                     last_updated = datetime.fromtimestamp(stat.st_mtime, tz=utc)
                     if self.is_latest_content(last_updated, provider.get('last_updated')):
-                        item = self.parser.parse_file(filepath)
+                        item = self.parser.parse_file(filepath, provider)
+                        dpa_derive_dateline(item)
 
                         self.move_file(self.path, filename, provider=provider, success=True)
                         yield [item]
                     else:
                         self.move_file(self.path, filename, provider=provider, success=True)
-            except ParserError.IPTC7901ParserError() as ex:
-                logger.exception("Ingest Type: DPA - File: {0} could not be processed".format(filename))
-                self.move_file(self.path, filename, provider=provider, success=False)
-                raise ParserError.IPTC7901ParserError(ex, provider)
-            except ParserError as ex:
-                self.move_file(self.path, filename, provider=provider, success=False)
             except Exception as ex:
                 self.move_file(self.path, filename, provider=provider, success=False)
-                raise ProviderError.ingestError(ex, provider)
+                raise ParserError.parseFileError('DPA', filename, ex, provider)
+
+    def parse_file(self, filename, provider):
+        """
+        Given a filename of a file to be ingested prepend the path found in the providers config and call
+        the underlying parse_file method
+        :param filename:
+        :param provider:
+        :return: The item parsed from the file
+        """
+        try:
+            path = provider.get('config', {}).get('path', None)
+
+            if not path:
+                return []
+
+            item = self.parser.parse_file(os.path.join(path, filename), provider)
+
+            return [item]
+        except Exception as ex:
+            raise ParserError.parseFileError('DPA', filename, ex, provider)

@@ -19,7 +19,7 @@ from eve.validation import ValidationError
 
 from superdesk.metadata.item import PUB_STATUS, CONTENT_TYPE, ITEM_TYPE, GUID_FIELD, ITEM_STATE, CONTENT_STATE, \
     PUBLISH_STATES, EMBARGO
-from superdesk.metadata.packages import SEQUENCE, LINKED_IN_PACKAGES, GROUPS
+from superdesk.metadata.packages import SEQUENCE, LINKED_IN_PACKAGES, GROUPS, PACKAGE
 from superdesk.publish import SUBSCRIBER_TYPES
 from settings import DEFAULT_SOURCE_VALUE_FOR_MANUAL_ARTICLES
 import superdesk
@@ -28,7 +28,8 @@ from superdesk.notification import push_notification
 from superdesk.services import BaseService
 from superdesk import get_resource_service
 from apps.archive.archive import ArchiveResource, SOURCE as ARCHIVE
-from apps.archive.common import validate_schedule, ITEM_OPERATION
+from apps.archive.common import validate_schedule, ITEM_OPERATION, convert_task_attributes_to_objectId, is_genre, \
+    BROADCAST_GENRE
 from superdesk.utc import utcnow
 from superdesk.workflow import is_workflow_state_transition_valid
 from superdesk.publish.formatters import get_formatter
@@ -42,8 +43,6 @@ from apps.publish.published_item import LAST_PUBLISHED_VERSION
 
 logger = logging.getLogger(__name__)
 
-DIGITAL = 'digital'
-WIRE = 'wire'
 ITEM_PUBLISH = 'publish'
 ITEM_CORRECT = 'correct'
 ITEM_KILL = 'kill'
@@ -79,8 +78,9 @@ class BasePublishService(BaseService):
     publish_type = 'publish'
     published_state = 'published'
 
-    non_digital = partial(filter, lambda s: s.get('subscriber_type', '') != SUBSCRIBER_TYPES.DIGITAL)
-    digital = partial(filter, lambda s: s.get('subscriber_type', '') == SUBSCRIBER_TYPES.DIGITAL)
+    non_digital = partial(filter, lambda s: s.get('subscriber_type', '') == SUBSCRIBER_TYPES.WIRE)
+    digital = partial(filter, lambda s: (s.get('subscriber_type', '') in {SUBSCRIBER_TYPES.DIGITAL,
+                                                                          SUBSCRIBER_TYPES.ALL}))
     takes_package_service = TakesPackageService()
     package_service = PackageService()
 
@@ -135,12 +135,19 @@ class BasePublishService(BaseService):
 
         self._set_updates(original, updates, updates.get(config.LAST_UPDATED, utcnow()))
         updates[ITEM_OPERATION] = ITEM_PUBLISH
+        convert_task_attributes_to_objectId(updates)
 
     def on_updated(self, updates, original):
         self.update_published_collection(published_item_id=original[config.ID_FIELD])
         original = get_resource_service(ARCHIVE).find_one(req=None, _id=original[config.ID_FIELD])
         updates.update(original)
         user = get_user()
+
+        if updates[ITEM_OPERATION] != ITEM_KILL and \
+                original.get(ITEM_TYPE) in [CONTENT_TYPE.TEXT, CONTENT_TYPE.PREFORMATTED]:
+            get_resource_service('archive_broadcast').on_broadcast_master_updated(updates[ITEM_OPERATION], original)
+
+        get_resource_service('archive_broadcast').reset_broadcast_status(updates, original)
         push_notification('item:updated', item=str(original[config.ID_FIELD]), user=str(user.get(config.ID_FIELD)))
 
     def update(self, id, updates, original):
@@ -159,7 +166,8 @@ class BasePublishService(BaseService):
 
             if original[ITEM_TYPE] != CONTENT_TYPE.COMPOSITE:
                 # if target_for is set the we don't to digital client.
-                if not updates.get('targeted_for', original.get('targeted_for')):
+                if not (updates.get('targeted_for', original.get('targeted_for')) or
+                        is_genre(original, BROADCAST_GENRE)):
                     # check if item is in a digital package
                     package = self.takes_package_service.get_take_package(original)
 
@@ -167,13 +175,14 @@ class BasePublishService(BaseService):
                         queued_digital = self._publish_takes_package(package, updates, original, last_updated)
                     else:
                         '''
-                        If type of the item is text or preformatted then item need to be sent to digital subscribers.
+                        If type of the item is text or preformatted
+                        then item need to be sent to digital subscribers.
                         So, package the item as a take.
                         '''
                         updated = copy(original)
                         updated.update(updates)
 
-                        if original[ITEM_TYPE] in [CONTENT_TYPE.TEXT, CONTENT_TYPE.PREFORMATTED] and \
+                        if original[ITEM_TYPE] in {CONTENT_TYPE.TEXT, CONTENT_TYPE.PREFORMATTED} and \
                                 self.sending_to_digital_subscribers(updated):
                             # create a takes package
                             package_id = self.takes_package_service.package_story_as_a_take(updated, {}, None)
@@ -182,8 +191,13 @@ class BasePublishService(BaseService):
                             queued_digital = self._publish_takes_package(package, updates, original, last_updated)
 
                 # queue only text items
-                queued_wire = \
-                    self.publish(doc=original, updates=updates, target_media_type=WIRE if package else None)
+                media_type = None
+                updated = deepcopy(original)
+                updated.update(updates)
+                if package:
+                    media_type = SUBSCRIBER_TYPES.WIRE
+
+                queued_wire = self.publish(doc=original, updates=updates, target_media_type=media_type)
 
                 queued = queued_digital or queued_wire
                 if not queued:
@@ -230,12 +244,12 @@ class BasePublishService(BaseService):
         '''
         if package[ITEM_STATE] in [CONTENT_STATE.PUBLISHED, CONTENT_STATE.CORRECTED]:
             package.update(package_updates)
-            queued_digital = self.publish(doc=package, updates=None, target_media_type=DIGITAL)
+            queued_digital = self.publish(doc=package, updates=None, target_media_type=SUBSCRIBER_TYPES.DIGITAL)
         else:
             package.update(package_updates)
             queued_digital = get_resource_service('archive_publish').publish(doc=package,
                                                                              updates=None,
-                                                                             target_media_type=DIGITAL)
+                                                                             target_media_type=SUBSCRIBER_TYPES.DIGITAL)
 
         self.update_published_collection(published_item_id=package[config.ID_FIELD])
         return queued_digital
@@ -252,13 +266,15 @@ class BasePublishService(BaseService):
             raise SuperdeskApiError.badRequestError("Empty package cannot be published!")
 
         removed_items = []
-        if self.publish_type == ITEM_CORRECT:
+        if self.publish_type in [ITEM_CORRECT, ITEM_KILL]:
             removed_items, added_items = self._get_changed_items(items, updates)
-            if len(removed_items) == len(items) and len(added_items) == 0:
+            # we raise error if correction is done on a empty package. Kill is fine.
+            if len(removed_items) == len(items) and len(added_items) == 0 and self.publish_type == ITEM_CORRECT:
                 raise SuperdeskApiError.badRequestError("Corrected package cannot be empty!")
             items.extend(added_items)
 
         subscriber_items = {}
+
         if items:
             archive_publish = get_resource_service('archive_publish')
             for guid in items:
@@ -282,8 +298,14 @@ class BasePublishService(BaseService):
                         archive_publish.patch(id=package_item.pop(config.ID_FIELD), updates=package_item)
 
                     insert_into_versions(id_=guid)
-                    package_item = super().find_one(req=None, _id=guid)
 
+                elif guid in removed_items:
+                    # remove the package information from the package item.
+                    linked_in_packages = [linked for linked in package_item.get(LINKED_IN_PACKAGES)
+                                          if linked.get(PACKAGE) != package.get(config.ID_FIELD)]
+                    super().system_update(guid, {LINKED_IN_PACKAGES: linked_in_packages}, package_item)
+
+                package_item = super().find_one(req=None, _id=guid)
                 subscribers = self._get_subscribers_for_package_item(package_item)
                 self.package_service.update_field_in_package(updates, package_item[config.ID_FIELD],
                                                              config.VERSION, package_item[config.VERSION])
@@ -296,7 +318,6 @@ class BasePublishService(BaseService):
                 self._extend_subscriber_items(subscriber_items, subscribers, package_item, digital_item_id)
 
             self.publish_package(package, updates, target_subscribers=subscriber_items)
-            return subscribers
 
     def _extend_subscriber_items(self, subscriber_items, subscribers, item, digital_item_id):
         """
@@ -546,7 +567,7 @@ class BasePublishService(BaseService):
         subscribers, subscribers_yet_to_receive = self.get_subscribers(doc, target_media_type)
 
         # Step 3
-        if target_media_type == WIRE:
+        if target_media_type == SUBSCRIBER_TYPES.WIRE:
             self._update_headline_sequence(updated)
 
         # Step 4
@@ -586,7 +607,7 @@ class BasePublishService(BaseService):
         if doc.get(EMBARGO) and doc.get(EMBARGO) > utcnow():
             return False
 
-        subscribers, subscribers_yet_to_receive = self.get_subscribers(doc, DIGITAL)
+        subscribers, subscribers_yet_to_receive = self.get_subscribers(doc, SUBSCRIBER_TYPES.DIGITAL)
         subscribers = list(self.digital(subscribers))
         subscribers_yet_to_receive = list(self.digital(subscribers_yet_to_receive))
         return len(subscribers) > 0 or len(subscribers_yet_to_receive) > 0
@@ -636,10 +657,10 @@ class BasePublishService(BaseService):
         global_filters = list(service.get(req=req, lookup=None))
 
         for subscriber in subscribers:
-            if target_media_type:
+            if target_media_type and subscriber.get('subscriber_type', '') != SUBSCRIBER_TYPES.ALL:
                 can_send_takes_packages = subscriber['subscriber_type'] == SUBSCRIBER_TYPES.DIGITAL
-                if target_media_type == WIRE and can_send_takes_packages or target_media_type == DIGITAL \
-                        and not can_send_takes_packages:
+                if target_media_type == SUBSCRIBER_TYPES.WIRE and can_send_takes_packages or \
+                        target_media_type == SUBSCRIBER_TYPES.DIGITAL and not can_send_takes_packages:
                     continue
 
             if doc.get('targeted_for'):
@@ -831,6 +852,7 @@ class BasePublishService(BaseService):
                     # check the locks on the items
                     if doc.get('lock_session', None) and package['lock_session'] != doc['lock_session']:
                         validation_errors.extend(['{}: packaged item cannot be locked'.format(doc['headline'])])
+
 
 superdesk.workflow_state('published')
 superdesk.workflow_action(

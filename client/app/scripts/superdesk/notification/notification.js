@@ -10,8 +10,8 @@
 (function() {
     'use strict';
 
-    WebSocketProxy.$inject = ['$rootScope', 'config', '$interval'];
-    function WebSocketProxy($rootScope, config, $interval) {
+    WebSocketProxy.$inject = ['$rootScope', 'config', '$interval', 'session', 'SESSION_EVENTS'];
+    function WebSocketProxy($rootScope, config, $interval, session, SESSION_EVENTS) {
 
         var ws = null;
         var connectTimer = -1;
@@ -35,8 +35,17 @@
         }
 
         var connect = function() {
-            ws = new WebSocket(config.server.ws);
-            bindEvents();
+            if (!ws) {
+                ws = new WebSocket(config.server.ws);
+                bindEvents();
+            }
+        };
+
+        var disconnect = function() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
         };
 
         var bindEvents = function() {
@@ -60,8 +69,8 @@
             ws.onclose = function(event) {
                 $rootScope.$broadcast('disconnected');
                 $interval.cancel(connectTimer);
-                connectTimer = $interval(function() { console.log('$interval');
-                    if (ws) {
+                connectTimer = $interval(function() {
+                    if (ws && session.sessionId) {
                         connect();  // Retry to connect for every TIMEOUT interval.
                     }
                 }, TIMEOUT, 0, false);  // passed invokeApply = false to prevent triggering digest cycle
@@ -69,13 +78,17 @@
         };
 
         connect();
+
+        $rootScope.$on(SESSION_EVENTS.LOGOUT, disconnect);
+
+        $rootScope.$on(SESSION_EVENTS.LOGIN, connect);
     }
 
     /**
      * Service for notifying user when websocket connection disconnected or connected.
      */
-    NotifyConnectionService.$inject = ['$rootScope', 'notify', 'gettext', '$timeout'];
-    function NotifyConnectionService($rootScope, notify, gettext, $timeout) {
+    NotifyConnectionService.$inject = ['$rootScope', 'notify', 'gettext', '$timeout', 'session'];
+    function NotifyConnectionService($rootScope, notify, gettext, $timeout, session) {
         var successTimeout, alertTimeout;
         var _this = this;
         _this.message = null;
@@ -93,6 +106,16 @@
             successTimeout = $timeout(function() {
                 notify.success(gettext(_this.message));
             }, 100);
+        });
+
+        $rootScope.$on('vocabularies:updated', function(event, data) {
+            if (!data.user || data.user !== session.identity._id) {
+                _this.message = gettext(data.vocabulary +
+                    ' vocabulary has been updated. Please re-login to see updated vocabulary values');
+                $timeout(function() {
+                    notify.error(_this.message);
+                }, 100);
+            }
         });
     }
 

@@ -90,10 +90,14 @@ function Content() {
         waitFor(preview);
     };
 
+    this.closePreview = function() {
+        element(by.className('close-preview')).click();
+    };
+
     this.checkMarkedForHighlight = function(highlight, item) {
         var crtItem = this.getItem(item);
-        expect(crtItem.element(by.className('icon-star-color')).isDisplayed()).toBeTruthy();
-        expect(crtItem.element(by.className('icon-star-color')).getAttribute('tooltip-html-unsafe'))
+        expect(crtItem.element(by.className('icon-star')).isDisplayed()).toBeTruthy();
+        expect(crtItem.element(by.className('icon-star')).getAttribute('tooltip-html-unsafe'))
             .toContain(highlight);
     };
 

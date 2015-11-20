@@ -30,7 +30,8 @@
         more_coming: false,
         targeted_for: [],
         embargo: null,
-        renditions: null
+        renditions: null,
+        body_footer: null
     });
 
     var DEFAULT_ACTIONS = Object.freeze({
@@ -477,11 +478,19 @@
             var lockedByMe = !lock.isLocked(current_item);
             action.view = !lockedByMe;
 
+            var isBroadcast = (current_item.genre && current_item.genre.length > 0 &&
+                               current_item.type === 'text' &&
+                               current_item.genre.some(function(genre) {
+                                   return genre.name === 'Broadcast Script';
+                               }));
+
             // new take should be on the text item that are closed or last take but not killed and doesn't have embargo.
-            action.new_take = !is_read_only_state && (current_item.type === 'text' || current_item.type === 'preformatted') &&
+
+            action.new_take = !is_read_only_state && current_item.type === 'text' &&
                 !current_item.embargo && !current_item.publish_schedule &&
                 (angular.isUndefined(current_item.takes) || current_item.takes.last_take === current_item._id) &&
-                (angular.isUndefined(current_item.more_coming) || !current_item.more_coming);
+                (angular.isUndefined(current_item.more_coming) || !current_item.more_coming) && !isBroadcast &&
+                !current_item.rewritten_by;
 
             // item is published state - corrected, published, scheduled, killed
             if (self.isPublished(current_item)) {
@@ -500,9 +509,10 @@
                     action.correct = user_privileges.correct && lockedByMe && !is_read_only_state;
                 }
 
-                action.re_write = (_.contains(['published', 'corrected'], current_item.state) &&
-                    _.contains(['text', 'preformatted'], current_item.type) && !current_item.embargo &&
-                    (angular.isUndefined(current_item.more_coming) || !current_item.more_coming));
+                action.re_write = _.contains(['published', 'corrected'], current_item.state) &&
+                    _.contains(['text'], current_item.type) &&
+                    !current_item.embargo && !current_item.rewritten_by && action.new_take &&
+                    (!current_item.broadcast || !current_item.broadcast.master_id);
 
             } else {
                 // production states i.e in_progress, routed, fetched, submitted.
@@ -537,19 +547,24 @@
                 !current_item.embargo && current_item.package_type !== 'takes' &&
                 current_item.state !== 'killed' && !current_item.publish_schedule;
 
+            action.create_broadcast = (!_.contains(['spiked', 'scheduled', 'killed'], current_item.state)) &&
+                (_.contains(['published', 'corrected'], current_item.state)) &&
+                current_item.type === 'text' && !isBroadcast;
+
             action.multi_edit = !is_read_only_state;
 
             //check for desk membership for edit rights.
             if (current_item.task && current_item.task.desk) {
                 // in production
-                var desk = _.find(self.userDesks, {'_id': current_item.task.desk});
-                if (!desk) {
-                    action = angular.extend({}, DEFAULT_ACTIONS);
-                }
 
                 action.duplicate = user_privileges.duplicate &&
                     !_.contains(['spiked', 'killed'], current_item.state) &&
                     (angular.isUndefined(current_item.package_type) || current_item.package_type !== 'takes');
+
+                var desk = _.find(self.userDesks, {'_id': current_item.task.desk});
+                if (!desk) {
+                    action = angular.extend({}, DEFAULT_ACTIONS);
+                }
             } else {
                 // personal
                 action.copy = true;
@@ -575,7 +590,7 @@
          * @returns {boolean} True if a "Valid Take" else False
          */
         this.isTakeItem = function(item) {
-            return (_.contains(['text', 'preformatted'], item.type) &&
+            return (_.contains(['text'], item.type) &&
                 item.takes && item.takes.sequence > 1);
         };
     }
@@ -833,6 +848,7 @@
 
     AuthoringDirective.$inject = [
         'superdesk',
+        'superdeskFlags',
         'authoringWorkspace',
         'notify',
         'gettext',
@@ -852,9 +868,8 @@
         'modal',
         'archiveService'
     ];
-    function AuthoringDirective(superdesk, authoringWorkspace, notify, gettext, desks, authoring, api, session, lock,
-                                privileges, content, $location, referrer, macros, $timeout, $q, $window, modal,
-                                archiveService) {
+    function AuthoringDirective(superdesk, superdeskFlags, authoringWorkspace, notify, gettext, desks, authoring, api, session, lock,
+            privileges, content, $location, referrer, macros, $timeout, $q, $window, modal, archiveService) {
         return {
             link: function($scope, elem, attrs) {
                 var _closing;
@@ -960,6 +975,10 @@
                         $scope.origItem = res;
                         $scope.dirty = false;
                         $scope.item = _.create($scope.origItem);
+                        if (res.cropData) {
+                            $scope.item.hasCrops = true;
+                        }
+
                         notify.success(gettext('Item updated.'));
                         return $scope.origItem;
                     }, function(response) {
@@ -1096,7 +1115,7 @@
                                 notify.success(gettext('Item published.'));
                                 $scope.item = response;
                                 $scope.dirty = false;
-                                authoringWorkspace.close();
+                                authoringWorkspace.close(true);
                             }
                         } else {
                             notify.error(gettext('Unknown Error: Item not published.'));
@@ -1150,7 +1169,7 @@
                 $scope.close = function() {
                     _closing = true;
                     authoring.close($scope.item, $scope.origItem, $scope.save_enabled()).then(function () {
-                        authoringWorkspace.close($scope.item);
+                        authoringWorkspace.close(true);
                     });
                 };
 
@@ -1158,7 +1177,7 @@
                  * Minimize an item
                  */
                 $scope.minimize = function () {
-                    authoringWorkspace.close();
+                    authoringWorkspace.close(true);
                 };
 
                 $scope.closeOpenNew = function(createFunction, paramValue) {
@@ -1302,12 +1321,25 @@
                     }
                 });
 
+                $scope.$on('item:highlight', function(e, data) {
+                    if ($scope.item._id === data.item_id){
+                        if (!$scope.item.highlights) {
+                            $scope.item.highlights = [data.highlight_id];
+                        } else if ($scope.item.highlights.indexOf(data.highlight_id) === -1){
+                            $scope.item.highlights = [data.highlight_id].concat($scope.item.highlights);
+                        } else if (!$scope.item.multiSelect){
+                            $scope.item.highlights = _.without($scope.item.highlights, data.highlight_id);
+                        }
+                    }
+                });
+
                 macros.setupShortcuts($scope);
             }
         };
     }
 
-    function AuthoringTopbarDirective() {
+    AuthoringTopbarDirective.$inject = ['keyboardManager'];
+    function AuthoringTopbarDirective(keyboardManager) {
         return {
             templateUrl: 'scripts/superdesk-authoring/views/authoring-topbar.html',
             link: function(scope) {
@@ -1319,6 +1351,33 @@
                         scope.saveDisabled = false;
                     });
                 };
+                scope.$on('key:ctrl:shift:u', function($event, event) {
+                    event.preventDefault();
+                    if (scope.item._locked &&
+                        !scope.item.sendTo &&
+                        scope.can_unlock() &&
+                        scope.itemActions.save &&
+                        !scope.unlockClicked
+                    ) {
+                        scope.unlock();
+                    }
+                });
+                scope.$on('key:ctrl:shift:e', function($event, event) {
+                    event.preventDefault();
+                    scope.close();
+                });
+                scope.$on('key:ctrl:shift:s', function($event, event) {
+                    event.preventDefault();
+                    if (scope._editable &&
+                        scope.itemActions.save &&
+                        scope.action === 'edit' &&
+                        !scope.saveDisabled &&
+                        scope.save_enabled()
+                    ) {
+                        scope.saveTopbar();
+                    }
+                });
+
             }
         };
     }
@@ -1523,9 +1582,9 @@
         };
     }
     SendItem.$inject = ['$q', 'api', 'desks', 'notify', 'authoringWorkspace', 'superdeskFlags',
-        '$location', 'macros', '$rootScope', 'authoring', 'send', 'spellcheck', 'confirm'];
+        '$location', 'macros', '$rootScope', 'authoring', 'send', 'spellcheck', 'confirm', 'archiveService'];
     function SendItem($q, api, desks, notify, authoringWorkspace, superdeskFlags,
-        $location, macros, $rootScope, authoring, send, spellcheck, confirm) {
+        $location, macros, $rootScope, authoring, send, spellcheck, confirm, archiveService) {
         return {
             scope: {
                 item: '=',
@@ -1643,7 +1702,7 @@
                 };
 
                 /*
-                 * Returns true if Send and Send and Continue button needs to be disabled, false othervise.
+                 * Returns true if Send and Send and Continue button needs to be disabled, false otherwise.
                  * @returns {Boolean}
                  */
                 scope.disableSendButton = function () {
@@ -1653,12 +1712,21 @@
                     }
                 };
 
+                /*
+                 * Returns true if user is not a member of selected desk, false otherwise.
+                 * @returns {Boolean}
+                 */
+                scope.disableFetchAndOpenButton = function () {
+                    var _isNonMember = _.isEmpty(_.find(desks.userDesks._items, {_id: scope.selectedDesk._id}));
+                    return _isNonMember;
+                };
+
                 /**
                  * Returns true if Publish Schedule needs to be displayed, false otherwise.
                  */
                 scope.showPublishSchedule = function() {
-                    return scope.mode !== 'ingest' && scope.item && scope.item.type !== 'composite' &&
-                        !scope.item.embargo_date && !scope.item.embargo_time &&
+                    return scope.item && archiveService.getType(scope.item) !== 'ingest' &&
+                        scope.item.type !== 'composite' && !scope.item.embargo_date && !scope.item.embargo_time &&
                         !authoring.isTakeItem(scope.item) &&
                         ['published', 'killed', 'corrected'].indexOf(scope.item.state) === -1;
                 };
@@ -1667,7 +1735,7 @@
                  * Returns true if Embargo needs to be displayed, false otherwise.
                  */
                 scope.showEmbargo = function() {
-                    var prePublishCondition = scope.mode !== 'ingest' && scope.item &&
+                    var prePublishCondition = scope.item && archiveService.getType(scope.item) !== 'ingest' &&
                         scope.item.type !== 'composite' && !scope.item.publish_schedule_date &&
                         !scope.item.publish_schedule_time && !authoring.isTakeItem(scope.item);
 
@@ -1686,6 +1754,7 @@
                 };
 
                 function runSend(open) {
+                    scope.item.sendTo = true;
                     var deskId = scope.selectedDesk._id;
                     var stageId = scope.selectedStage._id || scope.selectedDesk.incoming_stage;
 
@@ -1706,7 +1775,7 @@
                 }
 
                 scope.canSendAndContinue = function() {
-                    return !authoring.isPublished(scope.item) && _.contains(['text', 'preformatted'], scope.item.type);
+                    return !authoring.isPublished(scope.item) && _.contains(['text'], scope.item.type);
                 };
 
                 /**
@@ -1755,6 +1824,7 @@
                     var stageId = scope.selectedStage._id || scope.selectedDesk.incoming_stage;
 
                     scope.item.more_coming = true;
+                    scope.item.sendTo = true;
                     return sendAuthoring(deskId, stageId, scope.selectedMacro, true)
                         .then(function() {
                             var itemDeskId = null;
@@ -1764,7 +1834,7 @@
                             return authoring.linkItem(scope.item, null, itemDeskId);
                         })
                         .then(function (item) {
-                            authoringWorkspace.close();
+                            authoringWorkspace.close(false);
                             notify.success(gettext('New take created.'));
                             authoringWorkspace.edit(item);
                         }, function(err) {
@@ -1805,7 +1875,7 @@
                             if (sendAndContinue) {
                                 return deferred.resolve();
                             } else {
-                                authoringWorkspace.close();
+                                authoringWorkspace.close(true);
                             }
                         }, function(err) {
                             if (angular.isDefined(err.data._message)) {
@@ -1935,9 +2005,8 @@
         };
     }
 
-    ArticleEditDirective.$inject = ['autosave', 'authoring', 'metadata', 'session', '$filter', '$timeout',
-    'superdesk', 'notify', 'gettext'];
-    function ArticleEditDirective(autosave, authoring, metadata, session, $filter, $timeout, superdesk, notify, gettext) {
+    ArticleEditDirective.$inject = ['autosave', 'authoring', 'metadata', '$filter', 'superdesk'];
+    function ArticleEditDirective(autosave, authoring, metadata, $filter, superdesk) {
         return {
             templateUrl: 'scripts/superdesk-authoring/views/article-edit.html',
             link: function(scope) {
@@ -1976,6 +2045,13 @@
 
                 metadata.initialize().then(function() {
                     scope.metadata = metadata.values;
+
+                    if (scope.item.type === 'picture') {
+                        scope.item.hasCrops = false;
+                        scope.item.hasCrops = scope.metadata.crop_sizes.some(function (crop) {
+                            return scope.item.renditions && scope.item.renditions[crop.name];
+                        });
+                    }
                 });
 
                 /**
@@ -2072,6 +2148,20 @@
                         scope.item.renditions = _.merge(orig, diff);
                     });
                 };
+
+                /**
+                 * Adds the selected Public Service Announcement to the item allowing user for further edit.
+                 */
+                scope.addPSAToFooter = function() {
+                    if (!scope.item.body_footer) {
+                        scope.item.body_footer = '';
+                    }
+
+                    if (scope.item.body_footer_value) {
+                        scope.item.body_footer = scope.item.body_footer + scope.item.body_footer_value.value + '<br>';
+                        autosave.save(scope.item);
+                    }
+                };
             }
         };
     }
@@ -2136,6 +2226,7 @@
                     label: gettext('Edit'),
                     priority: 10,
                     icon: 'pencil',
+                    keyboardShortcut: 'ctrl+e',
                     controller: ['data', 'authoringWorkspace', function(data, authoringWorkspace) {
                         authoringWorkspace.edit(data.item ? data.item : data);
                     }],
@@ -2150,7 +2241,7 @@
                 .activity('kill.text', {
                     label: gettext('Kill item'),
                     priority: 100,
-                    icon: 'remove',
+                    icon: 'remove-sign',
                     group: 'corrections',
                     controller: ['data', 'authoringWorkspace', function(data, authoringWorkspace) {
                         authoringWorkspace.kill(data.item);
@@ -2164,7 +2255,7 @@
                 .activity('correct.text', {
                     label: gettext('Correct item'),
                     priority: 100,
-                    icon: 'pencil',
+                    icon: 'edit-line',
                     group: 'corrections',
                     controller: ['data', 'authoringWorkspace', function(data, authoringWorkspace) {
                         authoringWorkspace.correct(data.item);
@@ -2178,7 +2269,8 @@
                 .activity('view.item', {
                     label: gettext('Open'),
                     priority: 2000,
-                    icon: 'fullscreen',
+                    icon: 'external',
+                    keyboardShortcut: 'ctrl+o',
                     controller: ['data', 'authoringWorkspace', function(data, authoringWorkspace) {
                         authoringWorkspace.view(data.item || data);
                     }],
@@ -2262,8 +2354,8 @@
         };
     }
 
-    headerInfoDirective.$inject = ['familyService', 'authoringWidgets', 'authoring', 'archiveService'];
-    function headerInfoDirective(familyService, authoringWidgets, authoring, archiveService) {
+    headerInfoDirective.$inject = ['api', 'familyService', 'authoringWidgets', 'authoring', '$rootScope', 'archiveService'];
+    function headerInfoDirective(api, familyService, authoringWidgets, authoring, $rootScope, archiveService) {
         return {
             templateUrl: 'scripts/superdesk-authoring/views/header-info.html',
             require: '^sdAuthoringWidgets',
@@ -2276,11 +2368,12 @@
                     scope.loaded = true;
 
                     if (!archiveService.isLegal(scope.item)) {
-                        // Related items
-                        familyService.fetchItems(scope.item.family_id || scope.item._id, scope.item)
-                            .then(function (items) {
+                        // Related Items
+                        if (scope.item.slugline) {
+                            archiveService.getRelatedItems(scope.item.slugline).then(function(items) {
                                 scope.relatedItems = items;
                             });
+                        }
 
                         var relatedItemWidget = _.filter(authoringWidgets, function (widget) {
                             return widget._id === 'related-item';
@@ -2288,6 +2381,14 @@
 
                         scope.activateWidget = function () {
                             WidgetsManagerCtrl.activate(relatedItemWidget[0]);
+                        };
+
+                        scope.previewMasterStory = function () {
+                            var item_id = item.broadcast.takes_package_id ?
+                                item.broadcast.takes_package_id : item.broadcast.master_id;
+                            return api.find('archive', item_id).then(function(item) {
+                                $rootScope.$broadcast('broadcast:preview', {'item': item});
+                            });
                         };
                     }
 
@@ -2329,11 +2430,17 @@
         };
 
         /**
-         * Stop editing
+         * Stop editing.
+         *
+         * @param {boolean} showMonitoring when true shows the monitoring if monitoring is hidden.
          */
-        this.close = function() {
+        this.close = function(showMonitoring) {
             self.item = null;
             self.action = null;
+            if (showMonitoring && superdeskFlags.flags.hideMonitoring) {
+                superdeskFlags.flags.hideMonitoring = false;
+            }
+
             saveState();
         };
 

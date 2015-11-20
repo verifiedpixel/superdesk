@@ -7,7 +7,7 @@
 # For the full copyright and license information, please see the
 # AUTHORS and LICENSE files distributed with this source code, or
 # at https://www.sourcefabric.org/superdesk/license
-
+from bson import ObjectId
 
 import flask
 from eve.utils import config
@@ -41,6 +41,11 @@ ITEM_RESTORE = 'restore'
 ITEM_DUPLICATE = 'duplicate'
 ITEM_DESCHEDULE = 'deschedule'
 item_operations = [ITEM_CREATE, ITEM_UPDATE, ITEM_RESTORE, ITEM_DUPLICATE, ITEM_DESCHEDULE]
+# part the task dict
+LAST_AUTHORING_DESK = 'last_authoring_desk'
+LAST_PRODUCTION_DESK = 'last_production_desk'
+BROADCAST_GENRE = 'Broadcast Script'
+RE_OPENS = 'reopens'
 
 
 def update_version(updates, original):
@@ -70,42 +75,14 @@ def on_create_item(docs, repo_type=ARCHIVE):
 
         set_default_state(doc, CONTENT_STATE.DRAFT)
         doc.setdefault(config.ID_FIELD, doc[GUID_FIELD])
-        set_dateline(doc, repo_type)
-        set_byline(doc, repo_type)
-        set_sign_off(doc, repo_type=repo_type)
+
+        copy_metadata_from_user_preferences(doc, repo_type)
 
         if not doc.get(ITEM_OPERATION):
             doc[ITEM_OPERATION] = ITEM_CREATE
 
 
-def set_dateline(doc, repo_type):
-    """
-    If repo_type is ARCHIVE and dateline isn't available then this method sets dateline property for the article
-    represented by doc. Dateline has 3 parts: Located, Date (Format: Month Day) and Source.
-    Dateline can either be simple: Sydney, July 30 AAP - or can be complex: Surat,Gujarat,IN, July 30 AAP -.
-    Date in the dateline should be timezone sensitive to the Located.
-
-    Located is set on the article based on user preferences if available. If located is not available in
-    user preferences then dateline in full will not be set.
-
-    :param doc: article
-    :param repo_type: collection name where the doc will be persisted
-    """
-
-    if repo_type == ARCHIVE and 'dateline' not in doc:
-        current_date_time = dateline_ts = utcnow()
-        doc['dateline'] = {'date': current_date_time, 'source': ORGANIZATION_NAME_ABBREVIATION, 'located': None,
-                           'text': None}
-
-        user = get_user()
-        if user and user.get('user_preferences', {}).get('dateline:located'):
-            located = user.get('user_preferences', {}).get('dateline:located', {}).get('located')
-            if located:
-                doc['dateline']['located'] = located
-                doc['dateline']['text'] = format_dateline_to_locmmmddsrc(located, dateline_ts)
-
-
-def format_dateline_to_locmmmddsrc(located, current_timestamp):
+def format_dateline_to_locmmmddsrc(located, current_timestamp, source=ORGANIZATION_NAME_ABBREVIATION):
     """
     Formats dateline to "Location, Month Date Source -"
 
@@ -133,19 +110,7 @@ def format_dateline_to_locmmmddsrc(located, current_timestamp):
         formatted_date = current_timestamp.strftime('%b %d')
 
     return "{location} {mmmdd} {source} -".format(location=dateline_location.upper(), mmmdd=formatted_date,
-                                                  source=ORGANIZATION_NAME_ABBREVIATION)
-
-
-def set_byline(doc, repo_type=ARCHIVE):
-    """
-    Sets byline property on the doc if it's from ARCHIVE repo. If user creating the article has byline set in the
-    profile then doc['byline'] = user_profile['byline']. Otherwise it's not set.
-    """
-
-    if repo_type == ARCHIVE:
-        user = get_user()
-        if user and user.get(BYLINE):
-            doc[BYLINE] = user[BYLINE]
+                                                  source=source)
 
 
 def on_duplicate_item(doc):
@@ -173,7 +138,7 @@ def set_original_creator(doc):
     doc['original_creator'] = user
 
 
-def set_sign_off(updates, original=None, repo_type=ARCHIVE):
+def set_sign_off(updates, original=None, repo_type=ARCHIVE, user=None):
     """
     Set sign_off on updates object. Rules:
         1. updates['sign_off'] = original['sign_off'] + sign_off of the user performing operation.
@@ -183,7 +148,7 @@ def set_sign_off(updates, original=None, repo_type=ARCHIVE):
     if repo_type != ARCHIVE:
         return
 
-    user = get_user()
+    user = user if user else get_user()
     if not user:
         return
 
@@ -379,16 +344,6 @@ def update_state(original, updates):
             updates[ITEM_STATE] = CONTENT_STATE.DRAFT
 
 
-def is_update_allowed(archive_doc):
-    """
-    Checks if the archive_doc is valid to be updated. If invalid then the method raises ForbiddenError.
-    For instance, a published item shouldn't be allowed to update.
-    """
-
-    if archive_doc.get(ITEM_STATE) == CONTENT_STATE.KILLED:
-        raise SuperdeskApiError.forbiddenError("Item isn't in a valid state to be updated.")
-
-
 def handle_existing_data(doc, pub_status_value='usable', doc_type='archive'):
     """
     Handles existing data. For now the below are handled:
@@ -475,6 +430,21 @@ def item_schema(extra=None):
         EMBARGO: {
             'type': 'datetime',
             'nullable': True
+        },
+        'broadcast': {
+            'type': 'dict',
+            'nullable': True,
+            'schema': {
+                'status': {'type': 'string'},
+                'master_id': {'type': 'string', 'mapping': not_analyzed},
+                'takes_package_id': {'type': 'string', 'mapping': not_analyzed},
+                'rewrite_id': {'type': 'string', 'mapping': not_analyzed}
+            }
+        },
+        'body_footer': {  # Public Service Announcements
+            'type': 'string',
+            'nullable': True,
+            'mapping': not_analyzed
         }
     }
     schema.update(metadata_schema)
@@ -493,21 +463,74 @@ def is_item_in_package(item):
         and sum(1 for x in item.get(LINKED_IN_PACKAGES, []) if x.get(PACKAGE_TYPE, '') == '')
 
 
-def is_normal_package(doc):
+def convert_task_attributes_to_objectId(doc):
     """
-    Returns True if the passed doc is a package and not a takes package. Otherwise, returns False.
+    set the task attributes desk, stage, user as object id
+    :param doc:
 
-    :return: True if it's a Package and not a Takes Package, False otherwise.
+    """
+    task = doc.get('task', {})
+
+    if not task:
+        return
+
+    if ObjectId.is_valid(task.get('desk')) and not isinstance(task.get('desk'), ObjectId):
+        task['desk'] = ObjectId(task.get('desk'))
+    if ObjectId.is_valid(task.get('stage')) and not isinstance(task.get('stage'), ObjectId):
+        task['stage'] = ObjectId(task.get('stage'))
+    if ObjectId.is_valid(task.get('user')) and not isinstance(task.get('user'), ObjectId):
+        task['user'] = ObjectId(task.get('user'))
+    if ObjectId.is_valid(task.get(LAST_PRODUCTION_DESK)) and \
+            not isinstance(task.get(LAST_PRODUCTION_DESK), ObjectId):
+        task[LAST_PRODUCTION_DESK] = ObjectId(task.get(LAST_PRODUCTION_DESK))
+    if ObjectId.is_valid(task.get(LAST_AUTHORING_DESK, None)) and \
+            not isinstance(task.get(LAST_AUTHORING_DESK), ObjectId):
+        task[LAST_AUTHORING_DESK] = ObjectId(task.get(LAST_AUTHORING_DESK))
+
+
+def copy_metadata_from_user_preferences(doc, repo_type=ARCHIVE):
+    """
+    Copies following properties: byline, signoff, dateline.located, place from user preferences to doc if the repo_type
+    is Archive.
+
+    About Dateline: Dateline has 3 parts: Located, Date (Format: Month Day) and Source. Dateline can either be simple:
+    Sydney, July 30 AAP - or can be complex: Surat,Gujarat,IN, July 30 AAP -. Date in the dateline is timezone
+    sensitive to the Located.  Located is set on the article based on user preferences if available. If located is not
+    available in user preferences then dateline in full will not be set.
     """
 
-    return not is_takes_package(doc)
+    if repo_type == ARCHIVE:
+        user = get_user()
+
+        if 'dateline' not in doc:
+            current_date_time = dateline_ts = utcnow()
+            doc['dateline'] = {'date': current_date_time, 'source': ORGANIZATION_NAME_ABBREVIATION, 'located': None,
+                               'text': None}
+
+            if user and user.get('user_preferences', {}).get('dateline:located'):
+                located = user.get('user_preferences', {}).get('dateline:located', {}).get('located')
+                if located:
+                    doc['dateline']['located'] = located
+                    doc['dateline']['text'] = format_dateline_to_locmmmddsrc(located, dateline_ts)
+
+        if BYLINE not in doc and user and user.get(BYLINE):
+                doc[BYLINE] = user[BYLINE]
+
+        if 'place' not in doc and user:
+            place_in_preference = user.get('user_preferences', {}).get('article:default:place')
+
+            if place_in_preference:
+                doc['place'] = place_in_preference.get('place')
+
+        set_sign_off(doc, repo_type=repo_type, user=user)
 
 
-def is_takes_package(doc):
+def is_genre(item, genre_value):
     """
-    Returns True if the passed doc is a takes package. Otherwise, returns False.
-
-    :return: True if it's a Takes Package, False otherwise.
+    Item to check specific genre exists or not
+    :param dict item: item on which the check is performed.
+    :param str genre_value: genre_value as string
+    :return: If exists then true else false
     """
-
-    return doc[ITEM_TYPE] == CONTENT_TYPE.COMPOSITE and doc.get(PACKAGE_TYPE, '') == TAKES_PACKAGE
+    return item.get('genre') and any(genre.get('value', '').lower() == genre_value.lower()
+                                     for genre in item.get('genre', []))

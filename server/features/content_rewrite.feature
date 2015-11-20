@@ -28,7 +28,9 @@ Feature: Rewrite content
       [{"guid": "123", "type": "text", "headline": "test", "_current_version": 1, "state": "fetched",
         "task": {"desk": "#desks._id#", "stage": "#desks.incoming_stage#", "user": "#CONTEXT_USER_ID#"},
         "subject":[{"qcode": "17004000", "name": "Statistics"}],
-        "body_html": "Test Document body"}]
+        "body_html": "Test Document body",
+        "place": [{"qcode" : "ACT", "world_region" : "Oceania", "country" : "Australia",
+        "name" : "ACT", "state" : "Australian Capital Territory"}]}]
       """
       When we post to "/stages"
       """
@@ -79,7 +81,13 @@ Feature: Rewrite content
       Then we get existing resource
       """
       {"_items" : [{"_id": "#REWRITE_ID#", "anpa_take_key": "update", "rewrite_of": "#archive.123.take_package#",
-        "task": {"desk": "#desks._id#", "stage": "#desks.incoming_stage#"}}]}
+        "task": {"desk": "#desks._id#", "stage": "#desks.incoming_stage#"},
+        "place": [{"qcode" : "ACT"}]}]}
+      """
+      When we get "/archive/123"
+      Then we get existing resource
+      """
+      {"_id": "123", "rewritten_by": "#REWRITE_ID#", "place": [{"qcode" : "ACT"}]}
       """
 
     @auth
@@ -425,6 +433,8 @@ Feature: Rewrite content
       And we get "rewrite_of" not populated
       When we get "/published"
       Then we get "rewritten_by" not populated in results
+      When we get "/archive/123"
+      Then we get "rewritten_by" not populated
 
     @auth
     Scenario: Spike of an unpublished rewrite of a rewrite removes references from last rewrite

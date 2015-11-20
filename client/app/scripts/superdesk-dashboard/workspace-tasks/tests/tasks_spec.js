@@ -1,7 +1,7 @@
 
-'use strict';
-
 describe('tasks', function() {
+
+    'use strict';
 
     beforeEach(module('superdesk.desks'));
     beforeEach(module('superdesk.filters'));
@@ -11,9 +11,10 @@ describe('tasks', function() {
     describe('task controller', function() {
 
         var scope;
-        var desk = {incoming_stage: 'inbox'};
+        var desk = {_id: '1', working_stage: 'working', incoming_stage: 'inbox'};
 
-        beforeEach(inject(function($rootScope, $controller, $q, desks) {
+        beforeEach(inject(function($rootScope, $controller, $q, desks, session) {
+            session.identity = {_id: 'user:1'};
             spyOn(desks, 'getCurrentDeskId').and.returnValue(1);
             spyOn(desks, 'fetchDesks').and.returnValue($q.when());
             spyOn(desks, 'fetchDeskStages').and.returnValue($q.when([]));
@@ -25,7 +26,7 @@ describe('tasks', function() {
         it('can create task', inject(function($rootScope, $controller, desks) {
             expect(scope.newTask).toBeNull();
             scope.create();
-            expect(scope.newTask.task.desk).toBe(1);
+            expect(scope.newTask.task.desk).toBe('1');
             expect(scope.newTask.task.due_date).not.toBeNull();
             expect(scope.newTask.task.due_time).not.toBeNull();
         }));
@@ -62,5 +63,16 @@ describe('tasks', function() {
                 expect(tasksArgs[0]).toBe('tasks');
             }));
         });
+    });
+
+    describe('pick task controller', function() {
+        beforeEach(module('superdesk.workspace.tasks'));
+
+        it('can pick task', inject(function(superdesk) {
+            spyOn(superdesk, 'intent');
+            var data = {item: {_id: 'foo'}};
+            superdesk.start(superdesk.activity('pick.task'), {data: data});
+            expect(superdesk.intent).toHaveBeenCalledWith('edit', 'item', data.item);
+        }));
     });
 });

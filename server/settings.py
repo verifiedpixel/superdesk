@@ -32,7 +32,9 @@ def env(variable, fallback_value=None):
         else:
             return env_value
 
-
+ABS_PATH = os.path.abspath(os.path.dirname(__file__))
+BEHAVE_TESTS_FIXTURES_PATH = os.path.join(ABS_PATH,  # default value: `features/steps/fixtures`
+                                          'features', 'steps', 'fixtures')
 XML = False
 IF_MATCH = True
 BANDWIDTH_SAVER = False
@@ -70,6 +72,27 @@ ELASTICSEARCH_URL = env('ELASTICSEARCH_URL', 'http://localhost:9200')
 ELASTICSEARCH_INDEX = env('ELASTICSEARCH_INDEX', 'superdesk')
 if env('ELASTIC_PORT'):
     ELASTICSEARCH_URL = env('ELASTIC_PORT').replace('tcp:', 'http:')
+
+ELASTICSEARCH_SETTINGS = {
+    'settings': {
+        'analysis': {
+            'filter': {
+                'remove_hyphen': {
+                    'pattern': '[-]',
+                    'type': 'pattern_replace',
+                    'replacement': ' '
+                }
+            },
+            'analyzer': {
+                'phrase_prefix_analyzer': {
+                    'type': 'custom',
+                    'filter': ['remove_hyphen', 'lowercase'],
+                    'tokenizer': 'keyword'
+                }
+            }
+        }
+    }
+}
 
 REDIS_URL = env('REDIS_URL', 'redis://localhost:6379')
 if env('REDIS_PORT'):
@@ -167,6 +190,7 @@ INSTALLED_APPS.extend([
 
     'superdesk.io',
     'superdesk.io.subjectcodes',
+    'superdesk.io.iptc',
     'apps.io',
     'superdesk.io.ftp',
     'superdesk.io.rss',
@@ -187,6 +211,7 @@ INSTALLED_APPS.extend([
     'apps.prepopulate',
     'apps.legal_archive',
     'apps.search',
+    'apps.saved_searches',
     'apps.privilege',
     'apps.rules',
     'apps.highlights',
@@ -204,6 +229,7 @@ INSTALLED_APPS.extend([
     'apps.validate',
     'apps.workspace',
     'apps.macros',
+    'apps.archive_broadcast'
 ])
 
 RESOURCE_METHODS = ['GET', 'POST']
@@ -287,6 +313,12 @@ MAX_VALUE_OF_PUBLISH_SEQUENCE = int(env('MAX_VALUE_OF_PUBLISH_SEQUENCE', 9999))
 
 # Defines default value for Source to be set for manually created articles
 DEFAULT_SOURCE_VALUE_FOR_MANUAL_ARTICLES = env('DEFAULT_SOURCE_VALUE_FOR_MANUAL_ARTICLES', 'AAP')
+
+# Defines default value for Priority to be set for manually created articles
+DEFAULT_PRIORITY_VALUE_FOR_MANUAL_ARTICLES = env('DEFAULT_PRIORITY_VALUE_FOR_MANUAL_ARTICLES', 6)
+
+# Defines default value for Urgency to be set for manually created articles
+DEFAULT_URGENCY_VALUE_FOR_MANUAL_ARTICLES = env('DEFAULT_URGENCY_VALUE_FOR_MANUAL_ARTICLES', 3)
 
 # Determines if the ODBC publishing mechanism will be used, If enabled then pyodbc must be installed along with it's
 # dependencies

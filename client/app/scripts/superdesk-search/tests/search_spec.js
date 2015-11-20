@@ -1,7 +1,7 @@
 'use strict';
 
 describe('search service', function() {
-    beforeEach(module('templates'));
+    beforeEach(module('superdesk.templates-cache'));
     beforeEach(module('superdesk.search'));
 
     it('can create base query', inject(function(search) {
@@ -19,6 +19,50 @@ describe('search service', function() {
     it('can create query string query', inject(function($rootScope, search) {
         var criteria = search.query({q: 'test'}).getCriteria();
         expect(criteria.query.filtered.query.query_string.query).toBe('test');
+    }));
+
+    it('can create query for from_desk', inject(function($rootScope, search) {
+        // only from desk is specified
+        var criteria = search.query({from_desk: 'test-authoring'}).getCriteria();
+        var filters = criteria.query.filtered.filter.and;
+        expect(filters).toContain({term: {'task.last_authoring_desk': 'test'}});
+        criteria = search.query({from_desk: 'test-production'}).getCriteria();
+        filters = criteria.query.filtered.filter.and;
+        expect(filters).toContain({term: {'task.last_production_desk': 'test'}});
+    }));
+
+    it('can create query for to_desk', inject(function($rootScope, search) {
+        // only to desk is specified
+        var criteria = search.query({to_desk: '456-authoring'}).getCriteria();
+        var filters = criteria.query.filtered.filter.and;
+        expect(filters).toContain({term: {'task.desk': '456'}});
+        expect(filters).toContain({exists: {field: 'task.last_production_desk'}});
+        criteria = search.query({to_desk: '456-production'}).getCriteria();
+        filters = criteria.query.filtered.filter.and;
+        expect(filters).toContain({term: {'task.desk': '456'}});
+        expect(filters).toContain({exists: {field: 'task.last_authoring_desk'}});
+    }));
+
+    it('can create query for from_desk and to_desk', inject(function($rootScope, search) {
+        // both from desk and to desk are specified
+        var criteria = search.query({from_desk: '123-authoring', to_desk: '456-production'}).getCriteria();
+        var filters = criteria.query.filtered.filter.and;
+        expect(filters).toContain({term: {'task.last_authoring_desk': '123'}});
+        expect(filters).toContain({term: {'task.desk': '456'}});
+    }));
+
+    it('can create query for original_creator', inject(function($rootScope, search) {
+        // only to desk is specified
+        var criteria = search.query({original_creator: '123'}).getCriteria();
+        var filters = criteria.query.filtered.filter.and;
+        expect(filters).toContain({term: {'original_creator': '123'}});
+    }));
+
+    it('can create query for unique_name', inject(function($rootScope, search) {
+        // only to desk is specified
+        var criteria = search.query({unique_name: '123'}).getCriteria();
+        var filters = criteria.query.filtered.filter.and;
+        expect(filters).toContain({term: {'unique_name': '123'}});
     }));
 
     it('can sort items', inject(function(search, $location, $rootScope) {
@@ -87,7 +131,7 @@ describe('sdSearchFacets directive', function () {
     beforeEach(module(
         'superdesk.authoring.metadata',
         'superdesk.search',
-        'templates'  // needed so that directive's template is placed into
+        'superdesk.templates-cache'  // needed so that directive's template is placed into
                      // $templateCache, avoiding the "Unexpected request" error
     ));
 
@@ -111,6 +155,13 @@ describe('sdSearchFacets directive', function () {
     }));
 
     /**
+     * Mock some of the dependencies of the tag service
+     */
+    beforeEach(inject(function($q) {
+        fakeMetadata.fetchSubjectcodes.and.returnValue($q.when());
+    }));
+
+    /**
      * Mock even more dependencies and compile the directive under test.
      */
     beforeEach(inject(function (
@@ -123,7 +174,7 @@ describe('sdSearchFacets directive', function () {
         spyOn(search, 'getSubjectCodes').and.returnValue([]);
 
         desks = _desks_;
-        spyOn(desks, 'initialize');
+        spyOn(desks, 'initialize').and.returnValue($q.when([]));
 
         facetsInit = $q.defer();
         spyOn(tags, 'initSelectedFacets').and.returnValue(facetsInit.promise);
@@ -131,7 +182,6 @@ describe('sdSearchFacets directive', function () {
         fakeApi.ingestProviders.query.and.returnValue(
             $q.when({_items: [{foo: 'bar'}]})
         );
-        fakeMetadata.fetchSubjectcodes.and.returnValue($q.when());
 
         // directive compilation...
         html = [
@@ -155,6 +205,7 @@ describe('sdSearchFacets directive', function () {
                     desk: {buckets: []},
                     type: {buckets: []},
                     category: {buckets: []},
+                    genre: {buckets: []},
                     urgency: {buckets: []},
                     priority: {buckets: []},
                     source: {buckets: []},
