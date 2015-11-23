@@ -304,6 +304,13 @@
         this.query = function createQuery(params) {
             return new Query(params);
         };
+
+        /*
+         * Generate Track By Identifier for search results.
+         */
+        this.generateTrackByIdentifier = function (item) {
+            return (item.state === 'ingested') ? item._id : item._id + ':' + item._current_version;
+        };
     }
 
     TagService.$inject = ['$location', 'desks', 'userList', 'metadata'];
@@ -532,6 +539,10 @@
 
                     scope.changeTab = function() {
                         scope.sTab = !scope.sTab;
+                    };
+
+                    scope.resetEditingSearch = function() {
+                        scope.editingSearch = false;
                     };
 
                     var initAggregations = function () {
@@ -1065,8 +1076,8 @@
                     /**
                      * Generates Identifier to be used by track by expression.
                      */
-                    scope.generateTrackIdentifier = function(item) {
-                        return (item.state === 'ingested') ? item._id : item._id + ':' + item._current_version;
+                    scope.generateTrackByIdentifier = function(item) {
+                        return search.generateTrackByIdentifier(item);
                     };
                 }
             };
@@ -1117,6 +1128,7 @@
                     };
 
                     scope.clear = function() {
+                        scope.resetEditingSearch();
                         scope.cancel();
                         $location.url('/search');
                     };
@@ -1130,13 +1142,19 @@
                             notify.success(gettext('Saved search is saved successfully'));
                             scope.cancel();
                             scope.changeTab();
+                            scope.edit = null;
                         }
 
-                        function onFail() {
-                            notify.error(gettext('Error. Saved search could not be saved.'));
+                        function onFail(error) {
+                            scope.edit = null;
+                            if (angular.isDefined(error.data._message)) {
+                                notify.error(error.data._message);
+                            } else {
+                                notify.error(gettext('Error. Saved search could not be saved.'));
+                            }
                         }
 
-                        var search = getFilters($location.search());
+                        var search = getFilters(_.clone($location.search()));
                         editSearch.filter = {query: search};
                         var originalSearch = {};
 
@@ -1586,13 +1604,6 @@
                     scope.isSearchEnabled = function() {
                         return scope.repo.search && (scope.repo.search !== 'local' ||
                             (scope.repo.ingest || scope.repo.archive || scope.repo.published || scope.repo.archived));
-                    };
-
-                    scope.focusOnSearch = function() {
-                        if (scope.advancedOpen) {
-                            scope.toggle();
-                        }
-                        input.focus();
                     };
 
                     function updateParam() {
